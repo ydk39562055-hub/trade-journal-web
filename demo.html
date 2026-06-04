@@ -270,6 +270,7 @@ const app = document.getElementById('app');
 let session = null;
 let localMode = false;     // 세션 없으면(익명 비활성) 로컬 전용
 let entries = [];
+let redfolder = [];        // 오늘 레드폴더(고임팩트 뉴스) — GitHub Action이 redfolder.json 갱신
 
 // ───────── 유틸 ─────────
 const esc = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -417,6 +418,7 @@ function render(){
       <button class="btn-ghost btn-sm" id="principles">📜 원칙</button>
     </header>
     <div class="wrap">
+      ${redfolderHTML()}
       ${balanceHTML()}
       <details class="card" id="routine" open style="margin-top:12px">
         <summary>📋 오늘의 루틴 & 원칙 (ICT) — 매일 읽기</summary>
@@ -771,6 +773,27 @@ function openMenu(){
   dlg.addEventListener('close',()=>dlg.remove());
 }
 
+// ───────── 레드폴더 (오늘 고임팩트 뉴스) ─────────
+async function loadRedfolder(){
+  try{ const r=await fetch('redfolder.json?t='+Date.now()); if(r.ok){ const j=await r.json(); if(Array.isArray(j)){ redfolder=j; render(); } } }catch{}
+}
+function redfolderHTML(){
+  if(!redfolder.length) return '';
+  const today=todayStr();
+  const list=redfolder.map(e=>({...e, d:new Date(e.date)}))
+    .filter(e=>{ if(isNaN(e.d))return false; const x=e.d; const y=`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; return y===today; })
+    .sort((a,b)=>a.d-b.d);
+  const rows=list.map(e=>{
+    const t=e.d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="stat-row" style="padding:5px 0;border-color:#e8d5cf"><span style="font-size:13px"><b>${t}</b> · ${esc(e.country||'')} ${esc(e.title||'')}</span></div>`;
+  }).join('');
+  return `<details class="card" id="rfcard" ${list.length?'open':''} style="margin-top:12px;border-color:var(--futures)">
+    <summary style="color:var(--futures)">🔴 오늘 레드폴더 (고임팩트 뉴스)${list.length?' · '+list.length+'건':''}</summary>
+    ${list.length? rows : '<div class="meta" style="padding:6px 0">오늘 레드폴더 없음 ✓</div>'}
+    <div class="hint">발표 직전 신규 진입 자제 · 발표 후 스윕은 트리거로 (시간=폰 기준)</div>
+  </details>`;
+}
+
 // ───────── 잔고 / 시드 ─────────
 function balanceHTML(){
   const pnlOf=mk=> entries.filter(e=>e.market===mk).reduce((a,e)=>{const v=numOf(e.pnl);return a+(v||0);},0);
@@ -891,6 +914,7 @@ try{
 }catch{}
 if(!session) localMode = true;   // 익명 비활성 → 폰 로컬 저장으로
 fetchEntries();
+loadRedfolder();                 // 오늘 레드폴더 로드(같은 주소 redfolder.json)
 sb.auth.onAuthStateChange((_e, ns)=>{ if(ns) session=ns; });
 </script>
 </body>
