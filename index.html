@@ -68,6 +68,31 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = 'https://oxogtsfxdjbctzehxvae.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3vXShFC5dKvMqzUy1KkyGQ_sF0SzUY2'; // 공개용(publishable) 키 — RLS로 보호
 const LS_KEY = 'free_journal_cache_v1';
+const LS_PRIN = 'free_journal_principles_v1';
+let principles = '';
+const DEFAULT_PRINCIPLES = `📌 선물 매매 원칙  (시작 세트 — 본인에 맞게 수정하세요)
+
+[리스크 — 제일 중요]
+1. 1회 손실 한도 = 계좌의 1% (배우는 중엔 0.5%). 손실액 기준으로 수량을 정한다 — 레버리지로 키우지 않는다.
+2. 손절 없이 진입 금지. 선물은 청산(강제매도) 위험 → 손절가를 먼저 정하고 들어간다.
+3. 손익비(R:R) 1.5 이상일 때만 진입. 먹을 게 잃을 것의 1.5배 미만이면 패스.
+4. 레버리지는 '증거금 효율' 도구지 '크기 키우는' 도구가 아니다. 1% 손실 한도가 수량을 정한다.
+
+[규율 — 감정 제어]
+5. 하루 손실 -2R(2~3연패) 도달 → 그날 매매 끝. 복구하려 더 들어가지 않는다.
+6. 복수 매매 금지 — 손실 직후 바로 재진입하지 않는다 (최소 15분 쉬기).
+7. 손절 밀지 않기 — 한 번 정한 손절을 불리한 쪽으로 옮기지 않는다.
+8. 물타기 금지 — 지고 있는 포지션에 추가 진입하지 않는다.
+9. 추격 금지 — 떠난 자리 쫓지 않고 다음 셋업을 기다린다.
+
+[환경 — 진입 조건]
+10. 주요 지표(CPI·FOMC·고용) 발표 전후 30분 진입 금지. 변동성 폭발 구간.
+11. 명확한 근거/셋업 없으면 안 한다. '느낌'으로 들어가지 않는다.
+12. 상위 시간대(추세) 방향과 맞을 때 우선. 역행 진입은 크기를 줄인다.
+
+[복기 — 성장]
+13. 이긴 매매도 기록한다 — 실력인지 운인지 구분하려고.
+14. 과정 > 결과. 규칙 지키고 졌으면 좋은 매매, 규칙 어기고 이겼으면 나쁜 매매.`;
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
@@ -108,7 +133,31 @@ function flashSaved(txt='저장됨 ✓'){
 }
 
 // ───────── 데이터 ─────────
+async function loadPrinciples(){
+  principles = localStorage.getItem(LS_PRIN) || DEFAULT_PRINCIPLES;
+  try{
+    const { data } = await sb.from('journal_prefs').select('principles').eq('user_id', session.user.id).maybeSingle();
+    if(data && data.principles){
+      principles = data.principles;
+    }else{                          // 처음이면 기본 원칙을 클라우드에 심어둠
+      principles = DEFAULT_PRINCIPLES;
+      await sb.from('journal_prefs').upsert({ user_id: session.user.id, principles });
+    }
+    localStorage.setItem(LS_PRIN, principles);
+  }catch(e){ /* 오프라인: 캐시/기본값 사용 */ }
+}
+
+async function savePrinciples(text){
+  principles = text;
+  localStorage.setItem(LS_PRIN, text);
+  try{
+    await sb.from('journal_prefs').upsert({ user_id: session.user.id, principles: text, updated_at: new Date().toISOString() });
+    flashSaved('원칙 저장됨 ✓');
+  }catch(e){ flashSaved('⚠ 원칙 클라우드 저장 실패(로컬엔 있음)'); }
+}
+
 async function fetchEntries(){
+  loadPrinciples();                // 원칙도 같이 로드(백그라운드)
   entries = loadCache();           // 즉시 캐시 표시
   render();
   try{
@@ -148,6 +197,7 @@ function render(){
     <header>
       <h1>거래일지</h1>
       <span class="save-dot" id="saveDot"></span>
+      <button class="btn-ghost btn-sm" id="principles">📜 원칙</button>
       <button class="btn-ghost btn-sm" id="logout">로그아웃</button>
     </header>
     <div class="wrap">
@@ -158,6 +208,7 @@ function render(){
     </div>
     <button class="fab" id="add">+</button>`;
   document.getElementById('add').onclick=()=>openEditor();
+  document.getElementById('principles').onclick=()=>openPrinciples();
   document.getElementById('logout').onclick=async()=>{ await sb.auth.signOut(); session=null; render(); };
   app.querySelectorAll('[data-f]').forEach(b=> b.onclick=()=>{ filter=b.dataset.f; render(); });
   app.querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=> openEditor(b.dataset.edit));
@@ -222,6 +273,36 @@ function openEditor(id){
     await upsertEntry(draft); dlg.close();
   };
   dlg.addEventListener('close',()=> dlg.remove());
+}
+
+// ───────── 매매 원칙 ─────────
+function openPrinciples(){
+  let editing=false;
+  const dlg=document.createElement('dialog');
+  const draw=()=>{
+    dlg.innerHTML=`<div class="modal-in">
+      <div class="modal-head">
+        <h2>📜 매매 원칙</h2>
+        <button class="btn-ghost btn-sm" id="edit">${editing?'보기':'편집'}</button>
+        <button class="x" id="close">×</button>
+      </div>
+      ${editing
+        ? `<textarea id="pbody" style="min-height:55vh;font-size:14px">${esc(principles)}</textarea>
+           <button class="btn" id="psave" style="width:100%;margin-top:10px">저장</button>
+           <div class="hint">원칙은 자유롭게 고치세요. 클라우드에 저장돼 어느 기기서나 보입니다.</div>`
+        : `<div class="body" style="font-size:15px;line-height:1.7">${esc(principles)}</div>`}
+    </div>`;
+    dlg.querySelector('#close').onclick=()=>dlg.close();
+    dlg.querySelector('#edit').onclick=()=>{ editing=!editing; draw(); };
+    if(editing){
+      dlg.querySelector('#psave').onclick=async()=>{
+        await savePrinciples(dlg.querySelector('#pbody').value);
+        editing=false; draw();
+      };
+    }
+  };
+  document.body.appendChild(dlg); draw(); dlg.showModal();
+  dlg.addEventListener('close',()=>dlg.remove());
 }
 
 // ───────── 로그인 ─────────

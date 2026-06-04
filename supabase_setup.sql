@@ -26,3 +26,16 @@ create policy "free_journal own rows" on public.free_journal
 
 create index if not exists free_journal_user_date
   on public.free_journal(user_id, traded_at desc);
+
+-- 매매 원칙 저장 (항상 보기 + 본인 수정용, 1인 1행)
+create table if not exists public.journal_prefs (
+  user_id     uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  principles  text default '',
+  updated_at  timestamptz default now()
+);
+alter table public.journal_prefs enable row level security;
+drop policy if exists "journal_prefs own" on public.journal_prefs;
+create policy "journal_prefs own" on public.journal_prefs
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
