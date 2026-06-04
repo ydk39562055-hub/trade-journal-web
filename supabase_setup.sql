@@ -41,8 +41,10 @@ alter table public.free_journal add column if not exists setups       jsonb defa
 create table if not exists public.journal_prefs (
   user_id     uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   principles  text default '',
+  settings    jsonb default '{}'::jsonb,
   updated_at  timestamptz default now()
 );
+alter table public.journal_prefs add column if not exists settings jsonb default '{}'::jsonb;  -- 시드($) 등 설정
 alter table public.journal_prefs enable row level security;
 drop policy if exists "journal_prefs own" on public.journal_prefs;
 create policy "journal_prefs own" on public.journal_prefs

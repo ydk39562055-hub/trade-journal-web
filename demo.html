@@ -84,18 +84,20 @@
 
 <script type="module">
 const __DUMMY=[
- {id:'1',market:'선물',traded_at:'2026-06-03',direction:'long',result:'win',pnl:320000,realized_r:2.1,setups:['FVG인버전(BPR)','MSS'],errors:[],body:'NQ 런던 킬존, 아시아 하이 스윕 후 MSS 확인하고 FVG에서 롱. 계획대로 DOL까지 보유.',photos:[]},
- {id:'2',market:'선물',traded_at:'2026-06-02',direction:'short',result:'loss',pnl:-110000,realized_r:-1,setups:['OB'],errors:['추격'],body:'스윕 안 기다리고 추격 진입 실수. 무효화 닿아 손절.',photos:[]},
- {id:'3',market:'현물',traded_at:'2026-05-30',direction:'long',result:'win',pnl:80000,realized_r:1.4,setups:['SFP'],errors:[],body:'BTC 디스카운트 구간 매집.',photos:[]},
+ {id:'1',market:'선물',traded_at:'2026-06-03',direction:'long',result:'win',pnl:320,realized_r:2.1,setups:['FVG인버전(BPR)','MSS'],errors:[],body:'NQ 런던 킬존, 아시아 하이 스윕 후 MSS 확인하고 FVG에서 롱. 계획대로 DOL까지 보유.',photos:[]},
+ {id:'2',market:'선물',traded_at:'2026-06-02',direction:'short',result:'loss',pnl:-110,realized_r:-1,setups:['OB'],errors:['추격'],body:'스윕 안 기다리고 추격 진입 실수. 무효화 닿아 손절.',photos:[]},
+ {id:'3',market:'현물',traded_at:'2026-05-30',direction:'long',result:'win',pnl:80,realized_r:1.4,setups:['SFP'],errors:[],body:'BTC 디스카운트 구간 매집.',photos:[]},
  {id:'4',market:'현물',traded_at:'2026-05-28',direction:'long',result:'be',pnl:0,realized_r:0,setups:[],errors:['포모'],body:'포모로 일찍 들어가 본전 청산.',photos:[]}
 ];
-const createClient=()=>({auth:{getSession:async()=>({data:{session:{user:{id:'demo'}}}}),onAuthStateChange(){},signInWithOtp:async()=>({}),verifyOtp:async()=>({}),signOut:async()=>({})},from:(t)=>{const o={select(){return o;},order(){return o;},eq(){return o;},maybeSingle:async()=>({data:null}),upsert:async()=>({error:null}),delete(){return{eq:async()=>({error:null})};},then(res){res({data:t==='free_journal'?__DUMMY:[],error:null});}};return o;}});
+const createClient=()=>({auth:{getSession:async()=>({data:{session:{user:{id:'demo'}}}}),onAuthStateChange(){},signInWithOtp:async()=>({}),verifyOtp:async()=>({}),signOut:async()=>({})},from:(t)=>{const o={select(){return o;},order(){return o;},eq(){return o;},maybeSingle:async()=>({data:{principles:'',settings:{futuresSeed:10000,spotSeed:5000}}}),upsert:async()=>({error:null}),delete(){return{eq:async()=>({error:null})};},then(res){res({data:t==='free_journal'?__DUMMY:[],error:null});}};return o;}});
 
 const SUPABASE_URL = 'https://oxogtsfxdjbctzehxvae.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3vXShFC5dKvMqzUy1KkyGQ_sF0SzUY2'; // 공개용(publishable) 키 — RLS로 보호
 const LS_KEY = 'free_journal_demo_v1';
 const LS_PRIN = 'free_journal_principles_demo_v1';
 const LS_CHECKS = 'free_journal_checks_demo_v1';
+const LS_SETTINGS = 'free_journal_settings_demo_v1';
+let settings = {futuresSeed:null, spotSeed:null};
 let principles = '';
 const ERROR_TAGS = ['포모','추격','손절 밀기','물타기','복수매매','오버사이즈','조기청산','근거없음'];
 const SETUP_TAGS = ['FVG인버전(BPR)','OB','Breaker','SFP','Liquidity sweep','MSS','Displacement','SMT','OTE'];
@@ -264,6 +266,8 @@ let entries = [];
 // ───────── 유틸 ─────────
 const esc = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const numOf = v => (v!=null && v!=='' && !isNaN(Number(v))) ? Number(v) : null;
+const usd = n => (n<0?'-$':'$') + Math.abs(Math.round(n)).toLocaleString('en-US');
 function saveCache(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(entries)); }catch{} }
 function loadCache(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'[]'); }catch{ return []; } }
 
@@ -294,16 +298,27 @@ function flashSaved(txt='저장됨 ✓'){
 // ───────── 데이터 ─────────
 async function loadPrinciples(){
   principles = localStorage.getItem(LS_PRIN) || DEFAULT_PRINCIPLES;
+  try{ settings = {...settings, ...JSON.parse(localStorage.getItem(LS_SETTINGS)||'{}')}; }catch{}
   try{
-    const { data } = await sb.from('journal_prefs').select('principles').eq('user_id', session.user.id).maybeSingle();
-    if(data && data.principles){
-      principles = data.principles;
-    }else{                          // 처음이면 기본 원칙을 클라우드에 심어둠
+    const { data } = await sb.from('journal_prefs').select('principles, settings').eq('user_id', session.user.id).maybeSingle();
+    if(data){
+      if(data.principles) principles = data.principles;
+      else { principles = DEFAULT_PRINCIPLES; await sb.from('journal_prefs').upsert({ user_id: session.user.id, principles }); }
+      if(data.settings && typeof data.settings==='object'){ settings={...settings, ...data.settings}; localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
+    }else{
       principles = DEFAULT_PRINCIPLES;
       await sb.from('journal_prefs').upsert({ user_id: session.user.id, principles });
     }
     localStorage.setItem(LS_PRIN, principles);
+    if(session) render();           // 시드/원칙 클라우드 반영 후 갱신
   }catch(e){ /* 오프라인: 캐시/기본값 사용 */ }
+}
+
+async function saveSettings(obj){
+  settings = {...settings, ...obj};
+  localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
+  try{ await sb.from('journal_prefs').upsert({ user_id: session.user.id, settings, updated_at:new Date().toISOString() }); flashSaved('시드 저장됨 ✓'); }
+  catch(e){ flashSaved('⚠ 시드 클라우드 저장 실패(로컬엔 있음)'); }
 }
 
 async function savePrinciples(text){
@@ -389,6 +404,7 @@ function render(){
       <button class="btn-ghost btn-sm" id="logout">로그아웃</button>
     </header>
     <div class="wrap">
+      ${balanceHTML()}
       <details class="card" id="routine" open style="margin-top:12px">
         <summary>📋 오늘의 루틴 & 원칙 (ICT) — 매일 읽기</summary>
         <div class="body" style="max-height:46vh;overflow:auto;font-size:13.5px;line-height:1.7;margin-top:6px">${principlesHTML(principles)}</div>
@@ -418,6 +434,7 @@ function render(){
   si.oninput=ev=>{ search=ev.target.value; const pos=ev.target.selectionStart; render(); const s2=document.getElementById('search'); if(s2){ s2.focus(); try{s2.setSelectionRange(pos,pos);}catch{} } };
   document.getElementById('period').onchange=ev=>{ period=ev.target.value; render(); };
   app.querySelectorAll('img.zoom').forEach(im=> im.onclick=()=>openPhoto(im.dataset.img));
+  const bc=document.getElementById('balcard'); if(bc) bc.onclick=()=>openSettings();
   const ep=document.getElementById('editprin'); if(ep) ep.onclick=()=>openPrinciples();
   app.querySelectorAll('#routine .chk').forEach(el=> el.onclick=()=>{
     const i=+el.dataset.li, s=loadChecks();
@@ -711,6 +728,47 @@ function openMenu(){
   dlg.querySelector('#mjx').onclick=()=>{ exportJSON(); dlg.close(); };
   dlg.querySelector('#mji').onclick=()=> dlg.querySelector('#mjfile').click();
   dlg.querySelector('#mjfile').onchange=async ev=>{ const f=ev.target.files[0]; if(f){ await importJSON(f); dlg.close(); } };
+  dlg.addEventListener('close',()=>dlg.remove());
+}
+
+// ───────── 잔고 / 시드 ─────────
+function balanceHTML(){
+  const pnlOf=mk=> entries.filter(e=>e.market===mk).reduce((a,e)=>{const v=numOf(e.pnl);return a+(v||0);},0);
+  const fP=pnlOf('선물'), sP=pnlOf('현물');
+  const fS=numOf(settings.futuresSeed), sS=numOf(settings.spotSeed);
+  if(fS==null && sS==null && fP===0 && sP===0){
+    return `<div class="card" id="balcard" style="margin-top:12px;cursor:pointer"><div class="row"><span style="flex:1">💰 시드(초기자본) 설정 — 탭해서 선물/현물 입력</span><span class="meta">＋</span></div></div>`;
+  }
+  const line=(label,seed,pnl)=>{
+    const bal=(seed||0)+pnl, ret=seed?pnl/seed*100:null, col=pnl>=0?'var(--futures)':'var(--spot)';
+    const sub=`<span style="color:${col};font-size:12px">(${pnl>=0?'+':''}${usd(pnl)}${ret!=null?', '+(ret>=0?'+':'')+ret.toFixed(1)+'%':''})</span>`;
+    return `<div class="stat-row"><span>${label}${seed!=null?' '+usd(seed)+' →':''}</span><span class="v">${(seed!=null||pnl!==0)?usd(bal):'-'} ${sub}</span></div>`;
+  };
+  const tSeed=(fS||0)+(sS||0), tPnl=fP+sP, tBal=tSeed+tPnl, tRet=tSeed?tPnl/tSeed*100:null, tcol=tPnl>=0?'var(--futures)':'var(--spot)';
+  return `<div class="card" id="balcard" style="margin-top:12px;cursor:pointer">
+    <div class="row" style="margin-bottom:4px"><span style="flex:1;font-weight:700">💰 잔고 ($)</span><span class="meta">시드 설정 ✏️</span></div>
+    ${line('선물', fS, fP)}
+    ${line('현물', sS, sP)}
+    <div class="stat-row" style="border:none"><span style="font-weight:700">합계</span><span class="v">${usd(tBal)} <span style="color:${tcol};font-size:12px">(${tPnl>=0?'+':''}${usd(tPnl)}${tRet!=null?', '+(tRet>=0?'+':'')+tRet.toFixed(1)+'%':''})</span></span></div>
+  </div>`;
+}
+
+function openSettings(){
+  const dlg=document.createElement('dialog');
+  dlg.innerHTML=`<div class="modal-in">
+    <div class="modal-head"><h2>💰 시드(초기자본) 설정</h2><button class="x" id="close">×</button></div>
+    <div class="hint">달러($) 기준. 거래 손익금액도 달러로 입력하면 잔고가 자동 계산됩니다.</div>
+    <label>선물 시드 ($)</label><input type="number" id="fs" inputmode="decimal" value="${settings.futuresSeed??''}">
+    <label>현물 시드 ($)</label><input type="number" id="ss" inputmode="decimal" value="${settings.spotSeed??''}">
+    <button class="btn" id="save" style="width:100%;margin-top:14px">저장</button>
+  </div>`;
+  document.body.appendChild(dlg); dlg.showModal();
+  dlg.querySelector('#close').onclick=()=>dlg.close();
+  dlg.querySelector('#save').onclick=async()=>{
+    const fs=parseFloat(dlg.querySelector('#fs').value), ss=parseFloat(dlg.querySelector('#ss').value);
+    await saveSettings({futuresSeed:isNaN(fs)?null:fs, spotSeed:isNaN(ss)?null:ss});
+    dlg.close(); render();
+  };
   dlg.addEventListener('close',()=>dlg.remove());
 }
 
