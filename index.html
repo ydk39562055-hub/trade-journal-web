@@ -92,8 +92,15 @@ const LS_CHECKS = 'free_journal_checks_v1';
 const LS_SETTINGS = 'free_journal_settings_v1';
 let settings = {futuresSeed:null, spotSeed:null};
 let principles = '';
-const ERROR_TAGS = ['포모','추격','손절 밀기','물타기','복수매매','오버사이즈','조기청산','근거없음'];
-const SETUP_TAGS = ['FVG인버전(BPR)','OB','Breaker','SFP','Liquidity sweep','MSS','Displacement','SMT','OTE'];
+const ERROR_TAGS_DEFAULT = ['포모','추격','손절 밀기','물타기','복수매매','오버사이즈','조기청산','근거없음'];
+const SETUP_TAGS = ['IFVG','OB','Breaker','SFP','Liquidity sweep','MSS','Displacement','SMT','OTE'];
+const TIMEFRAMES = ['1분','3분','5분','15분','1시간','4시간'];
+const LS_ERRTAGS = 'free_journal_errtags_v1';
+function userErrorTags(){
+  try{ const a=JSON.parse(localStorage.getItem(LS_ERRTAGS)||'null'); if(Array.isArray(a)&&a.length) return a; }catch{}
+  return [...ERROR_TAGS_DEFAULT];
+}
+function saveUserErrorTags(arr){ try{ localStorage.setItem(LS_ERRTAGS, JSON.stringify(arr)); }catch{} }
 const DEFAULT_PRINCIPLES = `ICT 거래 시스템 — 데일리 루틴 & 원칙
 
 🔑 오늘의 주문
@@ -350,7 +357,7 @@ async function upsertEntry(entry){
   // 클라우드 저장
   const row={ id:entry.id, user_id:session.user.id, market:entry.market, traded_at:entry.traded_at, body:entry.body, photos:entry.photos,
     direction:entry.direction??null, entry_price:entry.entry_price??null, exit_price:entry.exit_price??null,
-    result:entry.result??null, realized_r:entry.realized_r??null, pnl:entry.pnl??null, errors:entry.errors||[], setups:entry.setups||[], updated_at:new Date().toISOString() };
+    result:entry.result??null, realized_r:entry.realized_r??null, pnl:entry.pnl??null, errors:entry.errors||[], setups:entry.setups||[], timeframe:entry.timeframe??null, updated_at:new Date().toISOString() };
   const { error } = await sb.from('free_journal').upsert(row);
   if(error){ flashSaved('⚠ 클라우드 저장 실패(로컬엔 있음)'); document.getElementById('saveDot').style.color='var(--futures)'; }
   else flashSaved();
@@ -462,7 +469,7 @@ function cardHtml(e){
   return `<div class="card">
     <div class="row">
       <span class="tag ${cls}">${e.market}</span>
-      <span class="meta" style="flex:1">${esc(e.traded_at||'')} ${dir}</span>
+      <span class="meta" style="flex:1">${esc(e.traded_at||'')} ${dir}${e.timeframe?' · '+esc(e.timeframe):''}</span>
       ${pb}${rb}
       <button class="btn-ghost btn-sm" data-edit="${e.id}">수정</button>
       <button class="btn-ghost btn-sm" data-del="${e.id}">삭제</button>
@@ -520,10 +527,16 @@ function openEditor(id){
       </div>
       <label>손익금액 (선택 · +이익 / −손실)</label>
       <input type="number" id="pnl" inputmode="decimal" value="${draft.pnl??''}">
+      <label>진입 분봉</label>
+      <div class="seg" id="tf">${TIMEFRAMES.map(t=>`<button data-t="${t}" class="${draft.timeframe===t?'on':''}">${t}</button>`).join('')}</div>
       <label>셋업 태그 (ICT)</label>
       <div id="setups">${SETUP_TAGS.map(t=>`<span class="chip ${draft.setups.includes(t)?'on':''}" data-s="${t}">${t}</span>`).join('')}</div>
-      <label>실수 태그</label>
-      <div id="errs">${ERROR_TAGS.map(t=>`<span class="chip ${draft.errors.includes(t)?'on':''}" data-e="${t}">${t}</span>`).join('')}</div>
+      <label>실수 태그 (직접 입력 가능)</label>
+      <div id="errs"></div>
+      <div class="row" style="margin-top:6px;gap:6px">
+        <input id="errnew" placeholder="실수 직접 입력 후 추가" style="flex:1">
+        <button class="btn-ghost btn-sm" id="erradd" type="button">추가</button>
+      </div>
     </details>
 
     <div class="row" style="margin-top:16px;gap:8px">
@@ -555,14 +568,32 @@ function openEditor(id){
   dlg.querySelector('#exit').oninput=ev=> draft.exit_price=numOrNull(ev.target.value);
   dlg.querySelector('#rr').oninput=ev=> draft.realized_r=numOrNull(ev.target.value);
   dlg.querySelector('#pnl').oninput=ev=> draft.pnl=numOrNull(ev.target.value);
+  dlg.querySelectorAll('#tf button').forEach(b=> b.onclick=()=>{
+    draft.timeframe = draft.timeframe===b.dataset.t ? null : b.dataset.t;
+    dlg.querySelectorAll('#tf button').forEach(x=>x.classList.toggle('on', x.dataset.t===draft.timeframe)); });
   dlg.querySelectorAll('#setups .chip').forEach(c=> c.onclick=()=>{
     const t=c.dataset.s; const i=draft.setups.indexOf(t);
     if(i>=0) draft.setups.splice(i,1); else draft.setups.push(t);
     c.classList.toggle('on'); });
-  dlg.querySelectorAll('#errs .chip').forEach(c=> c.onclick=()=>{
-    const t=c.dataset.e; const i=draft.errors.indexOf(t);
-    if(i>=0) draft.errors.splice(i,1); else draft.errors.push(t);
-    c.classList.toggle('on'); });
+  // 실수 태그 — 사용자 목록 + draft 합쳐서 동적 렌더 (직접 추가 가능)
+  const drawErrs=()=>{
+    const list=[...new Set([...userErrorTags(), ...draft.errors])];
+    dlg.querySelector('#errs').innerHTML = list.map(t=>`<span class="chip ${draft.errors.includes(t)?'on':''}" data-e="${esc(t)}">${esc(t)}</span>`).join('');
+    dlg.querySelectorAll('#errs .chip').forEach(c=> c.onclick=()=>{
+      const t=c.dataset.e; const i=draft.errors.indexOf(t);
+      if(i>=0) draft.errors.splice(i,1); else draft.errors.push(t);
+      c.classList.toggle('on'); });
+  };
+  drawErrs();
+  const addErr=()=>{
+    const inp=dlg.querySelector('#errnew'); const t=(inp.value||'').trim();
+    if(!t) return;
+    if(!draft.errors.includes(t)) draft.errors.push(t);
+    const ut=userErrorTags(); if(!ut.includes(t)){ ut.push(t); saveUserErrorTags(ut); }
+    inp.value=''; drawErrs();
+  };
+  dlg.querySelector('#erradd').onclick=addErr;
+  dlg.querySelector('#errnew').onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); addErr(); } };
 
   dlg.querySelector('#close').onclick=()=> dlg.close();
   dlg.querySelector('#save').onclick=async()=>{
@@ -627,6 +658,9 @@ function openDashboard(){
     const tagRows=Object.entries(tagStats).sort((a,b)=>b[1].n-a[1].n).map(([t,s])=>{const d=s.w+s.l;const wr=d?Math.round(s.w/d*100)+'%':'-';return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr}</td><td style="color:${s.p>=0?'var(--futures)':'var(--spot)'}">${s.p>=0?'+':''}${money(s.p)}</td></tr>`;}).join('');
     const setStats={}; for(const e of pool)for(const t of(e.setups||[])){const s=setStats[t]=setStats[t]||{n:0,w:0,l:0,p:0};s.n++;if(e.result==='win')s.w++;if(e.result==='loss')s.l++;const pv=num(e.pnl);if(pv!=null)s.p+=pv;}
     const setRows=Object.entries(setStats).sort((a,b)=>b[1].n-a[1].n).map(([t,s])=>{const d=s.w+s.l;const wr=d?Math.round(s.w/d*100)+'%':'-';return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr}</td><td style="color:${s.p>=0?'var(--futures)':'var(--spot)'}">${s.p>=0?'+':''}${money(s.p)}</td></tr>`;}).join('');
+    const tfStats={}; for(const e of pool){const t=e.timeframe; if(!t)continue; const s=tfStats[t]=tfStats[t]||{n:0,w:0,l:0,p:0};s.n++;if(e.result==='win')s.w++;if(e.result==='loss')s.l++;const pv=num(e.pnl);if(pv!=null)s.p+=pv;}
+    const tfOrder=t=>{const i=TIMEFRAMES.indexOf(t);return i<0?99:i;};
+    const tfRows=Object.entries(tfStats).sort((a,b)=>tfOrder(a[0])-tfOrder(b[0])).map(([t,s])=>{const d=s.w+s.l;const wr=d?Math.round(s.w/d*100)+'%':'-';return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr}</td><td style="color:${s.p>=0?'var(--futures)':'var(--spot)'}">${s.p>=0?'+':''}${money(s.p)}</td></tr>`;}).join('');
     const clean=closed.filter(e=>!(e.errors&&e.errors.length)).length;
     const adher=closed.length?Math.round(clean/closed.length*100):null;
     const hasAny=closed.length||rs.length||pls.length;
@@ -661,6 +695,7 @@ function openDashboard(){
 
       ${monthRows?`<h3 style="margin:16px 0 0;font-size:15px">월별 손익</h3><table class="xt"><tr><th>월</th><th>손익</th></tr>${monthRows}</table>`:''}
 
+      ${tfRows?`<h3 style="margin:16px 0 0;font-size:15px">진입 분봉별 (어느 분봉이 잘 되나)</h3><table class="xt"><tr><th>분봉</th><th>건수</th><th>승률</th><th>손익</th></tr>${tfRows}</table>`:''}
       ${setRows?`<h3 style="margin:16px 0 0;font-size:15px">셋업별 (ICT · 어떤 셋업이 잘 되나)</h3><table class="xt"><tr><th>셋업</th><th>건수</th><th>승률</th><th>손익</th></tr>${setRows}</table>`:''}
       ${tagRows?`<h3 style="margin:16px 0 0;font-size:15px">실수 태그별 (약점 + 손익)</h3><table class="xt"><tr><th>태그</th><th>건수</th><th>승률</th><th>손익</th></tr>${tagRows}</table>`:''}
     `:`<div class="muted">${mkt==='all'?'전체':mkt}에 결과(익절/손절/R/손익)를 입력한 거래가 없어요.</div>`}
@@ -673,7 +708,7 @@ function openDashboard(){
 }
 
 function exportCSV(){
-  const cols=['traded_at','market','direction','entry_price','exit_price','result','realized_r','pnl','setups','errors','body'];
+  const cols=['traded_at','market','timeframe','direction','entry_price','exit_price','result','realized_r','pnl','setups','errors','body'];
   const cell=(e,c)=>{ let v=(c==='errors'||c==='setups')? (e[c]||[]).join('|') : (e[c]??''); if(typeof v==='number'&&!Number.isFinite(v))v=''; v=String(v).replace(/"/g,'""'); return /[",\n]/.test(v)?`"${v}"`:v; };
   const csv='﻿'+[cols.join(','), ...entries.map(e=>cols.map(c=>cell(e,c)).join(','))].join('\n');
   const a=document.createElement('a');
