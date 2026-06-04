@@ -1,0 +1,35 @@
+name: redfolder-update
+
+on:
+  schedule:
+    - cron: "0 0,12 * * *"     # 하루 2번(UTC 00:00, 12:00) ForexFactory 고임팩트 갱신
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: fetch ForexFactory red folder
+        run: |
+          python - <<'PY'
+          import urllib.request, json, gzip
+          url='https://nfs.faireconomy.media/ff_calendar_thisweek.json'
+          req=urllib.request.Request(url, headers={'User-Agent':'Mozilla/5.0','Accept':'application/json','Accept-Encoding':'identity'})
+          raw=urllib.request.urlopen(req, timeout=30).read()
+          try: data=json.loads(raw)
+          except Exception: data=json.loads(gzip.decompress(raw))
+          high=[{'title':e['title'],'country':e['country'],'date':e['date'],'forecast':e.get('forecast',''),'previous':e.get('previous','')} for e in data if e.get('impact')=='High']
+          json.dump(high, open('redfolder.json','w',encoding='utf-8'), ensure_ascii=False, indent=0)
+          print('wrote', len(high), 'high-impact events')
+          PY
+      - name: commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add redfolder.json
+          git commit -m "redfolder update [skip ci]" 2>/dev/null || echo "no change"
+          git push 2>/dev/null || true
