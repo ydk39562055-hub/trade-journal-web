@@ -24,6 +24,33 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const usd = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
 
+/* 동기화용 블롭 병합 — 두 기기 기록을 합치되 삭제(tombstone)는 반영.
+   a=로컬, b=클라우드. 스칼라(설정/원칙)는 클라우드(b)가 있으면 우선. */
+const _mtime = e => e.updated_at || e.created_at || '';
+function mergeBlobs(a, b) {
+  a = a || {}; b = b || {};
+  const deleted = {};
+  for (const src of [a.deleted || {}, b.deleted || {}])
+    for (const k in src) if (!deleted[k] || src[k] > deleted[k]) deleted[k] = src[k];
+  const buried = (id, t) => deleted[id] && deleted[id] >= (t || ''); // 삭제시각이 항목시각 이상이면 묻음
+  // 일지: id 합집합, 같은 id면 최신(mtime) 유지, 삭제된 건 제외
+  const em = new Map();
+  for (const e of [...(a.entries || []), ...(b.entries || [])]) {
+    if (!e || !e.id) continue;
+    const prev = em.get(e.id);
+    if (!prev || _mtime(e) >= _mtime(prev)) em.set(e.id, e);
+  }
+  const entries = [...em.values()].filter(e => !buried(e.id, _mtime(e)))
+    .sort((x, y) => (y.traded_at || '').localeCompare(x.traded_at || '') || (y.created_at || '').localeCompare(x.created_at || ''));
+  // 메모: id 합집합, 삭제된 건 제외
+  const mm = new Map();
+  for (const m of [...(a.memos || []), ...(b.memos || [])]) if (m && m.id && !mm.has(m.id)) mm.set(m.id, m);
+  const memos = [...mm.values()].filter(m => !deleted[m.id]);
+  const settings = { ...(a.settings || {}), ...(b.settings || {}) };
+  const principles = (b.principles && b.principles.trim()) ? b.principles : (a.principles || '');
+  return { v: 1, entries, settings, principles, memos, deleted };
+}
+
 function RedFolderCard({ items }) {
   if (!items || !items.length) return null;
   const today = todayStr();
@@ -73,6 +100,13 @@ function App() {
   });
   const [flash, setFlash] = useState('');
   const flashTimer = useRef();
+  // ── 클라우드 동기화 ──
+  const [syncId, setSyncId] = useState(() => localStorage.getItem('tj_sync_id') || null);
+  const [deleted, setDeleted] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_deleted_v1') || '{}'); } catch { return {}; } });
+  const [syncReady, setSyncReady] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(''); // '' | syncing | saved | err
+  const lastSentRef = useRef('');
+  const debRef = useRef();
 
   // persist
   useEffect(() => { localStorage.setItem('tj_entries_v3', JSON.stringify(entries)); }, [entries]);
@@ -80,6 +114,58 @@ function App() {
   useEffect(() => { localStorage.setItem('tj_principles_v2', principles); }, [principles]);
   useEffect(() => { localStorage.setItem('tj_checks_v2', JSON.stringify({ d: todayStr(), s: [...checks] })); }, [checks]);
   useEffect(() => { localStorage.setItem('tj_memos_v2', JSON.stringify(memos)); }, [memos]);
+  useEffect(() => { localStorage.setItem('tj_deleted_v1', JSON.stringify(deleted)); }, [deleted]);
+
+  const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, deleted });
+  const applyBlob = (b) => {
+    if (Array.isArray(b.entries)) setEntries(b.entries);
+    if (b.settings) setSettings(b.settings);
+    if (typeof b.principles === 'string' && b.principles.trim()) setPrinciples(b.principles);
+    if (Array.isArray(b.memos)) setMemos(b.memos);
+    if (b.deleted) setDeleted(b.deleted);
+  };
+
+  // 동기화 코드가 잡히면(첫 로드/연결) → 클라우드와 병합 후 정착
+  useEffect(() => {
+    if (!syncId || !window.TJSync) { lastSentRef.current = ''; setSyncReady(true); return; }
+    let cancelled = false; setSyncReady(false); setSyncStatus('syncing');
+    (async () => {
+      try {
+        const cloud = await TJSync.pull(syncId);
+        if (cancelled) return;
+        const local = gatherBlob();
+        let merged, needPush;
+        if (cloud && cloud.data && Object.keys(cloud.data).length) {
+          merged = mergeBlobs(local, cloud.data);
+          needPush = JSON.stringify(merged) !== JSON.stringify({ v: 1, ...cloud.data });
+        } else { merged = mergeBlobs(local, {}); needPush = true; }
+        applyBlob(merged);
+        lastSentRef.current = JSON.stringify(merged);
+        if (needPush) await TJSync.push(syncId, merged);
+        if (!cancelled) setSyncStatus('saved');
+      } catch (e) { if (!cancelled) setSyncStatus('err'); }
+      finally { if (!cancelled) setSyncReady(true); }
+    })();
+    return () => { cancelled = true; };
+  }, [syncId]);
+
+  // 변경 시 클라우드로 밀어올리기(디바운스). 첫 병합 직후엔 내용 동일 → 건너뜀
+  useEffect(() => {
+    if (!syncId || !syncReady || !window.TJSync) return;
+    const json = JSON.stringify(gatherBlob());
+    if (json === lastSentRef.current) return;
+    setSyncStatus('syncing');
+    clearTimeout(debRef.current);
+    debRef.current = setTimeout(async () => {
+      try { await TJSync.push(syncId, JSON.parse(json)); lastSentRef.current = json; setSyncStatus('saved'); }
+      catch (e) { setSyncStatus('err'); }
+    }, 1400);
+    return () => clearTimeout(debRef.current);
+  }, [entries, settings, principles, memos, deleted, syncId, syncReady]);
+
+  const enableSync = () => { const c = TJSync.genCode(); localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('동기화 켜짐 ☁'); return c; };
+  const joinSync = (raw) => { const c = TJSync.clean(raw); if (c.length < 12) { alert('코드가 너무 짧아요. 다시 확인해주세요.'); return false; } localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('연결 중… ☁'); return true; };
+  const disableSync = () => { localStorage.removeItem('tj_sync_id'); setSyncId(null); lastSentRef.current = ''; setSyncStatus(''); doFlash('이 기기 동기화 꺼짐'); };
   // 레드폴더(ForexFactory 고임팩트) — 같은 주소 redfolder.json (GH Action이 갱신)
   useEffect(() => { fetch('redfolder.json?t=' + Date.now()).then(r => r.ok ? r.json() : []).then(j => { if (Array.isArray(j)) setRedfolder(j); }).catch(() => {}); }, []);
 
@@ -95,7 +181,7 @@ function App() {
     setMemos(prev => [{ id: 'm-' + Date.now(), at, text }, ...prev]);
     doFlash('메모 저장됨 ✓');
   };
-  const removeMemo = (id) => setMemos(prev => prev.filter(m => m.id !== id));
+  const removeMemo = (id) => { setMemos(prev => prev.filter(m => m.id !== id)); setDeleted(p => ({ ...p, [id]: new Date().toISOString() })); };
 
   // apply tweaks → CSS vars
   useEffect(() => {
@@ -113,6 +199,7 @@ function App() {
 
   // entry ops
   const saveEntry = (e) => {
+    e = { ...e, updated_at: new Date().toISOString() }; // 동기화 병합 시 최신 편집 우선용
     setEntries(prev => {
       const i = prev.findIndex(x => x.id === e.id);
       const next = i >= 0 ? prev.map(x => x.id === e.id ? e : x) : [e, ...prev];
@@ -121,7 +208,7 @@ function App() {
     });
     setModal(null); doFlash('저장됨 ✓');
   };
-  const deleteEntry = (id) => { if (confirm('이 일지를 삭제할까요?')) { setEntries(prev => prev.filter(x => x.id !== id)); doFlash('삭제됨'); } };
+  const deleteEntry = (id) => { if (confirm('이 일지를 삭제할까요?')) { setEntries(prev => prev.filter(x => x.id !== id)); setDeleted(p => ({ ...p, [id]: new Date().toISOString() })); doFlash('삭제됨'); } };
   const importEntries = (arr) => {
     if (!Array.isArray(arr) || !arr.length) { alert('가져올 일지가 없어요.'); return; }
     if (!confirm(`${arr.length}건을 가져옵니다. 같은 ID는 덮어써요. 계속할까요?`)) return;
@@ -134,6 +221,8 @@ function App() {
   };
   const clearAll = () => {
     if (!confirm('샘플 데이터(예시 28건)와 시드를 비우고 빈 일지로 시작할까요?\n되돌릴 수 없어요. (필요하면 먼저 더보기 → JSON 백업)')) return;
+    const ts = new Date().toISOString();
+    setDeleted(prev => { const n = { ...prev }; entries.forEach(e => { n[e.id] = ts; }); return n; }); // 동기화 시 다른 기기에서도 비워지도록
     setEntries([]); setSettings({ futuresSeed: null, spotSeed: null });
     setModal(null); doFlash('초기화됨 — 새로 시작 ✓');
   };
@@ -181,6 +270,11 @@ function App() {
             </div>
             <h1 style={{ fontSize: 18, letterSpacing: '-.02em' }}>거래일지</h1>
             {flash && <span style={{ fontSize: 12.5, color: 'var(--win)', fontWeight: 600, animation: 'fade-in .2s' }}>{flash}</span>}
+            {!flash && syncId && (
+              <span title="클라우드 동기화 켜짐" style={{ fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4, color: syncStatus === 'err' ? 'var(--loss)' : 'var(--ink-3)' }}>
+                ☁ {syncStatus === 'syncing' ? '동기화 중…' : syncStatus === 'err' ? '오프라인' : '동기화됨'}
+              </span>
+            )}
           </div>
           <div className="seg" style={{ display: isMobile ? 'none' : 'inline-flex' }}>
             {[['cockpit', '차트형'], ['ledger', '목록형'], ['focus', '원칙형']].map(([v, l]) => (
@@ -266,7 +360,8 @@ function App() {
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
-      {modal?.type === 'menu' && <MenuModal entries={entries} onImport={importEntries} onReset={clearAll} onClose={() => setModal(null)} />}
+      {modal?.type === 'menu' && <MenuModal entries={entries} syncId={syncId} onImport={importEntries} onReset={clearAll} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
+      {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}
 
       {/* ── Tweaks ── */}
       <TweaksPanel title="Tweaks">

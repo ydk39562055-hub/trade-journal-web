@@ -175,8 +175,68 @@ function PrinciplesModal({ text, onSave, onClose }) {
   );
 }
 
+/* ───────────── 클라우드 동기화 (동기화 코드) ───────────── */
+function SyncModal({ syncId, onEnable, onJoin, onDisable, onClose }) {
+  const [mode, setMode] = useStateM(syncId ? 'on' : 'home'); // home | new | join | on
+  const [code, setCode] = useStateM(syncId || '');
+  const [joinVal, setJoinVal] = useStateM('');
+  const [copied, setCopied] = useStateM(false);
+  const fmt = c => (c || '').replace(/(.{5})(?=.)/g, '$1-'); // 보기용 하이픈
+  const copy = () => {
+    const txt = fmt(code);
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, () => {});
+    else { setCopied(true); setTimeout(() => setCopied(false), 1600); }
+  };
+  const startNew = () => { const c = onEnable(); setCode(c); setMode('on'); };
+  const doJoin = () => { if (onJoin(joinVal)) { setCode(window.TJSync ? TJSync.clean(joinVal) : joinVal); setMode('on'); } };
+
+  const fld = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
+  const big = { width: '100%', justifyContent: 'flex-start', gap: 12, padding: '16px', marginBottom: 10, fontSize: 14.5, fontWeight: 600, textAlign: 'left', alignItems: 'flex-start', flexDirection: 'column' };
+  const codeBox = { fontFamily: 'var(--font-mono, monospace)', fontSize: 16, fontWeight: 700, letterSpacing: '.04em', wordBreak: 'break-all', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', lineHeight: 1.5, color: 'var(--ink)' };
+
+  return (
+    <Modal open onClose={onClose} title="다른 기기와 동기화" sub="로그인 없이, 동기화 코드 하나로 여러 컴퓨터가 같은 일지를 봅니다" maxWidth={460}>
+      {mode === 'home' && (<>
+        <button className="btn-ghost" style={big} onClick={startNew}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>☁ 이 기기 기록으로 새로 시작</span>
+          <span style={{ fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 500 }}>지금 이 컴퓨터의 일지를 클라우드에 올리고 코드를 만듭니다. (처음이면 이거)</span>
+        </button>
+        <button className="btn-ghost" style={big} onClick={() => setMode('join')}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>🔗 이미 코드가 있어요</span>
+          <span style={{ fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 500 }}>다른 컴퓨터에서 만든 코드를 입력해 그 기록을 불러옵니다.</span>
+        </button>
+        <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 8, lineHeight: 1.55 }}>※ 코드는 비밀번호처럼 다루세요. 코드를 아는 사람만 이 일지를 볼 수 있습니다.</div>
+      </>)}
+
+      {mode === 'join' && (<>
+        <label style={fld}>동기화 코드 붙여넣기</label>
+        <textarea value={joinVal} onChange={e => setJoinVal(e.target.value)} placeholder="다른 컴퓨터의 코드 (예: AB3kq-9Fm2x-…)" style={{ minHeight: 64, fontSize: 14, letterSpacing: '.03em' }} />
+        <button className="btn" onClick={doJoin} disabled={window.TJSync ? TJSync.clean(joinVal).length < 12 : joinVal.length < 12} style={{ width: '100%', marginTop: 12, padding: 13 }}>이 코드로 연결</button>
+        <button className="btn-ghost btn-sm" onClick={() => setMode('home')} style={{ width: '100%', marginTop: 8 }}>← 뒤로</button>
+        <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 10, lineHeight: 1.55 }}>연결하면 이 기기의 기존 기록과 클라우드 기록이 합쳐집니다(삭제 기록도 반영).</div>
+      </>)}
+
+      {mode === 'on' && (<>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--win)', flexShrink: 0 }} />
+          <b style={{ fontSize: 14.5 }}>이 기기는 동기화 중</b>
+        </div>
+        <label style={fld}>내 동기화 코드 — 다른 컴퓨터에 이걸 입력하세요</label>
+        <div style={codeBox}>{fmt(code)}</div>
+        <button className="btn" onClick={copy} style={{ width: '100%', marginTop: 10, padding: 12 }}>{copied ? '복사됨 ✓' : '코드 복사'}</button>
+        <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 12, lineHeight: 1.6 }}>
+          다른 컴퓨터에서 같은 주소를 열고 → 더보기 → 다른 기기와 동기화 → <b>"이미 코드가 있어요"</b> → 이 코드 붙여넣기. 그 뒤론 양쪽이 자동으로 같이 갱신됩니다.
+        </div>
+        <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0 10px' }} />
+        <button className="btn-ghost" style={{ width: '100%', justifyContent: 'center', color: 'var(--loss)' }} onClick={() => { if (confirm('이 기기에서만 동기화를 끕니다. 기록은 그대로 남고, 다시 코드를 입력하면 재연결됩니다.')) { onDisable(); onClose(); } }}>이 기기 동기화 끄기</button>
+        <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 8, lineHeight: 1.5 }}>※ 한 번에 한 기기에서 쓰는 걸 권장합니다(두 기기 동시 편집 시 마지막 저장이 우선).</div>
+      </>)}
+    </Modal>
+  );
+}
+
 /* ───────────── 더보기 (CSV / JSON) ───────────── */
-function MenuModal({ entries, onImport, onReset, onClose }) {
+function MenuModal({ entries, syncId, onImport, onReset, onSync, onClose }) {
   const fileRef = useRefM();
   const today = new Date().toISOString().slice(0, 10);
   const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
@@ -192,6 +252,10 @@ function MenuModal({ entries, onImport, onReset, onClose }) {
   const row = { width: '100%', justifyContent: 'flex-start', gap: 12, padding: '15px 16px', marginBottom: 9, fontSize: 14.5, fontWeight: 600 };
   return (
     <Modal open onClose={onClose} title="더보기" maxWidth={440}>
+      <button className="btn-ghost" style={{ ...row, color: syncId ? 'var(--win)' : 'var(--violet)' }} onClick={onSync}>
+        ☁ 다른 기기와 동기화{syncId ? ' — 켜짐 ✓' : ''}
+      </button>
+      <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0 12px' }} />
       <button className="btn-ghost" style={row} onClick={exportCSV}>CSV 내보내기</button>
       <button className="btn-ghost" style={row} onClick={exportJSON}>JSON 백업 (내보내기)</button>
       <button className="btn-ghost" style={row} onClick={() => fileRef.current.click()}>JSON 복원 (가져오기)</button>
@@ -298,4 +362,4 @@ function MemoModal({ memos, onChange, onClose }) {
   );
 }
 
-Object.assign(window, { EditorModal, SettingsModal, PrinciplesModal, MenuModal, MemoModal });
+Object.assign(window, { EditorModal, SettingsModal, PrinciplesModal, MenuModal, MemoModal, SyncModal });
