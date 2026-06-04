@@ -44,6 +44,12 @@
   .body{white-space:pre-wrap;word-break:break-word;margin:8px 0 0}
   .chip{display:inline-block;padding:5px 11px;margin:3px 3px 0 0;border-radius:999px;border:1px solid var(--border);background:#fff;font-size:13px;cursor:pointer}
   .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .seg button.on{background:var(--accent);color:#fff}
+  .chk{cursor:pointer;display:flex;gap:7px;align-items:flex-start;padding:3px 2px;border-radius:6px}
+  .chk:active{background:var(--accentSoft)}
+  .chk .box{flex-shrink:0;font-size:15px;line-height:1.5}
+  .chk.done .t{text-decoration:line-through;color:var(--ink4)}
+  .pline{white-space:pre-wrap;word-break:break-word}
   details{margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:0 12px;background:#fff}
   summary{cursor:pointer;padding:10px 0;font-size:14px;color:var(--ink2);font-weight:600}
   .grid2{display:flex;gap:8px} .grid2>div{flex:1}
@@ -81,6 +87,7 @@ const SUPABASE_URL = 'https://oxogtsfxdjbctzehxvae.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3vXShFC5dKvMqzUy1KkyGQ_sF0SzUY2'; // 공개용(publishable) 키 — RLS로 보호
 const LS_KEY = 'free_journal_cache_v1';
 const LS_PRIN = 'free_journal_principles_v1';
+const LS_CHECKS = 'free_journal_checks_v1';
 let principles = '';
 const ERROR_TAGS = ['포모','추격','손절 밀기','물타기','복수매매','오버사이즈','조기청산','근거없음'];
 const DEFAULT_PRINCIPLES = `ICT 거래 시스템 — 데일리 루틴 & 원칙
@@ -332,6 +339,25 @@ async function removeEntry(id){
   flashSaved(error?'⚠ 삭제 클라우드 반영 실패':'삭제됨');
 }
 
+// ───────── 원칙 체크리스트 (데일리 루틴 ☐, 날짜별 리셋) ─────────
+function loadChecks(){
+  try{ const o=JSON.parse(localStorage.getItem(LS_CHECKS)||'{}'); if(o.d===todayStr()) return new Set(o.s||[]); }catch{}
+  return new Set();
+}
+function saveChecks(set){ try{ localStorage.setItem(LS_CHECKS, JSON.stringify({d:todayStr(), s:[...set]})); }catch{} }
+function principlesHTML(text){
+  const checks=loadChecks();
+  return (text||'').split('\n').map((line,i)=>{
+    const t=line.replace(/^\s+/,'');
+    if(t.startsWith('☐')||t.startsWith('☑')){
+      const done=checks.has(i);
+      const bodyTxt=t.replace(/^[☐☑]\s?/,'');
+      return `<div class="chk ${done?'done':''}" data-li="${i}"><span class="box">${done?'☑':'☐'}</span><span class="t">${esc(bodyTxt)}</span></div>`;
+    }
+    return `<div class="pline">${esc(line)||'&nbsp;'}</div>`;
+  }).join('');
+}
+
 // ───────── 화면 ─────────
 let filter='all';
 
@@ -348,7 +374,7 @@ function render(){
     <div class="wrap">
       <details class="card" id="routine" open style="margin-top:12px">
         <summary>📋 오늘의 루틴 & 원칙 (ICT) — 매일 읽기</summary>
-        <div class="body" style="max-height:46vh;overflow:auto;font-size:13.5px;line-height:1.7;margin-top:6px">${esc(principles)}</div>
+        <div class="body" style="max-height:46vh;overflow:auto;font-size:13.5px;line-height:1.7;margin-top:6px">${principlesHTML(principles)}</div>
         <div style="text-align:right;margin-top:6px"><button class="btn-ghost btn-sm" id="editprin">✏️ 편집</button></div>
       </details>
       <div class="row" style="margin:12px 0 0;gap:8px;justify-content:flex-end">
@@ -366,6 +392,12 @@ function render(){
   document.getElementById('stats').onclick=()=>openDashboard();
   document.getElementById('csv').onclick=()=>exportCSV();
   const ep=document.getElementById('editprin'); if(ep) ep.onclick=()=>openPrinciples();
+  app.querySelectorAll('#routine .chk').forEach(el=> el.onclick=()=>{
+    const i=+el.dataset.li, s=loadChecks();
+    if(s.has(i)) s.delete(i); else s.add(i);
+    saveChecks(s); el.classList.toggle('done');
+    const box=el.querySelector('.box'); if(box) box.textContent = s.has(i)?'☑':'☐';
+  });
   document.getElementById('logout').onclick=async()=>{ await sb.auth.signOut(); session=null; render(); };
   app.querySelectorAll('[data-f]').forEach(b=> b.onclick=()=>{ filter=b.dataset.f; render(); });
   app.querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=> openEditor(b.dataset.edit));
@@ -506,66 +538,54 @@ function sparkline(values, w=320, h=90){
 function openDashboard(){
   const fnum=n=>(n===Infinity?'∞':Math.round(n*100)/100);
   const money=n=>(n<0?'−':'')+Math.abs(Math.round(n)).toLocaleString('ko-KR');
-  const num=v=> (v!=null&&v!=='' && !isNaN(Number(v))) ? Number(v) : null;
-
-  const closed=entries.filter(e=>['win','loss','be'].includes(e.result));
-  const wins=closed.filter(e=>e.result==='win').length;
-  const losses=closed.filter(e=>e.result==='loss').length;
-  const bes=closed.filter(e=>e.result==='be').length;
-  const decisive=wins+losses;
-  const winRate=decisive?wins/decisive*100:0;
-
-  const rs=entries.map(e=>num(e.realized_r)).filter(v=>v!=null);
-  const sumR=rs.reduce((a,b)=>a+b,0), avgR=rs.length?sumR/rs.length:0;
-  const posR=rs.filter(r=>r>0).reduce((a,b)=>a+b,0), negR=Math.abs(rs.filter(r=>r<0).reduce((a,b)=>a+b,0));
-  const pf=negR?posR/negR:(posR>0?Infinity:0);
-
-  const pls=entries.map(e=>num(e.pnl)).filter(v=>v!=null);
-  const sumP=pls.reduce((a,b)=>a+b,0), avgP=pls.length?sumP/pls.length:0;
-  const best=pls.length?Math.max(...pls):0, worst=pls.length?Math.min(...pls):0;
-  const winP=pls.filter(v=>v>0), lossP=pls.filter(v=>v<0);
-  const avgWin=winP.length?winP.reduce((a,b)=>a+b,0)/winP.length:0;
-  const avgLoss=lossP.length?Math.abs(lossP.reduce((a,b)=>a+b,0)/lossP.length):0;
-  const payoff=avgLoss?avgWin/avgLoss:(avgWin>0?Infinity:0);
-
-  // 시간순(오래된→최근)
-  const chrono=[...entries].sort((a,b)=>(a.traded_at||'').localeCompare(b.traded_at||'')||(a.created_at||'').localeCompare(b.created_at||''));
-
-  // 누적 곡선 — pnl 있으면 금액, 없으면 R
-  const useMoney=pls.length>0;
-  const seq=chrono.map(e=> useMoney?num(e.pnl):num(e.realized_r)).filter(v=>v!=null);
-  let cum=0; const curve=seq.map(v=>(cum+=v));
-  let peak=-Infinity, mdd=0;
-  for(const v of curve){ if(v>peak)peak=v; const dd=peak-v; if(dd>mdd)mdd=dd; }
-
-  // 연승/연패
-  const closedChrono=chrono.filter(e=>['win','loss'].includes(e.result));
-  let maxW=0,maxL=0,cw=0,cl=0;
-  for(const e of closedChrono){ if(e.result==='win'){cw++;cl=0;}else{cl++;cw=0;} if(cw>maxW)maxW=cw; if(cl>maxL)maxL=cl; }
-
-  // 방향별
-  const dirStat=d=>{ const c=entries.filter(e=>e.direction===d); const cd=c.filter(e=>['win','loss'].includes(e.result)); const w=cd.filter(e=>e.result==='win').length; const p=c.map(e=>num(e.pnl)).filter(v=>v!=null).reduce((a,b)=>a+b,0); return {n:c.length, wr:cd.length?Math.round(w/cd.length*100):null, p}; };
-  const L=dirStat('long'), S=dirStat('short');
-
-  // 월별 손익
-  const byMonth={};
-  for(const e of entries){ const m=(e.traded_at||'').slice(0,7); const v=num(e.pnl); if(!m||v==null)continue; byMonth[m]=(byMonth[m]||0)+v; }
-  const monthRows=Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,v])=>`<tr><td>${m}</td><td style="color:${v>=0?'var(--futures)':'var(--spot)'}">${v>=0?'+':''}${money(v)}</td></tr>`).join('');
-
-  // 실수 태그별 (건수·승률·손익)
-  const tagStats={};
-  for(const e of entries) for(const t of (e.errors||[])){ const s=tagStats[t]=tagStats[t]||{n:0,w:0,l:0,p:0}; s.n++; if(e.result==='win')s.w++; if(e.result==='loss')s.l++; const pv=num(e.pnl); if(pv!=null)s.p+=pv; }
-  const tagRows=Object.entries(tagStats).sort((a,b)=>b[1].n-a[1].n).map(([t,s])=>{ const d=s.w+s.l; const wr=d?Math.round(s.w/d*100)+'%':'-'; return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr}</td><td style="color:${s.p>=0?'var(--futures)':'var(--spot)'}">${s.p>=0?'+':''}${money(s.p)}</td></tr>`; }).join('');
-
-  // 규칙 준수율 (마감 거래 중 실수태그 0)
-  const clean=closed.filter(e=>!(e.errors&&e.errors.length)).length;
-  const adher=closed.length?Math.round(clean/closed.length*100):null;
-
-  const hasAny=closed.length||rs.length||pls.length;
+  const num=v=>(v!=null&&v!==''&&!isNaN(Number(v)))?Number(v):null;
   const dlg=document.createElement('dialog');
-  dlg.innerHTML=`<div class="modal-in">
-    <div class="modal-head"><h2>📊 통계</h2><button class="x" id="close">×</button></div>
-    ${hasAny?`
+  let mkt=(filter==='선물'||filter==='현물')?filter:'all';
+
+  const build=()=>{
+    const pool=entries.filter(e=> mkt==='all'||e.market===mkt);
+    const closed=pool.filter(e=>['win','loss','be'].includes(e.result));
+    const wins=closed.filter(e=>e.result==='win').length;
+    const losses=closed.filter(e=>e.result==='loss').length;
+    const bes=closed.filter(e=>e.result==='be').length;
+    const decisive=wins+losses;
+    const winRate=decisive?wins/decisive*100:0;
+    const rs=pool.map(e=>num(e.realized_r)).filter(v=>v!=null);
+    const sumR=rs.reduce((a,b)=>a+b,0), avgR=rs.length?sumR/rs.length:0;
+    const posR=rs.filter(r=>r>0).reduce((a,b)=>a+b,0), negR=Math.abs(rs.filter(r=>r<0).reduce((a,b)=>a+b,0));
+    const pf=negR?posR/negR:(posR>0?Infinity:0);
+    const pls=pool.map(e=>num(e.pnl)).filter(v=>v!=null);
+    const sumP=pls.reduce((a,b)=>a+b,0), avgP=pls.length?sumP/pls.length:0;
+    const best=pls.length?Math.max(...pls):0, worst=pls.length?Math.min(...pls):0;
+    const winP=pls.filter(v=>v>0), lossP=pls.filter(v=>v<0);
+    const avgWin=winP.length?winP.reduce((a,b)=>a+b,0)/winP.length:0;
+    const avgLoss=lossP.length?Math.abs(lossP.reduce((a,b)=>a+b,0)/lossP.length):0;
+    const payoff=avgLoss?avgWin/avgLoss:(avgWin>0?Infinity:0);
+    const chrono=[...pool].sort((a,b)=>(a.traded_at||'').localeCompare(b.traded_at||'')||(a.created_at||'').localeCompare(b.created_at||''));
+    const useMoney=pls.length>0;
+    const seq=chrono.map(e=>useMoney?num(e.pnl):num(e.realized_r)).filter(v=>v!=null);
+    let cum=0; const curve=seq.map(v=>(cum+=v));
+    let peak=-Infinity,mdd=0; for(const v of curve){if(v>peak)peak=v;const dd=peak-v;if(dd>mdd)mdd=dd;}
+    const closedChrono=chrono.filter(e=>['win','loss'].includes(e.result));
+    let maxW=0,maxL=0,cw=0,cl=0; for(const e of closedChrono){if(e.result==='win'){cw++;cl=0;}else{cl++;cw=0;}if(cw>maxW)maxW=cw;if(cl>maxL)maxL=cl;}
+    const dirStat=d=>{const c=pool.filter(e=>e.direction===d);const cd=c.filter(e=>['win','loss'].includes(e.result));const w=cd.filter(e=>e.result==='win').length;const p=c.map(e=>num(e.pnl)).filter(v=>v!=null).reduce((a,b)=>a+b,0);return{n:c.length,wr:cd.length?Math.round(w/cd.length*100):null,p};};
+    const L=dirStat('long'),S=dirStat('short');
+    const byMonth={}; for(const e of pool){const m=(e.traded_at||'').slice(0,7);const v=num(e.pnl);if(!m||v==null)continue;byMonth[m]=(byMonth[m]||0)+v;}
+    const monthRows=Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,v])=>`<tr><td>${m}</td><td style="color:${v>=0?'var(--futures)':'var(--spot)'}">${v>=0?'+':''}${money(v)}</td></tr>`).join('');
+    const tagStats={}; for(const e of pool)for(const t of(e.errors||[])){const s=tagStats[t]=tagStats[t]||{n:0,w:0,l:0,p:0};s.n++;if(e.result==='win')s.w++;if(e.result==='loss')s.l++;const pv=num(e.pnl);if(pv!=null)s.p+=pv;}
+    const tagRows=Object.entries(tagStats).sort((a,b)=>b[1].n-a[1].n).map(([t,s])=>{const d=s.w+s.l;const wr=d?Math.round(s.w/d*100)+'%':'-';return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr}</td><td style="color:${s.p>=0?'var(--futures)':'var(--spot)'}">${s.p>=0?'+':''}${money(s.p)}</td></tr>`;}).join('');
+    const clean=closed.filter(e=>!(e.errors&&e.errors.length)).length;
+    const adher=closed.length?Math.round(clean/closed.length*100):null;
+    const hasAny=closed.length||rs.length||pls.length;
+
+    dlg.innerHTML=`<div class="modal-in">
+      <div class="modal-head"><h2>📊 통계</h2><button class="x" id="close">×</button></div>
+      <div class="seg" id="mktseg">
+        <button data-m="all" class="${mkt==='all'?'on':''}">전체</button>
+        <button data-m="선물" class="futures ${mkt==='선물'?'on':''}">선물</button>
+        <button data-m="현물" class="spot ${mkt==='현물'?'on':''}">현물</button>
+      </div>
+      ${hasAny?`
       <div class="stat-row"><span>마감 거래</span><span class="v">${closed.length}건 (익${wins}·손${losses}·본${bes})</span></div>
       <div class="stat-row"><span>승률 (익/[익+손])</span><span class="v">${Math.round(winRate)}%</span></div>
       ${pls.length?`
@@ -589,10 +609,12 @@ function openDashboard(){
       ${monthRows?`<h3 style="margin:16px 0 0;font-size:15px">월별 손익</h3><table class="xt"><tr><th>월</th><th>손익</th></tr>${monthRows}</table>`:''}
 
       ${tagRows?`<h3 style="margin:16px 0 0;font-size:15px">실수 태그별 (약점 + 손익)</h3><table class="xt"><tr><th>태그</th><th>건수</th><th>승률</th><th>손익</th></tr>${tagRows}</table>`:''}
-    `:`<div class="muted">아직 결과/손익/R을 입력한 거래가 없어요.<br>일지 작성 시 📊 상세에서 채우면 여기 통계가 잡힙니다.</div>`}
-  </div>`;
-  document.body.appendChild(dlg); dlg.showModal();
-  dlg.querySelector('#close').onclick=()=>dlg.close();
+    `:`<div class="muted">${mkt==='all'?'전체':mkt}에 결과(익절/손절/R/손익)를 입력한 거래가 없어요.</div>`}
+    </div>`;
+    dlg.querySelector('#close').onclick=()=>dlg.close();
+    dlg.querySelectorAll('#mktseg button').forEach(b=> b.onclick=()=>{ mkt=b.dataset.m; build(); });
+  };
+  document.body.appendChild(dlg); build(); dlg.showModal();
   dlg.addEventListener('close',()=>dlg.remove());
 }
 
