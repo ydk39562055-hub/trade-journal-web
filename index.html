@@ -82,29 +82,159 @@ const LS_KEY = 'free_journal_cache_v1';
 const LS_PRIN = 'free_journal_principles_v1';
 let principles = '';
 const ERROR_TAGS = ['포모','추격','손절 밀기','물타기','복수매매','오버사이즈','조기청산','근거없음'];
-const DEFAULT_PRINCIPLES = `📌 선물 매매 원칙  (시작 세트 — 본인에 맞게 수정하세요)
+const DEFAULT_PRINCIPLES = `ICT 거래 시스템 — 데일리 루틴 & 원칙
 
-[리스크 — 제일 중요]
-1. 1회 손실 한도 = 계좌의 1% (배우는 중엔 0.5%). 손실액 기준으로 수량을 정한다 — 레버리지로 키우지 않는다.
-2. 손절 없이 진입 금지. 선물은 청산(강제매도) 위험 → 손절가를 먼저 정하고 들어간다.
-3. 손익비(R:R) 1.5 이상일 때만 진입. 먹을 게 잃을 것의 1.5배 미만이면 패스.
-4. 레버리지는 '증거금 효율' 도구지 '크기 키우는' 도구가 아니다. 1% 손실 한도가 수량을 정한다.
+🔑 오늘의 주문
+· 확장 + 편향 + 스윕 + OF전환 — 4개 모일 때만 진입. 나머지 관망.
+· PRICE를 읽고, 맞는 TIME을 기다린다. 관망도 포지션.
+· 오늘 못 먹어도 된다. 규칙 지키는 게 이기는 것.
+· 한 번에 한 셋업. FOMO·복수·물타기 금지.
 
-[규율 — 감정 제어]
-5. 하루 손실 -2R(2~3연패) 도달 → 그날 매매 끝. 복구하려 더 들어가지 않는다.
-6. 복수 매매 금지 — 손실 직후 바로 재진입하지 않는다 (최소 15분 쉬기).
-7. 손절 밀지 않기 — 한 번 정한 손절을 불리한 쪽으로 옮기지 않는다.
-8. 물타기 금지 — 지고 있는 포지션에 추가 진입하지 않는다.
-9. 추격 금지 — 떠난 자리 쫓지 않고 다음 셋업을 기다린다.
+━━━━━ 0. 데일리 루틴 (매일 읽고 시작) ━━━━━
 
-[환경 — 진입 조건]
-10. 주요 지표(CPI·FOMC·고용) 발표 전후 30분 진입 금지. 변동성 폭발 구간.
-11. 명확한 근거/셋업 없으면 안 한다. '느낌'으로 들어가지 않는다.
-12. 상위 시간대(추세) 방향과 맞을 때 우선. 역행 진입은 크기를 줄인다.
+① 장전 분석 — HTF 컨텍스트
+☐ 일봉·4H 오더플로우 방향? (상승/하락)
+☐ 50% EQ 기준 지금 프리미엄? 디스카운트?
+☐ HTF FVG/OB 거부 중 vs 미청산 유동성으로 달리는 중?
+☐ True Daily Open(00:00 NY) 표시 → 롱은 시가 아래, 숏은 위에서만
+☐ 오늘의 DOL 한 곳 적기 — 없으면 거래 안 함
 
-[복기 — 성장]
-13. 이긴 매매도 기록한다 — 실력인지 운인지 구분하려고.
-14. 과정 > 결과. 규칙 지키고 졌으면 좋은 매매, 규칙 어기고 이겼으면 나쁜 매매.`;
+② 레벨 마킹 & 시간 세팅
+☐ 유동성 풀 표시: 아시아 H/L · 전일/전주 H/L · Equal H/L
+☐ 차트 NY 시간 세팅 확인
+☐ ForexFactory 고임팩트 뉴스 시간 표시 (발표 직전 신규 진입 자제 / 발표 후 스윕은 트리거로)
+☐ 시간 왜곡일? (월요일·월말/분기말 등)
+⏰ 거래 시간대 (KST 병기)
+· 런던 킬존  NY 02–05 → KST 여름 15–18 / 겨울 16–19
+· 뉴욕 본장/AM 매크로 07–11 ET → KST 여름 22:30~ / 겨울 23:30~
+· 뉴욕 밤(PM) 10:30~
+
+③ 시간대에서 대기 (시간 필터)
+· 런던 킬존·뉴욕 본장 밖이면 패턴 이뻐도 PASS.
+· 매크로 윈도우(:50–:10, AM 10–11)에 집중, 그 외 횡보 무시.
+
+④ 셋업 포착 — 컨펌 순서대로 (빠지면 PASS)
+1. 스윕 — 키풀(아시아·전일 H/L·Equal) 건드렸나
+2. SFP — 꼬리로 찌르고 몸통은 라인 안쪽 마감 (몸통 밖 마감=실패)
+3. OF 전환(MSS/CISD) — LTF(1–3분) 반대 스윙 H/L를 몸통으로 돌파·마감 (꼬리만=노이즈)
+4. Displacement + FVG — 가파른 장대 + FVG ≥ 0.5×ATR
+5. SMT — NQ/ES·BTC/ETH 괴리 (버프 / MSS 후·같은 TF)
+
+⑤ 진입 집행 (기계적으로)
+☐ 진입: FVG 상단 또는 50% CE에 지정가
+☐ 손절: SFP 꼬리 아래 or OB 시가 아래
+☐ delivery sentence 한 줄: "X 스윕 → Y 진입 → Z 목표 → 무효화 W"
+
+🛡️ 리스크 관리 — 절대 규칙 (어기면 그날 끝)
+▸ 시드 0.5~1% 고정 — 자리가 손절 정하고 수량은 역산
+▸ 손절은 진입과 동시에 무조건. 멘탈 스탑 금지
+▸ 물타기 금지 · 손절 불리하게 이동 금지. 무효화 닿으면 나간다
+▸ 일일 한도 −2R(또는 −2%) → 그날 종료, 차트 끄기
+▸ 3연패 → 그날 종료, 자리 뜨기
+▸ 주간 한도 −5% → 그 주 종료
+▸ 동시 포지션 1개. 손실 후 사이즈 키워 복구(복수매매) 금지
+▸ 벌었으면 사이즈 줄이거나 마감 — 번 거 토하지 말 것
+
+⑥ 청산
+· 1차 내부 유동성(직전 H/L·갭): 1:1.5~1:2서 50% 분할 + 본절 이동 (구조 기준, "무서워서" 금지)
+· 2차 외부 유동성(HTF 반대편 BSL/SSL): 내러티브 안 깨졌으면 DOL까지
+
+🚫 오늘 안 하는 날 (관망)
+· 비조작 추세장 → 런던 스킵
+· 뉴욕 전 이미 목표/5일 ADR 달성 → 뉴욕 스킵
+· 양쪽 다 터는 Seek & Destroy 장
+· 시간 안 맞음 / 레드폴더 직전
+
+🌙 장 마감 후 — 복기
+☐ 규칙 다 지켰나? (결과 말고 과정)
+☐ 리스크 한도·연패 룰 지켰나
+☐ 한 줄 교훈 — 어제보다 나아지기
+
+━━━━━ 1. 거래 원칙 38 (참조) — 이건 안 깬다 ━━━━━
+
+[대전제]
+1. 확장+편향+스윕+OF전환, 넷이 한 자리에 모일 때만 진입. 나머지 관망.
+2. PRICE 읽고 TIME 기다린다. 관망도 포지션.
+3. 모든 delivery는 Consolidation에서 시작.
+
+[조건 — 거래할 환경인가]
+4. 애매하면 관망 ("언제 > 무엇"). 4프로필(통합·확장·되돌림·반전) 어디인지 먼저.
+5. anticipation은 준비지 진입 아님 — 시간·가격 둘 다 맞을 때만.
+6. 시간 왜곡일 체크 — 뉴스·은행휴무·월요일·월말/분기말.
+7. 킬존 안에서만 (런던 02–05 / 뉴욕 07–10 NY). 차트는 NY 시간.
+8. 셋업 1~10 채점, 7점 미만 버림.
+
+[편향 — 어디로 가나]
+9. 편향 없으면 진입 X (= 복권). 세 근거 정렬 — 유동성·오더플로우·종가.
+10. DOL 불명확하면 거래 안 함.
+11. 유동성 사이클 위치 파악 (외부 헌트 → 내부 설계). ERL/IRL·BSL/SSL.
+12. OF는 같은 TF 종가로만 판단 (꼬리 무시).
+13. HTF Level TF → Entry TF (Daily→H1, H4→M15, H1→M5).
+14. Inducement(IDM)·터틀숩 = 함정카드.
+15. 낮은 확률(과확장·갇힌 OF·박스권 중심·반대 PDA·Seek&Destroy)이면 손 뗌.
+
+[진입 — 트리거]
+16. "No Raid, No Trade." 외부 유동성 스윕 후에만.
+17. 스윕 + OF 전환(CISD/MSS/Displacement) 확인 후.
+18. 최고 질 = 내부취득 + 외부확장.
+19. 진입 자리 우선순위: FVG 인버전(BPR) > OB/Breaker.
+20. 인버전 없으면 할인(롱)/프리미엄(숏) 필수, 있으면 면제.
+21. SMT는 확인용(예측 X) — OF 전환 후·같은 TF, 있으면 버프.
+22. delivery sentence 한 줄 못 쓰면 셋업 아님.
+
+[내러티브 — 경로]
+23. MM모델 단계 특정 (반전/LRS/RA1·2/최종확장). Original Consolidation 찾기.
+24. 세션 시퀀스 존중 — 런던 반전 / 뉴욕 지속 / 런던 마감.
+25. 요일 시퀀스 — 월(조작)→주중반(확장)→목(지속)→금(fill).
+26. 일봉 종가 — 이탈+내부=반전 / 외부유지=지속 / 양쪽스윕+내부=Seek&Destroy.
+
+[리스크]
+27. 사이즈 역산. 시드 대비 고정%(RPT).
+28. 물타기 금지. 추가는 새 셋업만.
+29. 손절 불리하게 안 넓힘. 무효화 닿으면 나간다 (Best Loser Wins).
+30. 하루·주 최대 손실 한도, 닿으면 끝.
+
+[청산]
+31. 손절은 내러티브 깨지기 전까지 DOL까지 (일찍 자르면 실현 R 깎임).
+32. 청산은 구조(다음 PDA·세션 H/L) 기준, 감정 X.
+
+[규율 · 멘탈]
+33. 한 번에 한 셋업. 뇌동·동시다발 금지.
+34. 세션 전 플랜 → 중엔 실행만.
+35. FOMO·복수매매 금지.
+36. 규칙 지키고 진 날 = 이긴 것.
+37. 매 거래 복기. 어제보다 나아지기.
+
+[자산 성격]
+38. 자산마다 성격 다름 → 기대치·사이징 조절.
+    NQ=개구쟁이 · ES·EURUSD=신사 · Gold=깡패 · JPY·GBP=곤조 · BTC=다중인격.
+
+━━━━━ 2. 진입 알고리즘 6단계 (정밀 집행 · 롱 기준, 숏은 미러) ━━━━━
+
+1단계 — HTF 컨텍스트 & 방향 필터
+· HTF 컨텍스트 정의. 거부 중 vs 유동성으로 달리는 중? → 그 방향으로만 하위 분봉 진입.
+· True Daily Open(00:00 NY): 롱=시가 아래, 숏=시가 위.
+⚠️ TDO 정의 00:00 vs 08:30 갈림 — 기준선으로 쓰되 절대 거부권으로 과신 X.
+
+2단계 — 킬존 & 매크로 시간 필터
+· 킬존 중심. 시간 안 맞으면 PASS.
+· 매크로 윈도우 대기. ICT 매크로는 :50–:10류 20분창 (AM 10–11). 08:30은 뉴스(별개).
+
+3단계 — 유동성 엔지니어링 & SFP
+· 타겟: 아시아 H/L · 전일·전주 H/L · Equal H/L.
+· ①스윕 ②라인 내부로 강하게 복귀 ③몸통이 라인 밖 마감=실패(꼬리만 인정).
+
+4단계 — Displacement & FVG 강도 (LTF 1–3분)
+· MSS: 반대 실질 스윙 H/L를 몸통으로 돌파·마감 (꼬리만=유동성 확장).
+· Displacement + FVG ≥ 0.5×ATR (평균보다 유의미하게 큰 갭).
+
+5단계 — SMT 최종 확증
+· NQ/ES·BTC/ETH 괴리 = 알고리즘 의도 확인. MSS 후·같은 TF에서.
+
+6단계 — 집행 & 무효화
+· 진입: FVG 상단 또는 50% CE에 지정가.
+· 손절: SFP 꼬리 아래 or OB 시가 아래. 몸통 깨지면 즉시 탈출.
+· 청산: 1차(1:1.5~2서 50%+본절) → 2차 외부 BSL/SSL까지.`;
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
@@ -215,6 +345,11 @@ function render(){
       <button class="btn-ghost btn-sm" id="logout">로그아웃</button>
     </header>
     <div class="wrap">
+      <details class="card" id="routine" open style="margin-top:12px">
+        <summary>📋 오늘의 루틴 & 원칙 (ICT) — 매일 읽기</summary>
+        <div class="body" style="max-height:46vh;overflow:auto;font-size:13.5px;line-height:1.7;margin-top:6px">${esc(principles)}</div>
+        <div style="text-align:right;margin-top:6px"><button class="btn-ghost btn-sm" id="editprin">✏️ 편집</button></div>
+      </details>
       <div class="row" style="margin:12px 0 0;gap:8px;justify-content:flex-end">
         <button class="btn-ghost btn-sm" id="stats">📊 통계</button>
         <button class="btn-ghost btn-sm" id="csv">⬇ CSV</button>
@@ -229,6 +364,7 @@ function render(){
   document.getElementById('principles').onclick=()=>openPrinciples();
   document.getElementById('stats').onclick=()=>openDashboard();
   document.getElementById('csv').onclick=()=>exportCSV();
+  const ep=document.getElementById('editprin'); if(ep) ep.onclick=()=>openPrinciples();
   document.getElementById('logout').onclick=async()=>{ await sb.auth.signOut(); session=null; render(); };
   app.querySelectorAll('[data-f]').forEach(b=> b.onclick=()=>{ filter=b.dataset.f; render(); });
   app.querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=> openEditor(b.dataset.edit));
@@ -415,13 +551,17 @@ function openPrinciples(){
       </div>
       ${editing
         ? `<textarea id="pbody" style="min-height:55vh;font-size:14px">${esc(principles)}</textarea>
-           <button class="btn" id="psave" style="width:100%;margin-top:10px">저장</button>
+           <div class="row" style="margin-top:10px;gap:8px">
+             <button class="btn-ghost" id="pdefault" style="flex:1">기본(ICT) 불러오기</button>
+             <button class="btn" id="psave" style="flex:1">저장</button>
+           </div>
            <div class="hint">원칙은 자유롭게 고치세요. 클라우드에 저장돼 어느 기기서나 보입니다.</div>`
         : `<div class="body" style="font-size:15px;line-height:1.7">${esc(principles)}</div>`}
     </div>`;
     dlg.querySelector('#close').onclick=()=>dlg.close();
     dlg.querySelector('#edit').onclick=()=>{ editing=!editing; draw(); };
     if(editing){
+      dlg.querySelector('#pdefault').onclick=()=>{ dlg.querySelector('#pbody').value=DEFAULT_PRINCIPLES; };
       dlg.querySelector('#psave').onclick=async()=>{
         await savePrinciples(dlg.querySelector('#pbody').value);
         editing=false; draw();
