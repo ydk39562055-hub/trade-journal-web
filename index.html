@@ -254,6 +254,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 const app = document.getElementById('app');
 let session = null;
+let localMode = false;     // 세션 없으면(익명 비활성) 로컬 전용
 let entries = [];
 
 // ───────── 유틸 ─────────
@@ -292,6 +293,7 @@ function flashSaved(txt='저장됨 ✓'){
 async function loadPrinciples(){
   principles = localStorage.getItem(LS_PRIN) || DEFAULT_PRINCIPLES;
   try{ settings = {...settings, ...JSON.parse(localStorage.getItem(LS_SETTINGS)||'{}')}; }catch{}
+  if(!session){ render(); return; }   // 로컬 전용: 클라우드 스킵
   try{
     const { data } = await sb.from('journal_prefs').select('principles, settings').eq('user_id', session.user.id).maybeSingle();
     if(data){
@@ -310,6 +312,7 @@ async function loadPrinciples(){
 async function saveSettings(obj){
   settings = {...settings, ...obj};
   localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
+  if(!session){ flashSaved('시드 저장됨 ✓'); return; }
   try{ await sb.from('journal_prefs').upsert({ user_id: session.user.id, settings, updated_at:new Date().toISOString() }); flashSaved('시드 저장됨 ✓'); }
   catch(e){ flashSaved('⚠ 시드 클라우드 저장 실패(로컬엔 있음)'); }
 }
@@ -317,6 +320,7 @@ async function saveSettings(obj){
 async function savePrinciples(text){
   principles = text;
   localStorage.setItem(LS_PRIN, text);
+  if(!session){ flashSaved('원칙 저장됨 ✓'); return; }
   try{
     await sb.from('journal_prefs').upsert({ user_id: session.user.id, principles: text, updated_at: new Date().toISOString() });
     flashSaved('원칙 저장됨 ✓');
@@ -327,6 +331,7 @@ async function fetchEntries(){
   loadPrinciples();                // 원칙도 같이 로드(백그라운드)
   entries = loadCache();           // 즉시 캐시 표시
   render();
+  if(!session) return;             // 로컬 전용: 캐시만 사용
   try{
     const { data, error } = await sb.from('free_journal').select('*').order('traded_at',{ascending:false}).order('created_at',{ascending:false});
     if(error) throw error;
@@ -341,6 +346,7 @@ async function upsertEntry(entry){
   if(i>=0) entries[i]=entry; else entries.unshift(entry);
   entries.sort((a,b)=> (b.traded_at||'').localeCompare(a.traded_at||'') || (b.created_at||'').localeCompare(a.created_at||''));
   saveCache(); render();
+  if(!session){ flashSaved('저장됨 ✓ (로컬)'); return; }
   // 클라우드 저장
   const row={ id:entry.id, user_id:session.user.id, market:entry.market, traded_at:entry.traded_at, body:entry.body, photos:entry.photos,
     direction:entry.direction??null, entry_price:entry.entry_price??null, exit_price:entry.exit_price??null,
@@ -352,6 +358,7 @@ async function upsertEntry(entry){
 
 async function removeEntry(id){
   entries = entries.filter(x=>x.id!==id); saveCache(); render();
+  if(!session){ flashSaved('삭제됨'); return; }
   const { error } = await sb.from('free_journal').delete().eq('id',id);
   flashSaved(error?'⚠ 삭제 클라우드 반영 실패':'삭제됨');
 }
@@ -381,7 +388,7 @@ let search='';
 let period='all';
 
 function render(){
-  if(!session){ renderLogin(); return; }
+  if(!session && !localMode){ renderLogin(); return; }
   const q=(search||'').trim().toLowerCase();
   const d30=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
   const ym=todayStr().slice(0,7);
@@ -394,7 +401,6 @@ function render(){
       <h1>거래일지</h1>
       <span class="save-dot" id="saveDot"></span>
       <button class="btn-ghost btn-sm" id="principles">📜 원칙</button>
-      <button class="btn-ghost btn-sm" id="logout">로그아웃</button>
     </header>
     <div class="wrap">
       ${balanceHTML()}
@@ -435,7 +441,6 @@ function render(){
     saveChecks(s); el.classList.toggle('done');
     const box=el.querySelector('.box'); if(box) box.textContent = s.has(i)?'☑':'☐';
   });
-  document.getElementById('logout').onclick=async()=>{ await sb.auth.signOut(); session=null; render(); };
   app.querySelectorAll('[data-f]').forEach(b=> b.onclick=()=>{ filter=b.dataset.f; render(); });
   app.querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=> openEditor(b.dataset.edit));
   app.querySelectorAll('[data-del]').forEach(b=> b.onclick=()=>{ if(confirm('이 일지를 삭제할까요?')) removeEntry(b.dataset.del); });
@@ -834,11 +839,17 @@ function renderLogin(){
   };
 }
 
-// ───────── 시작 ─────────
-const { data:{ session:s } } = await sb.auth.getSession();
-session = s;
-if(session) fetchEntries(); else renderLogin();
-sb.auth.onAuthStateChange((_e, ns)=>{ session=ns; });
+// ───────── 시작 (로그인 없음 — 자동 익명, 안되면 로컬) ─────────
+try{
+  const { data:{ session:s } } = await sb.auth.getSession();
+  session = s;
+  if(!session){
+    try{ const { data, error } = await sb.auth.signInAnonymously(); if(!error && data && data.session) session = data.session; }catch{}
+  }
+}catch{}
+if(!session) localMode = true;   // 익명 비활성 → 폰 로컬 저장으로
+fetchEntries();
+sb.auth.onAuthStateChange((_e, ns)=>{ if(ns) session=ns; });
 </script>
 </body>
 </html>
