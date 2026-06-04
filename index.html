@@ -319,7 +319,7 @@ async function upsertEntry(entry){
   // 클라우드 저장
   const row={ id:entry.id, user_id:session.user.id, market:entry.market, traded_at:entry.traded_at, body:entry.body, photos:entry.photos,
     direction:entry.direction??null, entry_price:entry.entry_price??null, exit_price:entry.exit_price??null,
-    result:entry.result??null, realized_r:entry.realized_r??null, errors:entry.errors||[], updated_at:new Date().toISOString() };
+    result:entry.result??null, realized_r:entry.realized_r??null, pnl:entry.pnl??null, errors:entry.errors||[], updated_at:new Date().toISOString() };
   const { error } = await sb.from('free_journal').upsert(row);
   if(error){ flashSaved('⚠ 클라우드 저장 실패(로컬엔 있음)'); document.getElementById('saveDot').style.color='var(--futures)'; }
   else flashSaved();
@@ -379,12 +379,13 @@ function cardHtml(e){
   const rb = e.result&&RES_MAP[e.result] ? `<span class="resbadge" style="background:${RES_MAP[e.result][1]};color:#fff">${RES_MAP[e.result][0]}${rtxt}</span>`
            : (rtxt? `<span class="resbadge" style="background:#807c75;color:#fff">${rtxt.trim()}</span>`:'');
   const dir = e.direction? `<span class="meta">${e.direction==='long'?'롱':'숏'}</span>`:'';
+  const pb = (e.pnl!=null&&e.pnl!=='') ? `<span class="resbadge" style="background:${Number(e.pnl)>=0?'var(--futures)':'var(--spot)'};color:#fff">${Number(e.pnl)>=0?'+':'−'}${Math.abs(Math.round(Number(e.pnl))).toLocaleString('ko-KR')}</span>`:'';
   const errs = (e.errors&&e.errors.length)? `<div style="margin-top:6px">${e.errors.map(t=>`<span class="chip on" style="cursor:default">${esc(t)}</span>`).join('')}</div>`:'';
   return `<div class="card">
     <div class="row">
       <span class="tag ${cls}">${e.market}</span>
       <span class="meta" style="flex:1">${esc(e.traded_at||'')} ${dir}</span>
-      ${rb}
+      ${pb}${rb}
       <button class="btn-ghost btn-sm" data-edit="${e.id}">수정</button>
       <button class="btn-ghost btn-sm" data-del="${e.id}">삭제</button>
     </div>
@@ -437,6 +438,8 @@ function openEditor(id){
         </div>
         <div><label>R배수 (예: 2 또는 -1)</label><input type="number" id="rr" inputmode="decimal" value="${draft.realized_r??''}"></div>
       </div>
+      <label>손익금액 (선택 · +이익 / −손실)</label>
+      <input type="number" id="pnl" inputmode="decimal" value="${draft.pnl??''}">
       <label>실수 태그</label>
       <div id="errs">${ERROR_TAGS.map(t=>`<span class="chip ${draft.errors.includes(t)?'on':''}" data-e="${t}">${t}</span>`).join('')}</div>
     </details>
@@ -469,6 +472,7 @@ function openEditor(id){
   dlg.querySelector('#entry').oninput=ev=> draft.entry_price=numOrNull(ev.target.value);
   dlg.querySelector('#exit').oninput=ev=> draft.exit_price=numOrNull(ev.target.value);
   dlg.querySelector('#rr').oninput=ev=> draft.realized_r=numOrNull(ev.target.value);
+  dlg.querySelector('#pnl').oninput=ev=> draft.pnl=numOrNull(ev.target.value);
   dlg.querySelectorAll('#errs .chip').forEach(c=> c.onclick=()=>{
     const t=c.dataset.e; const i=draft.errors.indexOf(t);
     if(i>=0) draft.errors.splice(i,1); else draft.errors.push(t);
@@ -495,6 +499,11 @@ function openDashboard(){
   const sumR=rs.reduce((a,b)=>a+b,0), avgR=rs.length?sumR/rs.length:0;
   const posR=rs.filter(r=>r>0).reduce((a,b)=>a+b,0), negR=Math.abs(rs.filter(r=>r<0).reduce((a,b)=>a+b,0));
   const pf= negR? posR/negR : (posR>0?Infinity:0);
+  // 손익 금액
+  const pls=entries.map(e=>e.pnl).filter(v=>v!=null&&v!=='').map(Number).filter(v=>!isNaN(v));
+  const sumP=pls.reduce((a,b)=>a+b,0), avgP=pls.length?sumP/pls.length:0;
+  const best=pls.length?Math.max(...pls):0, worst=pls.length?Math.min(...pls):0;
+  const money=n=> (n<0?'−':'')+Math.abs(Math.round(n)).toLocaleString('ko-KR');
 
   // 시장별
   const byMkt = m => { const c=entries.filter(e=>e.market===m&&['win','loss'].includes(e.result));
@@ -516,6 +525,11 @@ function openDashboard(){
       <div class="stat-row"><span>누적 R</span><span class="v">${sumR>0?'+':''}${fnum(sumR)}R</span></div>
       <div class="stat-row"><span>평균 R / 거래</span><span class="v">${avgR>0?'+':''}${fnum(avgR)}R</span></div>
       <div class="stat-row"><span>손익비 (Profit Factor)</span><span class="v">${fnum(pf)}</span></div>
+      ${pls.length? `
+      <div class="stat-row"><span>총 손익금액</span><span class="v" style="color:${sumP>=0?'var(--futures)':'var(--spot)'}">${sumP>=0?'+':''}${money(sumP)}</span></div>
+      <div class="stat-row"><span>평균 손익 / 거래</span><span class="v">${avgP>=0?'+':''}${money(avgP)}</span></div>
+      <div class="stat-row"><span>최고 익절 / 최대 손실</span><span class="v" style="font-size:13px">+${money(best)} / ${money(worst)}</span></div>
+      `:''}
       <div class="stat-row"><span>선물 / 현물</span><span class="v" style="font-size:13px">${byMkt('선물')} · ${byMkt('현물')}</span></div>
       ${tagRows? `<h3 style="margin:16px 0 0;font-size:15px">실수 태그별</h3>
         <table class="xt"><tr><th>태그</th><th>건수</th><th>승률</th><th>익/손</th></tr>${tagRows}</table>
@@ -528,7 +542,7 @@ function openDashboard(){
 }
 
 function exportCSV(){
-  const cols=['traded_at','market','direction','entry_price','exit_price','result','realized_r','errors','body'];
+  const cols=['traded_at','market','direction','entry_price','exit_price','result','realized_r','pnl','errors','body'];
   const cell=(e,c)=>{ let v=c==='errors'? (e.errors||[]).join('|') : (e[c]??''); v=String(v).replace(/"/g,'""'); return /[",\n]/.test(v)?`"${v}"`:v; };
   const csv='﻿'+[cols.join(','), ...entries.map(e=>cols.map(c=>cell(e,c)).join(','))].join('\n');
   const a=document.createElement('a');

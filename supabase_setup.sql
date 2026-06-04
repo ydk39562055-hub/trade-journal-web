@@ -33,6 +33,7 @@ alter table public.free_journal add column if not exists entry_price  numeric;
 alter table public.free_journal add column if not exists exit_price   numeric;
 alter table public.free_journal add column if not exists result       text;            -- 'win'|'loss'|'be'
 alter table public.free_journal add column if not exists realized_r   numeric;         -- 실현 R배수(부호 포함)
+alter table public.free_journal add column if not exists pnl          numeric;         -- 손익 금액(부호 포함, 단위는 본인 기준)
 alter table public.free_journal add column if not exists errors       jsonb default '[]'::jsonb;
 
 -- 매매 원칙 저장 (항상 보기 + 본인 수정용, 1인 1행)
