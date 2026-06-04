@@ -176,7 +176,7 @@ function PrinciplesModal({ text, onSave, onClose }) {
 }
 
 /* ───────────── 더보기 (CSV / JSON) ───────────── */
-function MenuModal({ entries, onImport, onClose }) {
+function MenuModal({ entries, onImport, onReset, onClose }) {
   const fileRef = useRefM();
   const today = new Date().toISOString().slice(0, 10);
   const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
@@ -198,6 +198,9 @@ function MenuModal({ entries, onImport, onClose }) {
       <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: 'none' }}
         onChange={async ev => { const f = ev.target.files[0]; if (!f) return; try { const obj = JSON.parse(await f.text()); const arr = Array.isArray(obj) ? obj : (obj.entries || []); onImport(arr); } catch (err) { alert('복원 실패: ' + err.message); } }} />
       <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 6, lineHeight: 1.5 }}>백업은 전체 일지를 파일 하나로 저장합니다. 복원 시 같은 ID는 덮어써요.</div>
+      <div style={{ borderTop: '1px solid var(--border)', margin: '14px 0 10px' }} />
+      <button className="btn-ghost" style={{ ...row, color: 'var(--loss)', marginBottom: 4 }} onClick={onReset}>샘플 데이터 지우기 — 새로 시작</button>
+      <div style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>처음 보이는 예시 거래 28건과 시드를 비우고 빈 일지로 시작합니다. (되돌릴 수 없음 — 필요하면 먼저 JSON 백업)</div>
     </Modal>
   );
 }

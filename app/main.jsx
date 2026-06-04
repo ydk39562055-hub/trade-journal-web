@@ -53,8 +53,8 @@ function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [redfolder, setRedfolder] = useState([]);
   const [entries, setEntries] = useState(() => {
-    try { const c = JSON.parse(localStorage.getItem('tj_entries_v3')); if (Array.isArray(c) && c.length) return c; } catch {}
-    return TJ.ENTRIES;
+    try { const raw = localStorage.getItem('tj_entries_v3'); if (raw !== null) { const c = JSON.parse(raw); if (Array.isArray(c)) return c; } } catch {}
+    return TJ.ENTRIES;   // 첫 방문만 샘플. 비웠으면([]) 빈 채로 유지
   });
   const [settings, setSettings] = useState(() => {
     try { return { ...TJ.SEED, ...JSON.parse(localStorage.getItem('tj_settings_v2') || '{}') }; } catch { return { ...TJ.SEED }; }
@@ -131,6 +131,11 @@ function App() {
       return [...map.values()].sort((a, b) => (b.traded_at || '').localeCompare(a.traded_at || ''));
     });
     setModal(null); doFlash('복원 완료 ✓');
+  };
+  const clearAll = () => {
+    if (!confirm('샘플 데이터(예시 28건)와 시드를 비우고 빈 일지로 시작할까요?\n되돌릴 수 없어요. (필요하면 먼저 더보기 → JSON 백업)')) return;
+    setEntries([]); setSettings({ futuresSeed: null, spotSeed: null });
+    setModal(null); doFlash('초기화됨 — 새로 시작 ✓');
   };
 
   // filtered list
@@ -261,7 +266,7 @@ function App() {
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
-      {modal?.type === 'menu' && <MenuModal entries={entries} onImport={importEntries} onClose={() => setModal(null)} />}
+      {modal?.type === 'menu' && <MenuModal entries={entries} onImport={importEntries} onReset={clearAll} onClose={() => setModal(null)} />}
 
       {/* ── Tweaks ── */}
       <TweaksPanel title="Tweaks">
