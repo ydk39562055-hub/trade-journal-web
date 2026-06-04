@@ -35,6 +35,7 @@ alter table public.free_journal add column if not exists result       text;     
 alter table public.free_journal add column if not exists realized_r   numeric;         -- 실현 R배수(부호 포함)
 alter table public.free_journal add column if not exists pnl          numeric;         -- 손익 금액(부호 포함, 단위는 본인 기준)
 alter table public.free_journal add column if not exists errors       jsonb default '[]'::jsonb;
+alter table public.free_journal add column if not exists setups       jsonb default '[]'::jsonb;     -- ICT 셋업 태그(FVG인버전/OB/SFP 등)
 
 -- 매매 원칙 저장 (항상 보기 + 본인 수정용, 1인 1행)
 create table if not exists public.journal_prefs (

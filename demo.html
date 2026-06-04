@@ -41,6 +41,7 @@
   .filterbar button.on{background:var(--accentSoft);border-color:var(--accent);color:var(--accent);font-weight:700}
   .photos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .photos img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+  .photos img.zoom{cursor:zoom-in}
   .body{white-space:pre-wrap;word-break:break-word;margin:8px 0 0}
   .chip{display:inline-block;padding:5px 11px;margin:3px 3px 0 0;border-radius:999px;border:1px solid var(--border);background:#fff;font-size:13px;cursor:pointer}
   .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -83,10 +84,10 @@
 
 <script type="module">
 const __DUMMY=[
- {id:'1',market:'선물',traded_at:'2026-06-03',direction:'long',result:'win',pnl:320000,realized_r:2.1,errors:[],body:'NQ 런던 킬존, 아시아 하이 스윕 후 MSS 확인하고 FVG에서 롱. 계획대로 DOL까지 보유.',photos:[]},
- {id:'2',market:'선물',traded_at:'2026-06-02',direction:'short',result:'loss',pnl:-110000,realized_r:-1,errors:['추격'],body:'스윕 안 기다리고 추격 진입 실수. 무효화 닿아 손절.',photos:[]},
- {id:'3',market:'현물',traded_at:'2026-05-30',direction:'long',result:'win',pnl:80000,realized_r:1.4,errors:[],body:'BTC 디스카운트 구간 매집.',photos:[]},
- {id:'4',market:'현물',traded_at:'2026-05-28',direction:'long',result:'be',pnl:0,realized_r:0,errors:['포모'],body:'포모로 일찍 들어가 본전 청산.',photos:[]}
+ {id:'1',market:'선물',traded_at:'2026-06-03',direction:'long',result:'win',pnl:320000,realized_r:2.1,setups:['FVG인버전(BPR)','MSS'],errors:[],body:'NQ 런던 킬존, 아시아 하이 스윕 후 MSS 확인하고 FVG에서 롱. 계획대로 DOL까지 보유.',photos:[]},
+ {id:'2',market:'선물',traded_at:'2026-06-02',direction:'short',result:'loss',pnl:-110000,realized_r:-1,setups:['OB'],errors:['추격'],body:'스윕 안 기다리고 추격 진입 실수. 무효화 닿아 손절.',photos:[]},
+ {id:'3',market:'현물',traded_at:'2026-05-30',direction:'long',result:'win',pnl:80000,realized_r:1.4,setups:['SFP'],errors:[],body:'BTC 디스카운트 구간 매집.',photos:[]},
+ {id:'4',market:'현물',traded_at:'2026-05-28',direction:'long',result:'be',pnl:0,realized_r:0,setups:[],errors:['포모'],body:'포모로 일찍 들어가 본전 청산.',photos:[]}
 ];
 const createClient=()=>({auth:{getSession:async()=>({data:{session:{user:{id:'demo'}}}}),onAuthStateChange(){},signInWithOtp:async()=>({}),verifyOtp:async()=>({}),signOut:async()=>({})},from:(t)=>{const o={select(){return o;},order(){return o;},eq(){return o;},maybeSingle:async()=>({data:null}),upsert:async()=>({error:null}),delete(){return{eq:async()=>({error:null})};},then(res){res({data:t==='free_journal'?__DUMMY:[],error:null});}};return o;}});
 
@@ -97,6 +98,7 @@ const LS_PRIN = 'free_journal_principles_demo_v1';
 const LS_CHECKS = 'free_journal_checks_demo_v1';
 let principles = '';
 const ERROR_TAGS = ['포모','추격','손절 밀기','물타기','복수매매','오버사이즈','조기청산','근거없음'];
+const SETUP_TAGS = ['FVG인버전(BPR)','OB','Breaker','SFP','Liquidity sweep','MSS','Displacement','SMT','OTE'];
 const DEFAULT_PRINCIPLES = `ICT 거래 시스템 — 데일리 루틴 & 원칙
 
 🔑 오늘의 주문
@@ -334,7 +336,7 @@ async function upsertEntry(entry){
   // 클라우드 저장
   const row={ id:entry.id, user_id:session.user.id, market:entry.market, traded_at:entry.traded_at, body:entry.body, photos:entry.photos,
     direction:entry.direction??null, entry_price:entry.entry_price??null, exit_price:entry.exit_price??null,
-    result:entry.result??null, realized_r:entry.realized_r??null, pnl:entry.pnl??null, errors:entry.errors||[], updated_at:new Date().toISOString() };
+    result:entry.result??null, realized_r:entry.realized_r??null, pnl:entry.pnl??null, errors:entry.errors||[], setups:entry.setups||[], updated_at:new Date().toISOString() };
   const { error } = await sb.from('free_journal').upsert(row);
   if(error){ flashSaved('⚠ 클라우드 저장 실패(로컬엔 있음)'); document.getElementById('saveDot').style.color='var(--futures)'; }
   else flashSaved();
@@ -367,10 +369,18 @@ function principlesHTML(text){
 
 // ───────── 화면 ─────────
 let filter='all';
+let search='';
+let period='all';
 
 function render(){
   if(!session){ renderLogin(); return; }
-  const list = entries.filter(e=> filter==='all' || e.market===filter);
+  const q=(search||'').trim().toLowerCase();
+  const d30=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  const ym=todayStr().slice(0,7);
+  let list = entries.filter(e=> filter==='all' || e.market===filter);
+  if(q) list = list.filter(e=> ((e.body||'')+' '+(e.setups||[]).join(' ')+' '+(e.errors||[]).join(' ')).toLowerCase().includes(q));
+  if(period==='month') list = list.filter(e=> (e.traded_at||'').startsWith(ym));
+  else if(period==='30d') list = list.filter(e=> (e.traded_at||'') >= d30);
   app.innerHTML = `
     <header>
       <h1>거래일지</h1>
@@ -384,20 +394,30 @@ function render(){
         <div class="body" style="max-height:46vh;overflow:auto;font-size:13.5px;line-height:1.7;margin-top:6px">${principlesHTML(principles)}</div>
         <div style="text-align:right;margin-top:6px"><button class="btn-ghost btn-sm" id="editprin">✏️ 편집</button></div>
       </details>
-      <div class="row" style="margin:12px 0 0;gap:8px;justify-content:flex-end">
+      <input id="search" placeholder="🔍 메모·셋업·태그 검색" value="${esc(search)}" style="margin-top:12px">
+      <div class="row" style="margin:8px 0 0;gap:8px">
+        <select id="period" style="flex:1">
+          <option value="all" ${period==='all'?'selected':''}>전체 기간</option>
+          <option value="month" ${period==='month'?'selected':''}>이번 달</option>
+          <option value="30d" ${period==='30d'?'selected':''}>최근 30일</option>
+        </select>
         <button class="btn-ghost btn-sm" id="stats">📊 통계</button>
-        <button class="btn-ghost btn-sm" id="csv">⬇ CSV</button>
+        <button class="btn-ghost btn-sm" id="menu">⋯</button>
       </div>
       <div class="filterbar">
         ${['all','선물','현물'].map(f=>`<button data-f="${f}" class="btn-ghost ${filter===f?'on':''}">${f==='all'?'전체':f}</button>`).join('')}
       </div>
-      ${list.length? list.map(cardHtml).join('') : `<div class="muted">아직 일지가 없어요.<br>오른쪽 아래 + 로 첫 기록을 남겨보세요.</div>`}
+      ${list.length? list.map(cardHtml).join('') : `<div class="muted">${(q||period!=='all')?'조건에 맞는 일지가 없어요.':'아직 일지가 없어요.<br>오른쪽 아래 + 로 첫 기록을 남겨보세요.'}</div>`}
     </div>
     <button class="fab" id="add">+</button>`;
   document.getElementById('add').onclick=()=>openEditor();
   document.getElementById('principles').onclick=()=>openPrinciples();
   document.getElementById('stats').onclick=()=>openDashboard();
-  document.getElementById('csv').onclick=()=>exportCSV();
+  document.getElementById('menu').onclick=()=>openMenu();
+  const si=document.getElementById('search');
+  si.oninput=ev=>{ search=ev.target.value; const pos=ev.target.selectionStart; render(); const s2=document.getElementById('search'); if(s2){ s2.focus(); try{s2.setSelectionRange(pos,pos);}catch{} } };
+  document.getElementById('period').onchange=ev=>{ period=ev.target.value; render(); };
+  app.querySelectorAll('img.zoom').forEach(im=> im.onclick=()=>openPhoto(im.dataset.img));
   const ep=document.getElementById('editprin'); if(ep) ep.onclick=()=>openPrinciples();
   app.querySelectorAll('#routine .chk').forEach(el=> el.onclick=()=>{
     const i=+el.dataset.li, s=loadChecks();
@@ -414,7 +434,7 @@ function render(){
 const RES_MAP={win:['익절','var(--futures)'],loss:['손절','var(--spot)'],be:['본전','#807c75']};
 function cardHtml(e){
   const cls = e.market==='선물'?'futures':'spot';
-  const photos = (e.photos||[]).map(p=>`<img src="${p}" loading="lazy">`).join('');
+  const photos = (e.photos||[]).map(p=>`<img src="${p}" loading="lazy" class="zoom" data-img="${p}">`).join('');
   const rv = Number(e.realized_r);
   const rtxt = (e.realized_r!=null && e.realized_r!=='' && !isNaN(rv)) ? ` ${rv>0?'+':''}${rv}R` : '';
   const rb = e.result&&RES_MAP[e.result] ? `<span class="resbadge" style="background:${RES_MAP[e.result][1]};color:#fff">${RES_MAP[e.result][0]}${rtxt}</span>`
@@ -422,6 +442,7 @@ function cardHtml(e){
   const dir = e.direction? `<span class="meta">${e.direction==='long'?'롱':'숏'}</span>`:'';
   const pv = Number(e.pnl);
   const pb = (e.pnl!=null&&e.pnl!=='' && !isNaN(pv)) ? `<span class="resbadge" style="background:${pv>=0?'var(--futures)':'var(--spot)'};color:#fff">${pv>=0?'+':'−'}${Math.abs(Math.round(pv)).toLocaleString('ko-KR')}</span>`:'';
+  const setupsH = (e.setups&&e.setups.length)? `<div style="margin-top:6px">${e.setups.map(t=>`<span class="chip" style="cursor:default;background:var(--spot);color:#fff;border-color:var(--spot)">${esc(t)}</span>`).join('')}</div>`:'';
   const errs = (e.errors&&e.errors.length)? `<div style="margin-top:6px">${e.errors.map(t=>`<span class="chip on" style="cursor:default">${esc(t)}</span>`).join('')}</div>`:'';
   return `<div class="card">
     <div class="row">
@@ -432,6 +453,7 @@ function cardHtml(e){
       <button class="btn-ghost btn-sm" data-del="${e.id}">삭제</button>
     </div>
     ${e.body?`<div class="body">${esc(e.body)}</div>`:''}
+    ${setupsH}
     ${errs}
     ${photos?`<div class="photos">${photos}</div>`:''}
   </div>`;
@@ -441,6 +463,7 @@ function openEditor(id){
   const e = id? entries.find(x=>x.id===id) : { id:crypto.randomUUID(), market:'선물', traded_at:todayStr(), body:'', photos:[], created_at:new Date().toISOString() };
   const draft = JSON.parse(JSON.stringify(e));
   if(!Array.isArray(draft.errors)) draft.errors=[];
+  if(!Array.isArray(draft.setups)) draft.setups=[];
   const dlg=document.createElement('dialog');
   dlg.innerHTML=`<div class="modal-in">
     <div class="modal-head">
@@ -482,6 +505,8 @@ function openEditor(id){
       </div>
       <label>손익금액 (선택 · +이익 / −손실)</label>
       <input type="number" id="pnl" inputmode="decimal" value="${draft.pnl??''}">
+      <label>셋업 태그 (ICT)</label>
+      <div id="setups">${SETUP_TAGS.map(t=>`<span class="chip ${draft.setups.includes(t)?'on':''}" data-s="${t}">${t}</span>`).join('')}</div>
       <label>실수 태그</label>
       <div id="errs">${ERROR_TAGS.map(t=>`<span class="chip ${draft.errors.includes(t)?'on':''}" data-e="${t}">${t}</span>`).join('')}</div>
     </details>
@@ -515,6 +540,10 @@ function openEditor(id){
   dlg.querySelector('#exit').oninput=ev=> draft.exit_price=numOrNull(ev.target.value);
   dlg.querySelector('#rr').oninput=ev=> draft.realized_r=numOrNull(ev.target.value);
   dlg.querySelector('#pnl').oninput=ev=> draft.pnl=numOrNull(ev.target.value);
+  dlg.querySelectorAll('#setups .chip').forEach(c=> c.onclick=()=>{
+    const t=c.dataset.s; const i=draft.setups.indexOf(t);
+    if(i>=0) draft.setups.splice(i,1); else draft.setups.push(t);
+    c.classList.toggle('on'); });
   dlg.querySelectorAll('#errs .chip').forEach(c=> c.onclick=()=>{
     const t=c.dataset.e; const i=draft.errors.indexOf(t);
     if(i>=0) draft.errors.splice(i,1); else draft.errors.push(t);
@@ -581,6 +610,8 @@ function openDashboard(){
     const monthRows=Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,v])=>`<tr><td>${m}</td><td style="color:${v>=0?'var(--futures)':'var(--spot)'}">${v>=0?'+':''}${money(v)}</td></tr>`).join('');
     const tagStats={}; for(const e of pool)for(const t of(e.errors||[])){const s=tagStats[t]=tagStats[t]||{n:0,w:0,l:0,p:0};s.n++;if(e.result==='win')s.w++;if(e.result==='loss')s.l++;const pv=num(e.pnl);if(pv!=null)s.p+=pv;}
     const tagRows=Object.entries(tagStats).sort((a,b)=>b[1].n-a[1].n).map(([t,s])=>{const d=s.w+s.l;const wr=d?Math.round(s.w/d*100)+'%':'-';return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr}</td><td style="color:${s.p>=0?'var(--futures)':'var(--spot)'}">${s.p>=0?'+':''}${money(s.p)}</td></tr>`;}).join('');
+    const setStats={}; for(const e of pool)for(const t of(e.setups||[])){const s=setStats[t]=setStats[t]||{n:0,w:0,l:0,p:0};s.n++;if(e.result==='win')s.w++;if(e.result==='loss')s.l++;const pv=num(e.pnl);if(pv!=null)s.p+=pv;}
+    const setRows=Object.entries(setStats).sort((a,b)=>b[1].n-a[1].n).map(([t,s])=>{const d=s.w+s.l;const wr=d?Math.round(s.w/d*100)+'%':'-';return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr}</td><td style="color:${s.p>=0?'var(--futures)':'var(--spot)'}">${s.p>=0?'+':''}${money(s.p)}</td></tr>`;}).join('');
     const clean=closed.filter(e=>!(e.errors&&e.errors.length)).length;
     const adher=closed.length?Math.round(clean/closed.length*100):null;
     const hasAny=closed.length||rs.length||pls.length;
@@ -615,6 +646,7 @@ function openDashboard(){
 
       ${monthRows?`<h3 style="margin:16px 0 0;font-size:15px">월별 손익</h3><table class="xt"><tr><th>월</th><th>손익</th></tr>${monthRows}</table>`:''}
 
+      ${setRows?`<h3 style="margin:16px 0 0;font-size:15px">셋업별 (ICT · 어떤 셋업이 잘 되나)</h3><table class="xt"><tr><th>셋업</th><th>건수</th><th>승률</th><th>손익</th></tr>${setRows}</table>`:''}
       ${tagRows?`<h3 style="margin:16px 0 0;font-size:15px">실수 태그별 (약점 + 손익)</h3><table class="xt"><tr><th>태그</th><th>건수</th><th>승률</th><th>손익</th></tr>${tagRows}</table>`:''}
     `:`<div class="muted">${mkt==='all'?'전체':mkt}에 결과(익절/손절/R/손익)를 입력한 거래가 없어요.</div>`}
     </div>`;
@@ -626,14 +658,60 @@ function openDashboard(){
 }
 
 function exportCSV(){
-  const cols=['traded_at','market','direction','entry_price','exit_price','result','realized_r','pnl','errors','body'];
-  const cell=(e,c)=>{ let v=c==='errors'? (e.errors||[]).join('|') : (e[c]??''); if(typeof v==='number'&&!Number.isFinite(v))v=''; v=String(v).replace(/"/g,'""'); return /[",\n]/.test(v)?`"${v}"`:v; };
+  const cols=['traded_at','market','direction','entry_price','exit_price','result','realized_r','pnl','setups','errors','body'];
+  const cell=(e,c)=>{ let v=(c==='errors'||c==='setups')? (e[c]||[]).join('|') : (e[c]??''); if(typeof v==='number'&&!Number.isFinite(v))v=''; v=String(v).replace(/"/g,'""'); return /[",\n]/.test(v)?`"${v}"`:v; };
   const csv='﻿'+[cols.join(','), ...entries.map(e=>cols.map(c=>cell(e,c)).join(','))].join('\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`거래일지_${todayStr()}.csv`; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   flashSaved('CSV 내보냄 ✓');
+}
+
+function exportJSON(){
+  const data=JSON.stringify({version:1, exportedAt:new Date().toISOString(), entries}, null, 1);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+  a.download=`거래일지_백업_${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000); flashSaved('JSON 백업 ✓');
+}
+
+async function importJSON(file){
+  try{
+    const obj=JSON.parse(await file.text());
+    const arr=Array.isArray(obj)?obj:(obj.entries||[]);
+    if(!Array.isArray(arr)||!arr.length){ alert('가져올 일지가 없어요 (형식 확인).'); return; }
+    if(!confirm(`${arr.length}건을 가져옵니다. 같은 id는 덮어씁니다. 계속할까요?`)) return;
+    for(const e of arr){ if(!e.id) e.id=crypto.randomUUID(); if(!Array.isArray(e.photos))e.photos=[]; await upsertEntry(e); }
+    flashSaved('복원 완료 ✓');
+  }catch(err){ alert('복원 실패: '+err.message); }
+}
+
+function openPhoto(src){
+  const dlg=document.createElement('dialog');
+  dlg.style.cssText='max-width:96%;background:transparent;border:none;padding:0';
+  dlg.innerHTML=`<img src="${src}" style="max-width:100%;max-height:88vh;border-radius:10px;display:block">`;
+  document.body.appendChild(dlg); dlg.showModal();
+  dlg.onclick=()=>dlg.close(); dlg.addEventListener('close',()=>dlg.remove());
+}
+
+function openMenu(){
+  const dlg=document.createElement('dialog');
+  dlg.innerHTML=`<div class="modal-in">
+    <div class="modal-head"><h2>더보기</h2><button class="x" id="close">×</button></div>
+    <button class="btn-ghost" id="mcsv" style="width:100%;margin-bottom:8px">⬇ CSV 내보내기</button>
+    <button class="btn-ghost" id="mjx" style="width:100%;margin-bottom:8px">💾 JSON 백업 (내보내기)</button>
+    <button class="btn-ghost" id="mji" style="width:100%">📂 JSON 복원 (가져오기)</button>
+    <input type="file" id="mjfile" accept="application/json,.json" style="display:none">
+    <div class="hint">백업: 전체 일지를 파일 하나로 저장. 복원: 그 파일을 골라 합칩니다 (같은 id는 덮어씀).</div>
+  </div>`;
+  document.body.appendChild(dlg); dlg.showModal();
+  dlg.querySelector('#close').onclick=()=>dlg.close();
+  dlg.querySelector('#mcsv').onclick=()=>{ exportCSV(); dlg.close(); };
+  dlg.querySelector('#mjx').onclick=()=>{ exportJSON(); dlg.close(); };
+  dlg.querySelector('#mji').onclick=()=> dlg.querySelector('#mjfile').click();
+  dlg.querySelector('#mjfile').onchange=async ev=>{ const f=ev.target.files[0]; if(f){ await importJSON(f); dlg.close(); } };
+  dlg.addEventListener('close',()=>dlg.remove());
 }
 
 // ───────── 매매 원칙 ─────────
