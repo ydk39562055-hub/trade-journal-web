@@ -41,6 +41,17 @@
   .photos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .photos img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
   .body{white-space:pre-wrap;word-break:break-word;margin:8px 0 0}
+  .chip{display:inline-block;padding:5px 11px;margin:3px 3px 0 0;border-radius:999px;border:1px solid var(--border);background:#fff;font-size:13px;cursor:pointer}
+  .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  details{margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:0 12px;background:#fff}
+  summary{cursor:pointer;padding:10px 0;font-size:14px;color:var(--ink2);font-weight:600}
+  .grid2{display:flex;gap:8px} .grid2>div{flex:1}
+  .resbadge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
+  .stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+  .stat-row .v{font-weight:700}
+  table.xt{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+  table.xt th,table.xt td{text-align:right;padding:6px 4px;border-bottom:1px solid var(--border)}
+  table.xt th:first-child,table.xt td:first-child{text-align:left}
   .meta{font-size:12px;color:var(--ink3);display:flex;gap:8px;align-items:center}
   .muted{color:var(--ink3);font-size:14px;text-align:center;padding:30px}
   .fab{position:fixed;right:18px;bottom:18px;width:56px;height:56px;border-radius:50%;
@@ -70,6 +81,7 @@ const SUPABASE_KEY = 'sb_publishable_3vXShFC5dKvMqzUy1KkyGQ_sF0SzUY2'; // 공개
 const LS_KEY = 'free_journal_cache_v1';
 const LS_PRIN = 'free_journal_principles_v1';
 let principles = '';
+const ERROR_TAGS = ['포모','추격','손절 밀기','물타기','복수매매','오버사이즈','조기청산','근거없음'];
 const DEFAULT_PRINCIPLES = `📌 선물 매매 원칙  (시작 세트 — 본인에 맞게 수정하세요)
 
 [리스크 — 제일 중요]
@@ -175,7 +187,9 @@ async function upsertEntry(entry){
   entries.sort((a,b)=> (b.traded_at||'').localeCompare(a.traded_at||'') || (b.created_at||'').localeCompare(a.created_at||''));
   saveCache(); render();
   // 클라우드 저장
-  const row={ id:entry.id, user_id:session.user.id, market:entry.market, traded_at:entry.traded_at, body:entry.body, photos:entry.photos, updated_at:new Date().toISOString() };
+  const row={ id:entry.id, user_id:session.user.id, market:entry.market, traded_at:entry.traded_at, body:entry.body, photos:entry.photos,
+    direction:entry.direction??null, entry_price:entry.entry_price??null, exit_price:entry.exit_price??null,
+    result:entry.result??null, realized_r:entry.realized_r??null, errors:entry.errors||[], updated_at:new Date().toISOString() };
   const { error } = await sb.from('free_journal').upsert(row);
   if(error){ flashSaved('⚠ 클라우드 저장 실패(로컬엔 있음)'); document.getElementById('saveDot').style.color='var(--futures)'; }
   else flashSaved();
@@ -201,6 +215,10 @@ function render(){
       <button class="btn-ghost btn-sm" id="logout">로그아웃</button>
     </header>
     <div class="wrap">
+      <div class="row" style="margin:12px 0 0;gap:8px;justify-content:flex-end">
+        <button class="btn-ghost btn-sm" id="stats">📊 통계</button>
+        <button class="btn-ghost btn-sm" id="csv">⬇ CSV</button>
+      </div>
       <div class="filterbar">
         ${['all','선물','현물'].map(f=>`<button data-f="${f}" class="btn-ghost ${filter===f?'on':''}">${f==='all'?'전체':f}</button>`).join('')}
       </div>
@@ -209,23 +227,33 @@ function render(){
     <button class="fab" id="add">+</button>`;
   document.getElementById('add').onclick=()=>openEditor();
   document.getElementById('principles').onclick=()=>openPrinciples();
+  document.getElementById('stats').onclick=()=>openDashboard();
+  document.getElementById('csv').onclick=()=>exportCSV();
   document.getElementById('logout').onclick=async()=>{ await sb.auth.signOut(); session=null; render(); };
   app.querySelectorAll('[data-f]').forEach(b=> b.onclick=()=>{ filter=b.dataset.f; render(); });
   app.querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=> openEditor(b.dataset.edit));
   app.querySelectorAll('[data-del]').forEach(b=> b.onclick=()=>{ if(confirm('이 일지를 삭제할까요?')) removeEntry(b.dataset.del); });
 }
 
+const RES_MAP={win:['익절','var(--futures)'],loss:['손절','var(--spot)'],be:['본전','#807c75']};
 function cardHtml(e){
   const cls = e.market==='선물'?'futures':'spot';
   const photos = (e.photos||[]).map(p=>`<img src="${p}" loading="lazy">`).join('');
+  const rtxt = (e.realized_r!=null && e.realized_r!=='') ? ` ${e.realized_r>0?'+':''}${e.realized_r}R` : '';
+  const rb = e.result&&RES_MAP[e.result] ? `<span class="resbadge" style="background:${RES_MAP[e.result][1]};color:#fff">${RES_MAP[e.result][0]}${rtxt}</span>`
+           : (rtxt? `<span class="resbadge" style="background:#807c75;color:#fff">${rtxt.trim()}</span>`:'');
+  const dir = e.direction? `<span class="meta">${e.direction==='long'?'롱':'숏'}</span>`:'';
+  const errs = (e.errors&&e.errors.length)? `<div style="margin-top:6px">${e.errors.map(t=>`<span class="chip on" style="cursor:default">${esc(t)}</span>`).join('')}</div>`:'';
   return `<div class="card">
     <div class="row">
       <span class="tag ${cls}">${e.market}</span>
-      <span class="meta" style="flex:1">${esc(e.traded_at||'')}</span>
+      <span class="meta" style="flex:1">${esc(e.traded_at||'')} ${dir}</span>
+      ${rb}
       <button class="btn-ghost btn-sm" data-edit="${e.id}">수정</button>
       <button class="btn-ghost btn-sm" data-del="${e.id}">삭제</button>
     </div>
     ${e.body?`<div class="body">${esc(e.body)}</div>`:''}
+    ${errs}
     ${photos?`<div class="photos">${photos}</div>`:''}
   </div>`;
 }
@@ -233,6 +261,7 @@ function cardHtml(e){
 function openEditor(id){
   const e = id? entries.find(x=>x.id===id) : { id:crypto.randomUUID(), market:'선물', traded_at:todayStr(), body:'', photos:[], created_at:new Date().toISOString() };
   const draft = JSON.parse(JSON.stringify(e));
+  if(!Array.isArray(draft.errors)) draft.errors=[];
   const dlg=document.createElement('dialog');
   dlg.innerHTML=`<div class="modal-in">
     <div class="modal-head">
@@ -250,6 +279,32 @@ function openEditor(id){
     <label>사진/차트 (여러 장 가능)</label>
     <input type="file" id="files" accept="image/*" multiple>
     <div class="photos" id="thumbs"></div>
+
+    <details ${ (draft.result||draft.direction||draft.entry_price||draft.errors.length) ? 'open':'' }>
+      <summary>📊 상세 (선택 — 채우면 통계에 잡힘)</summary>
+      <label>방향</label>
+      <div class="seg" id="dir">
+        <button data-d="long" class="futures ${draft.direction==='long'?'on':''}">롱</button>
+        <button data-d="short" class="spot ${draft.direction==='short'?'on':''}">숏</button>
+      </div>
+      <div class="grid2" style="margin-top:8px">
+        <div><label>진입가</label><input type="number" id="entry" inputmode="decimal" value="${draft.entry_price??''}"></div>
+        <div><label>청산가</label><input type="number" id="exit" inputmode="decimal" value="${draft.exit_price??''}"></div>
+      </div>
+      <div class="grid2" style="margin-top:8px">
+        <div><label>결과</label>
+          <div class="seg" id="res">
+            <button data-r="win" class="futures ${draft.result==='win'?'on':''}">익절</button>
+            <button data-r="loss" class="spot ${draft.result==='loss'?'on':''}">손절</button>
+            <button data-r="be" class="${draft.result==='be'?'on':''}">본전</button>
+          </div>
+        </div>
+        <div><label>R배수 (예: 2 또는 -1)</label><input type="number" id="rr" inputmode="decimal" value="${draft.realized_r??''}"></div>
+      </div>
+      <label>실수 태그</label>
+      <div id="errs">${ERROR_TAGS.map(t=>`<span class="chip ${draft.errors.includes(t)?'on':''}" data-e="${t}">${t}</span>`).join('')}</div>
+    </details>
+
     <div class="row" style="margin-top:16px;gap:8px">
       <button class="btn" id="save" style="flex:1">저장</button>
     </div>
@@ -267,12 +322,84 @@ function openEditor(id){
     for(const f of ev.target.files){ const d=await compressImage(f); if(d) draft.photos.push(d); }
     msg.textContent=''; drawThumbs(); ev.target.value='';
   };
+  // 상세(선택) 항목 wiring
+  const numOrNull=v=>{ const n=parseFloat(v); return isNaN(n)?null:n; };
+  dlg.querySelectorAll('#dir button').forEach(b=> b.onclick=()=>{
+    draft.direction = draft.direction===b.dataset.d ? null : b.dataset.d;
+    dlg.querySelectorAll('#dir button').forEach(x=>x.classList.toggle('on', x.dataset.d===draft.direction)); });
+  dlg.querySelectorAll('#res button').forEach(b=> b.onclick=()=>{
+    draft.result = draft.result===b.dataset.r ? null : b.dataset.r;
+    dlg.querySelectorAll('#res button').forEach(x=>x.classList.toggle('on', x.dataset.r===draft.result)); });
+  dlg.querySelector('#entry').oninput=ev=> draft.entry_price=numOrNull(ev.target.value);
+  dlg.querySelector('#exit').oninput=ev=> draft.exit_price=numOrNull(ev.target.value);
+  dlg.querySelector('#rr').oninput=ev=> draft.realized_r=numOrNull(ev.target.value);
+  dlg.querySelectorAll('#errs .chip').forEach(c=> c.onclick=()=>{
+    const t=c.dataset.e; const i=draft.errors.indexOf(t);
+    if(i>=0) draft.errors.splice(i,1); else draft.errors.push(t);
+    c.classList.toggle('on'); });
+
   dlg.querySelector('#close').onclick=()=> dlg.close();
   dlg.querySelector('#save').onclick=async()=>{
     draft.body=dlg.querySelector('#body').value;
     await upsertEntry(draft); dlg.close();
   };
   dlg.addEventListener('close',()=> dlg.remove());
+}
+
+// ───────── 통계 ─────────
+function openDashboard(){
+  const fnum = n => (n===Infinity?'∞':(Math.round(n*100)/100));
+  const closed = entries.filter(e=> ['win','loss','be'].includes(e.result));
+  const wins=closed.filter(e=>e.result==='win').length;
+  const losses=closed.filter(e=>e.result==='loss').length;
+  const bes=closed.filter(e=>e.result==='be').length;
+  const decisive=wins+losses;
+  const winRate=decisive? wins/decisive*100 : 0;
+  const rs=entries.map(e=>e.realized_r).filter(r=>r!=null&&r!=='').map(Number).filter(r=>!isNaN(r));
+  const sumR=rs.reduce((a,b)=>a+b,0), avgR=rs.length?sumR/rs.length:0;
+  const posR=rs.filter(r=>r>0).reduce((a,b)=>a+b,0), negR=Math.abs(rs.filter(r=>r<0).reduce((a,b)=>a+b,0));
+  const pf= negR? posR/negR : (posR>0?Infinity:0);
+
+  // 시장별
+  const byMkt = m => { const c=entries.filter(e=>e.market===m&&['win','loss'].includes(e.result));
+    const w=c.filter(e=>e.result==='win').length; return c.length? `${m} 승률 ${Math.round(w/c.length*100)}% (${w}/${c.length})`:`${m} 자료 없음`; };
+
+  // 실수 태그별 교차분석
+  const tagStats={};
+  for(const e of entries) for(const t of (e.errors||[])){ const s=tagStats[t]=tagStats[t]||{n:0,w:0,l:0}; s.n++; if(e.result==='win')s.w++; if(e.result==='loss')s.l++; }
+  const tagRows=Object.entries(tagStats).sort((a,b)=>b[1].n-a[1].n).map(([t,s])=>{
+    const d=s.w+s.l; const wr=d?Math.round(s.w/d*100):'-';
+    return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr==='-'?'-':wr+'%'}</td><td>${s.w}/${s.l}</td></tr>`; }).join('');
+
+  const dlg=document.createElement('dialog');
+  dlg.innerHTML=`<div class="modal-in">
+    <div class="modal-head"><h2>📊 통계</h2><button class="x" id="close">×</button></div>
+    ${closed.length||rs.length? `
+      <div class="stat-row"><span>마감 거래</span><span class="v">${closed.length}건 (익${wins}·손${losses}·본${bes})</span></div>
+      <div class="stat-row"><span>승률 (익/[익+손])</span><span class="v">${Math.round(winRate)}%</span></div>
+      <div class="stat-row"><span>누적 R</span><span class="v">${sumR>0?'+':''}${fnum(sumR)}R</span></div>
+      <div class="stat-row"><span>평균 R / 거래</span><span class="v">${avgR>0?'+':''}${fnum(avgR)}R</span></div>
+      <div class="stat-row"><span>손익비 (Profit Factor)</span><span class="v">${fnum(pf)}</span></div>
+      <div class="stat-row"><span>선물 / 현물</span><span class="v" style="font-size:13px">${byMkt('선물')} · ${byMkt('현물')}</span></div>
+      ${tagRows? `<h3 style="margin:16px 0 0;font-size:15px">실수 태그별</h3>
+        <table class="xt"><tr><th>태그</th><th>건수</th><th>승률</th><th>익/손</th></tr>${tagRows}</table>
+        <div class="hint">"포모로 한 매매 승률은?" 처럼 약점 패턴이 보입니다.</div>`:''}
+    ` : `<div class="muted">아직 결과(익절/손절/R)를 입력한 거래가 없어요.<br>일지 작성 시 📊 상세에서 결과·R을 채우면 여기 통계가 잡힙니다.</div>`}
+  </div>`;
+  document.body.appendChild(dlg); dlg.showModal();
+  dlg.querySelector('#close').onclick=()=>dlg.close();
+  dlg.addEventListener('close',()=>dlg.remove());
+}
+
+function exportCSV(){
+  const cols=['traded_at','market','direction','entry_price','exit_price','result','realized_r','errors','body'];
+  const cell=(e,c)=>{ let v=c==='errors'? (e.errors||[]).join('|') : (e[c]??''); v=String(v).replace(/"/g,'""'); return /[",\n]/.test(v)?`"${v}"`:v; };
+  const csv='﻿'+[cols.join(','), ...entries.map(e=>cols.map(c=>cell(e,c)).join(','))].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`거래일지_${todayStr()}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  flashSaved('CSV 내보냄 ✓');
 }
 
 // ───────── 매매 원칙 ─────────

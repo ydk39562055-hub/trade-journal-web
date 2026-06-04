@@ -27,6 +27,14 @@ create policy "free_journal own rows" on public.free_journal
 create index if not exists free_journal_user_date
   on public.free_journal(user_id, traded_at desc);
 
+-- 통계용 선택 컬럼 (전부 nullable — 자유형 유지, 채운 거래만 통계 집계)
+alter table public.free_journal add column if not exists direction   text;            -- 'long'|'short'
+alter table public.free_journal add column if not exists entry_price  numeric;
+alter table public.free_journal add column if not exists exit_price   numeric;
+alter table public.free_journal add column if not exists result       text;            -- 'win'|'loss'|'be'
+alter table public.free_journal add column if not exists realized_r   numeric;         -- 실현 R배수(부호 포함)
+alter table public.free_journal add column if not exists errors       jsonb default '[]'::jsonb;
+
 -- 매매 원칙 저장 (항상 보기 + 본인 수정용, 1인 1행)
 create table if not exists public.journal_prefs (
   user_id     uuid primary key default auth.uid() references auth.users(id) on delete cascade,
