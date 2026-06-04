@@ -375,11 +375,13 @@ const RES_MAP={win:['익절','var(--futures)'],loss:['손절','var(--spot)'],be:
 function cardHtml(e){
   const cls = e.market==='선물'?'futures':'spot';
   const photos = (e.photos||[]).map(p=>`<img src="${p}" loading="lazy">`).join('');
-  const rtxt = (e.realized_r!=null && e.realized_r!=='') ? ` ${e.realized_r>0?'+':''}${e.realized_r}R` : '';
+  const rv = Number(e.realized_r);
+  const rtxt = (e.realized_r!=null && e.realized_r!=='' && !isNaN(rv)) ? ` ${rv>0?'+':''}${rv}R` : '';
   const rb = e.result&&RES_MAP[e.result] ? `<span class="resbadge" style="background:${RES_MAP[e.result][1]};color:#fff">${RES_MAP[e.result][0]}${rtxt}</span>`
            : (rtxt? `<span class="resbadge" style="background:#807c75;color:#fff">${rtxt.trim()}</span>`:'');
   const dir = e.direction? `<span class="meta">${e.direction==='long'?'롱':'숏'}</span>`:'';
-  const pb = (e.pnl!=null&&e.pnl!=='') ? `<span class="resbadge" style="background:${Number(e.pnl)>=0?'var(--futures)':'var(--spot)'};color:#fff">${Number(e.pnl)>=0?'+':'−'}${Math.abs(Math.round(Number(e.pnl))).toLocaleString('ko-KR')}</span>`:'';
+  const pv = Number(e.pnl);
+  const pb = (e.pnl!=null&&e.pnl!=='' && !isNaN(pv)) ? `<span class="resbadge" style="background:${pv>=0?'var(--futures)':'var(--spot)'};color:#fff">${pv>=0?'+':'−'}${Math.abs(Math.round(pv)).toLocaleString('ko-KR')}</span>`:'';
   const errs = (e.errors&&e.errors.length)? `<div style="margin-top:6px">${e.errors.map(t=>`<span class="chip on" style="cursor:default">${esc(t)}</span>`).join('')}</div>`:'';
   return `<div class="card">
     <div class="row">
@@ -487,54 +489,106 @@ function openEditor(id){
 }
 
 // ───────── 통계 ─────────
+function sparkline(values, w=320, h=90){
+  if(!values || values.length<2) return '';
+  const min=Math.min(...values,0), max=Math.max(...values,0);
+  const range=(max-min)||1;
+  const pts=values.map((v,i)=>{ const x=i/(values.length-1)*w; const y=h-((v-min)/range)*(h-6)-3; return x.toFixed(1)+','+y.toFixed(1); }).join(' ');
+  const zeroY=h-((0-min)/range)*(h-6)-3;
+  const last=values[values.length-1];
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="margin-top:6px;background:#fff;border:1px solid var(--border);border-radius:8px">
+    <line x1="0" y1="${zeroY.toFixed(1)}" x2="${w}" y2="${zeroY.toFixed(1)}" stroke="#d4d2cb" stroke-width="1" stroke-dasharray="3"/>
+    <polyline points="${pts}" fill="none" stroke="${last>=0?'var(--futures)':'var(--spot)'}" stroke-width="2"/>
+  </svg>`;
+}
+
 function openDashboard(){
-  const fnum = n => (n===Infinity?'∞':(Math.round(n*100)/100));
-  const closed = entries.filter(e=> ['win','loss','be'].includes(e.result));
+  const fnum=n=>(n===Infinity?'∞':Math.round(n*100)/100);
+  const money=n=>(n<0?'−':'')+Math.abs(Math.round(n)).toLocaleString('ko-KR');
+  const num=v=> (v!=null&&v!=='' && !isNaN(Number(v))) ? Number(v) : null;
+
+  const closed=entries.filter(e=>['win','loss','be'].includes(e.result));
   const wins=closed.filter(e=>e.result==='win').length;
   const losses=closed.filter(e=>e.result==='loss').length;
   const bes=closed.filter(e=>e.result==='be').length;
   const decisive=wins+losses;
-  const winRate=decisive? wins/decisive*100 : 0;
-  const rs=entries.map(e=>e.realized_r).filter(r=>r!=null&&r!=='').map(Number).filter(r=>!isNaN(r));
+  const winRate=decisive?wins/decisive*100:0;
+
+  const rs=entries.map(e=>num(e.realized_r)).filter(v=>v!=null);
   const sumR=rs.reduce((a,b)=>a+b,0), avgR=rs.length?sumR/rs.length:0;
   const posR=rs.filter(r=>r>0).reduce((a,b)=>a+b,0), negR=Math.abs(rs.filter(r=>r<0).reduce((a,b)=>a+b,0));
-  const pf= negR? posR/negR : (posR>0?Infinity:0);
-  // 손익 금액
-  const pls=entries.map(e=>e.pnl).filter(v=>v!=null&&v!=='').map(Number).filter(v=>!isNaN(v));
+  const pf=negR?posR/negR:(posR>0?Infinity:0);
+
+  const pls=entries.map(e=>num(e.pnl)).filter(v=>v!=null);
   const sumP=pls.reduce((a,b)=>a+b,0), avgP=pls.length?sumP/pls.length:0;
   const best=pls.length?Math.max(...pls):0, worst=pls.length?Math.min(...pls):0;
-  const money=n=> (n<0?'−':'')+Math.abs(Math.round(n)).toLocaleString('ko-KR');
+  const winP=pls.filter(v=>v>0), lossP=pls.filter(v=>v<0);
+  const avgWin=winP.length?winP.reduce((a,b)=>a+b,0)/winP.length:0;
+  const avgLoss=lossP.length?Math.abs(lossP.reduce((a,b)=>a+b,0)/lossP.length):0;
+  const payoff=avgLoss?avgWin/avgLoss:(avgWin>0?Infinity:0);
 
-  // 시장별
-  const byMkt = m => { const c=entries.filter(e=>e.market===m&&['win','loss'].includes(e.result));
-    const w=c.filter(e=>e.result==='win').length; return c.length? `${m} 승률 ${Math.round(w/c.length*100)}% (${w}/${c.length})`:`${m} 자료 없음`; };
+  // 시간순(오래된→최근)
+  const chrono=[...entries].sort((a,b)=>(a.traded_at||'').localeCompare(b.traded_at||'')||(a.created_at||'').localeCompare(b.created_at||''));
 
-  // 실수 태그별 교차분석
+  // 누적 곡선 — pnl 있으면 금액, 없으면 R
+  const useMoney=pls.length>0;
+  const seq=chrono.map(e=> useMoney?num(e.pnl):num(e.realized_r)).filter(v=>v!=null);
+  let cum=0; const curve=seq.map(v=>(cum+=v));
+  let peak=-Infinity, mdd=0;
+  for(const v of curve){ if(v>peak)peak=v; const dd=peak-v; if(dd>mdd)mdd=dd; }
+
+  // 연승/연패
+  const closedChrono=chrono.filter(e=>['win','loss'].includes(e.result));
+  let maxW=0,maxL=0,cw=0,cl=0;
+  for(const e of closedChrono){ if(e.result==='win'){cw++;cl=0;}else{cl++;cw=0;} if(cw>maxW)maxW=cw; if(cl>maxL)maxL=cl; }
+
+  // 방향별
+  const dirStat=d=>{ const c=entries.filter(e=>e.direction===d); const cd=c.filter(e=>['win','loss'].includes(e.result)); const w=cd.filter(e=>e.result==='win').length; const p=c.map(e=>num(e.pnl)).filter(v=>v!=null).reduce((a,b)=>a+b,0); return {n:c.length, wr:cd.length?Math.round(w/cd.length*100):null, p}; };
+  const L=dirStat('long'), S=dirStat('short');
+
+  // 월별 손익
+  const byMonth={};
+  for(const e of entries){ const m=(e.traded_at||'').slice(0,7); const v=num(e.pnl); if(!m||v==null)continue; byMonth[m]=(byMonth[m]||0)+v; }
+  const monthRows=Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,v])=>`<tr><td>${m}</td><td style="color:${v>=0?'var(--futures)':'var(--spot)'}">${v>=0?'+':''}${money(v)}</td></tr>`).join('');
+
+  // 실수 태그별 (건수·승률·손익)
   const tagStats={};
-  for(const e of entries) for(const t of (e.errors||[])){ const s=tagStats[t]=tagStats[t]||{n:0,w:0,l:0}; s.n++; if(e.result==='win')s.w++; if(e.result==='loss')s.l++; }
-  const tagRows=Object.entries(tagStats).sort((a,b)=>b[1].n-a[1].n).map(([t,s])=>{
-    const d=s.w+s.l; const wr=d?Math.round(s.w/d*100):'-';
-    return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr==='-'?'-':wr+'%'}</td><td>${s.w}/${s.l}</td></tr>`; }).join('');
+  for(const e of entries) for(const t of (e.errors||[])){ const s=tagStats[t]=tagStats[t]||{n:0,w:0,l:0,p:0}; s.n++; if(e.result==='win')s.w++; if(e.result==='loss')s.l++; const pv=num(e.pnl); if(pv!=null)s.p+=pv; }
+  const tagRows=Object.entries(tagStats).sort((a,b)=>b[1].n-a[1].n).map(([t,s])=>{ const d=s.w+s.l; const wr=d?Math.round(s.w/d*100)+'%':'-'; return `<tr><td>${esc(t)}</td><td>${s.n}</td><td>${wr}</td><td style="color:${s.p>=0?'var(--futures)':'var(--spot)'}">${s.p>=0?'+':''}${money(s.p)}</td></tr>`; }).join('');
 
+  // 규칙 준수율 (마감 거래 중 실수태그 0)
+  const clean=closed.filter(e=>!(e.errors&&e.errors.length)).length;
+  const adher=closed.length?Math.round(clean/closed.length*100):null;
+
+  const hasAny=closed.length||rs.length||pls.length;
   const dlg=document.createElement('dialog');
   dlg.innerHTML=`<div class="modal-in">
     <div class="modal-head"><h2>📊 통계</h2><button class="x" id="close">×</button></div>
-    ${closed.length||rs.length? `
+    ${hasAny?`
       <div class="stat-row"><span>마감 거래</span><span class="v">${closed.length}건 (익${wins}·손${losses}·본${bes})</span></div>
       <div class="stat-row"><span>승률 (익/[익+손])</span><span class="v">${Math.round(winRate)}%</span></div>
-      <div class="stat-row"><span>누적 R</span><span class="v">${sumR>0?'+':''}${fnum(sumR)}R</span></div>
-      <div class="stat-row"><span>평균 R / 거래</span><span class="v">${avgR>0?'+':''}${fnum(avgR)}R</span></div>
-      <div class="stat-row"><span>손익비 (Profit Factor)</span><span class="v">${fnum(pf)}</span></div>
-      ${pls.length? `
+      ${pls.length?`
       <div class="stat-row"><span>총 손익금액</span><span class="v" style="color:${sumP>=0?'var(--futures)':'var(--spot)'}">${sumP>=0?'+':''}${money(sumP)}</span></div>
       <div class="stat-row"><span>평균 손익 / 거래</span><span class="v">${avgP>=0?'+':''}${money(avgP)}</span></div>
-      <div class="stat-row"><span>최고 익절 / 최대 손실</span><span class="v" style="font-size:13px">+${money(best)} / ${money(worst)}</span></div>
+      <div class="stat-row"><span>최고익절 / 최대손실</span><span class="v" style="font-size:13px">+${money(best)} / ${money(worst)}</span></div>
+      <div class="stat-row"><span>평균익절 / 평균손절 (payoff)</span><span class="v" style="font-size:13px">+${money(avgWin)} / −${money(avgLoss)} = ${fnum(payoff)}</span></div>
       `:''}
-      <div class="stat-row"><span>선물 / 현물</span><span class="v" style="font-size:13px">${byMkt('선물')} · ${byMkt('현물')}</span></div>
-      ${tagRows? `<h3 style="margin:16px 0 0;font-size:15px">실수 태그별</h3>
-        <table class="xt"><tr><th>태그</th><th>건수</th><th>승률</th><th>익/손</th></tr>${tagRows}</table>
-        <div class="hint">"포모로 한 매매 승률은?" 처럼 약점 패턴이 보입니다.</div>`:''}
-    ` : `<div class="muted">아직 결과(익절/손절/R)를 입력한 거래가 없어요.<br>일지 작성 시 📊 상세에서 결과·R을 채우면 여기 통계가 잡힙니다.</div>`}
+      <div class="stat-row"><span>누적 R · 평균 R</span><span class="v">${sumR>0?'+':''}${fnum(sumR)}R · ${avgR>0?'+':''}${fnum(avgR)}R</span></div>
+      <div class="stat-row"><span>손익비 (Profit Factor)</span><span class="v">${fnum(pf)}</span></div>
+      <div class="stat-row"><span>최대 연승 / 연패</span><span class="v">${maxW} / ${maxL}</span></div>
+      <div class="stat-row"><span>최대 낙폭 (MDD)</span><span class="v">${useMoney?money(mdd):fnum(mdd)+'R'}</span></div>
+      ${adher!=null?`<div class="stat-row"><span>규칙 준수율 (실수 0건)</span><span class="v">${adher}%</span></div>`:''}
+
+      ${curve.length>1?`<h3 style="margin:16px 0 4px;font-size:15px">누적 손익 곡선 (${useMoney?'금액':'R'})</h3>${sparkline(curve)}`:''}
+
+      <h3 style="margin:16px 0 0;font-size:15px">방향별</h3>
+      <div class="stat-row"><span>롱</span><span class="v" style="font-size:13px">${L.n}건 · 승률 ${L.wr==null?'-':L.wr+'%'} · ${L.p>=0?'+':''}${money(L.p)}</span></div>
+      <div class="stat-row"><span>숏</span><span class="v" style="font-size:13px">${S.n}건 · 승률 ${S.wr==null?'-':S.wr+'%'} · ${S.p>=0?'+':''}${money(S.p)}</span></div>
+
+      ${monthRows?`<h3 style="margin:16px 0 0;font-size:15px">월별 손익</h3><table class="xt"><tr><th>월</th><th>손익</th></tr>${monthRows}</table>`:''}
+
+      ${tagRows?`<h3 style="margin:16px 0 0;font-size:15px">실수 태그별 (약점 + 손익)</h3><table class="xt"><tr><th>태그</th><th>건수</th><th>승률</th><th>손익</th></tr>${tagRows}</table>`:''}
+    `:`<div class="muted">아직 결과/손익/R을 입력한 거래가 없어요.<br>일지 작성 시 📊 상세에서 채우면 여기 통계가 잡힙니다.</div>`}
   </div>`;
   document.body.appendChild(dlg); dlg.showModal();
   dlg.querySelector('#close').onclick=()=>dlg.close();
@@ -543,7 +597,7 @@ function openDashboard(){
 
 function exportCSV(){
   const cols=['traded_at','market','direction','entry_price','exit_price','result','realized_r','pnl','errors','body'];
-  const cell=(e,c)=>{ let v=c==='errors'? (e.errors||[]).join('|') : (e[c]??''); v=String(v).replace(/"/g,'""'); return /[",\n]/.test(v)?`"${v}"`:v; };
+  const cell=(e,c)=>{ let v=c==='errors'? (e.errors||[]).join('|') : (e[c]??''); if(typeof v==='number'&&!Number.isFinite(v))v=''; v=String(v).replace(/"/g,'""'); return /[",\n]/.test(v)?`"${v}"`:v; };
   const csv='﻿'+[cols.join(','), ...entries.map(e=>cols.map(c=>cell(e,c)).join(','))].join('\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
