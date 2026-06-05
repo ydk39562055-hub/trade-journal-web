@@ -156,21 +156,88 @@ function SettingsModal({ settings, onSave, onClose }) {
 }
 
 /* ───────────── 원칙 ───────────── */
+// 원문 텍스트 → 섹션 구조로 파싱 (편집은 원문 그대로 유지, 보기만 카드화)
+function parsePrinciples(text) {
+  const lines = (text || '').split('\n');
+  const isHeading = l => /^[①②③④⑤⑥⑦⑧⑨⑩]/.test(l) || /^오늘의 주문/.test(l) || /^리스크 관리/.test(l) || /^장 마감/.test(l);
+  const kindOf = h => /^오늘의 주문/.test(h) ? 'order' : /^리스크 관리/.test(h) ? 'risk' : /^장 마감/.test(h) ? 'review' : 'normal';
+  let title = '', routineLabel = '', cur = null; const sections = [];
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (!l) continue;
+    if (/^━/.test(l) || (/데일리 루틴/.test(l) && /매일/.test(l))) { routineLabel = l.replace(/━/g, '').trim(); continue; }
+    if (!title && !isHeading(l) && !cur) { title = l; continue; }
+    if (isHeading(l)) { cur = { title: l, kind: kindOf(l), items: [] }; sections.push(cur); continue; }
+    if (!cur) { cur = { title: '', kind: 'normal', items: [] }; sections.push(cur); }
+    cur.items.push(l);
+  }
+  return { title, routineLabel, sections };
+}
+function PItem({ text }) {
+  const m = text.match(/^(☐|▸|·|\d+\.)\s*(.*)$/);
+  const marker = m ? m[1] : ''; const body = m ? m[2] : text;
+  let glyph = '·', color = 'var(--violet)';
+  if (marker === '☐') { glyph = '☐'; color = 'var(--ink-4)'; }
+  else if (marker === '▸') { glyph = '▸'; color = 'var(--loss)'; }
+  else if (/^\d+\.$/.test(marker)) { glyph = marker; color = 'var(--violet-600)'; }
+  else if (!marker) { glyph = ''; }
+  return (
+    <div style={{ display: 'flex', gap: 7, fontSize: 13, lineHeight: 1.5, padding: '3px 0', color: 'var(--ink-2)' }}>
+      {glyph && <span style={{ color, flexShrink: 0, fontWeight: 700, minWidth: glyph.length > 1 ? 15 : 9, textAlign: 'left' }}>{glyph}</span>}
+      <span style={{ wordBreak: 'break-word' }}>{body}</span>
+    </div>
+  );
+}
 function PrinciplesModal({ text, onSave, onClose }) {
   const [editing, setEditing] = useStateM(false);
   const [draft, setDraft] = useStateM(text);
+  const P = parsePrinciples(text);
+  const order = P.sections.find(s => s.kind === 'order');
+  const grid = P.sections.filter(s => s.kind !== 'order');
+  const isWide = window.matchMedia('(min-width:560px)').matches;
   return (
-    <Modal open onClose={onClose} maxWidth={620}
+    <Modal open onClose={onClose} maxWidth={editing ? 720 : 1040} sheet={!isWide}
       title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>매매 원칙</span>}>
-      <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 10, gap: 8 }}>
+      <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 12, gap: 8 }}>
         {editing
           ? <><button className="btn-ghost btn-sm" onClick={() => { setDraft(TJ.DEFAULT_PRINCIPLES); }}>기본값</button>
             <button className="btn btn-sm" onClick={() => { onSave(draft); setEditing(false); }}>저장</button></>
           : <button className="btn-ghost btn-sm" onClick={() => { setDraft(text); setEditing(true); }}>편집</button>}
       </div>
-      {editing
-        ? <textarea value={draft} onChange={e => setDraft(e.target.value)} style={{ minHeight: '52vh', fontSize: 13.5, lineHeight: 1.6, fontFamily: 'var(--font)' }} />
-        : <div style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--ink-2)' }}>{text}</div>}
+
+      {editing ? (
+        <textarea value={draft} onChange={e => setDraft(e.target.value)} style={{ minHeight: '58vh', fontSize: 13.5, lineHeight: 1.6, fontFamily: 'var(--font)' }} />
+      ) : (
+        <div>
+          {P.title && <div style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: '-.01em', marginBottom: 14, color: 'var(--ink)' }}>{P.title}</div>}
+
+          {order && (
+            <div style={{ background: 'var(--violet-50)', border: '1px solid var(--violet-100)', borderRadius: 14, padding: '13px 16px', marginBottom: 16 }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 6, color: 'var(--violet-600)' }}>📌 {order.title}</div>
+              {order.items.map((it, i) => <PItem key={i} text={it} />)}
+            </div>
+          )}
+
+          {P.routineLabel && <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--ink-3)', margin: '2px 2px 10px' }}>{P.routineLabel}</div>}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, alignItems: 'start' }}>
+            {grid.map((s, i) => {
+              const risk = s.kind === 'risk';
+              return (
+                <div key={i} style={{
+                  border: '1px solid', borderColor: risk ? 'var(--loss)' : 'var(--border)',
+                  background: risk ? 'rgba(176,74,74,.05)' : 'var(--surface, #fff)', borderRadius: 14, padding: '13px 15px',
+                }}>
+                  <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 8, color: risk ? 'var(--loss)' : 'var(--ink)' }}>
+                    {risk ? '⚠ ' : ''}{s.title}
+                  </div>
+                  {s.items.map((it, j) => <PItem key={j} text={it} />)}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
