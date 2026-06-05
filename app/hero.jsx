@@ -4,8 +4,78 @@ const { useState: useStateH } = React;
 const usdH = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
 const fnumH = n => (n === Infinity ? '∞' : Math.round(n * 100) / 100);
 
-/* 원칙/루틴 본문 렌더 (체크박스 인터랙션) */
+/* 원칙 원문 → 섹션 그룹(줄 원본 인덱스 보존: 체크박스 toggle용) */
+function groupPrincipleLines(principles) {
+  const lines = principles.split('\n');
+  const isHeading = tx => /^[①②③④⑤⑥⑦⑧⑨⑩]/.test(tx) || /^오늘의 주문/.test(tx) || /^리스크 관리/.test(tx) || /^장 마감/.test(tx);
+  let title = '', routineLabel = '', cur = null; const sections = [];
+  lines.forEach((line, i) => {
+    const tx = line.replace(/^\s+/, '');
+    if (!tx) return;
+    if (tx.includes('━')) { routineLabel = tx.replace(/[━\s]+/g, ' ').trim(); return; }
+    if (!title && !cur && !isHeading(tx) && !/^[·▸•\-☐☑]/.test(tx) && !/^\d+[.)]/.test(tx)) { title = tx; return; }
+    if (isHeading(tx)) { cur = { title: tx, kind: /^오늘의 주문/.test(tx) ? 'order' : /^리스크 관리/.test(tx) ? 'risk' : /^장 마감/.test(tx) ? 'review' : 'normal', lines: [] }; sections.push(cur); return; }
+    if (!cur) { cur = { title: '', kind: 'normal', lines: [] }; sections.push(cur); }
+    cur.lines.push({ i, tx });
+  });
+  return { title, routineLabel, sections };
+}
+function PrincipleLine({ item, checks, toggle }) {
+  const { i, tx } = item;
+  if (tx.startsWith('☐') || tx.startsWith('☑')) {
+    const done = checks.has(i);
+    const body = tx.replace(/^[☐☑]\s?/, '');
+    return (
+      <button onClick={() => toggle(i)} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', width: '100%', textAlign: 'left', padding: '4px 4px', borderRadius: 7, transition: 'background .12s' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tint)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+        <span style={{ flexShrink: 0, width: 16, height: 16, marginTop: 2, borderRadius: 5, border: '1.8px solid ' + (done ? 'var(--violet)' : 'var(--border-strong)'), background: done ? 'var(--violet)' : 'transparent', display: 'grid', placeItems: 'center', transition: 'all .15s' }}>
+          {done && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>}
+        </span>
+        <span style={{ fontSize: 12.5, lineHeight: 1.5, color: done ? 'var(--ink-4)' : 'var(--ink-2)', textDecoration: done ? 'line-through' : 'none' }}>{body}</span>
+      </button>
+    );
+  }
+  const m = tx.match(/^([·▸•\-]|\d+[.)])\s*(.*)$/);
+  if (m) {
+    const g = m[1]; const color = g === '▸' ? 'var(--loss)' : 'var(--violet)';
+    return <div style={{ display: 'flex', gap: 7, fontSize: 12.5, lineHeight: 1.5, padding: '3px 4px', color: 'var(--ink-2)' }}>
+      <span style={{ color, flexShrink: 0, fontWeight: 700, minWidth: g.length > 1 ? 15 : 9 }}>{g}</span><span style={{ wordBreak: 'break-word' }}>{m[2]}</span>
+    </div>;
+  }
+  return <div style={{ fontSize: 12.5, lineHeight: 1.5, padding: '2px 4px', color: 'var(--ink-3)', wordBreak: 'break-word' }}>{tx}</div>;
+}
+/* 원칙/루틴 본문 — 섹션 카드 그리드(좌우 펼침) + 체크박스 */
 function renderPrinciples(principles, checks, toggle) {
+  const G = groupPrincipleLines(principles);
+  const order = G.sections.find(s => s.kind === 'order');
+  const grid = G.sections.filter(s => s.kind !== 'order');
+  const card = (s, key) => {
+    const risk = s.kind === 'risk';
+    return (
+      <div key={key} style={{ border: '1px solid', borderColor: risk ? 'var(--loss)' : 'var(--border)', background: risk ? 'rgba(176,74,74,.05)' : 'var(--surface-2, transparent)', borderRadius: 12, padding: '10px 12px' }}>
+        {s.title && <div style={{ fontWeight: 800, fontSize: 12.5, marginBottom: 6, color: risk ? 'var(--loss)' : 'var(--ink)' }}>{risk ? '⚠ ' : ''}{s.title}</div>}
+        {s.lines.map(it => <PrincipleLine key={it.i} item={it} checks={checks} toggle={toggle} />)}
+      </div>
+    );
+  };
+  return (
+    <div>
+      {G.title && <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 10, color: 'var(--ink)' }}>{G.title}</div>}
+      {order && (
+        <div style={{ background: 'var(--violet-50)', border: '1px solid var(--violet-100)', borderRadius: 12, padding: '10px 13px', marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 12.5, marginBottom: 5, color: 'var(--violet-600)' }}>📌 {order.title}</div>
+          {order.lines.map(it => <PrincipleLine key={it.i} item={it} checks={checks} toggle={toggle} />)}
+        </div>
+      )}
+      {G.routineLabel && <div style={{ fontWeight: 800, fontSize: 12, color: 'var(--ink-3)', margin: '2px 2px 8px' }}>{G.routineLabel}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, alignItems: 'start' }}>
+        {grid.map((s, i) => card(s, i))}
+      </div>
+    </div>
+  );
+}
+/* (구버전, 미사용) */
+function renderPrinciplesOld(principles, checks, toggle) {
   return principles.split('\n').map((line, i) => {
     const tx = line.replace(/^\s+/, '');
     if (tx.startsWith('☐') || tx.startsWith('☑')) {
@@ -64,6 +134,7 @@ function RoutineCard({ routine, defaultOpen }) {
   const { items, checks, done, total, toggle, principles, open, setOpen, onEdit } = routine;
   const isOpen = defaultOpen ? true : open;
   const allDone = done === total && total > 0;
+  const wideR = window.matchMedia('(min-width:680px)').matches;
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <button onClick={() => !defaultOpen && setOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 13, padding: '15px 18px', minHeight: 68, textAlign: 'left' }}>
@@ -82,7 +153,7 @@ function RoutineCard({ routine, defaultOpen }) {
       </button>
       {isOpen && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px 14px' }}>
-          <div style={{ maxHeight: defaultOpen ? 380 : 300, overflow: 'auto', paddingRight: 4 }}>
+          <div style={{ maxHeight: defaultOpen ? 'none' : (wideR ? 560 : 320), overflow: defaultOpen ? 'visible' : 'auto', paddingRight: 4 }}>
             {renderPrinciples(principles, checks, toggle)}
           </div>
           <div style={{ textAlign: 'right', marginTop: 8 }}>
@@ -251,17 +322,15 @@ function Hero({ layout, stats: s, balF, balS, totalBal, totalPnl, totalRet, onSe
     ];
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-        <div className="card" style={{ padding: '4px 20px', cursor: 'pointer' }} onClick={onStats}>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
-              {cells.map(([l, v, c], i) => (
-                <div key={l} style={{ padding: '16px 22px 16px 0', marginRight: 2, borderRight: i < cells.length - 1 ? '1px solid var(--border)' : 'none', paddingRight: 22 }}>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>{l}</div>
-                  <div className="mono" style={{ fontSize: 20, fontWeight: 800, marginTop: 3, color: c || 'var(--ink)' }}>{v}</div>
-                </div>
-              ))}
-            </div>
-            {s.curve.length > 1 && <div style={{ width: 150, flexShrink: 0 }}><EquityCurve points={s.curve} money={money} height={56} showAxis={false} /></div>}
+        <div className="card" style={{ padding: '4px 12px', cursor: 'pointer' }} onClick={onStats}>
+          <div style={{ display: 'flex', alignItems: 'stretch', flexWrap: 'wrap' }}>
+            {cells.map(([l, v, c], i) => (
+              <div key={l} style={{ flex: '1 1 96px', minWidth: 90, padding: '15px 10px', borderRight: i < cells.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>{l}</div>
+                <div className="mono" style={{ fontSize: 20, fontWeight: 800, marginTop: 3, color: c || 'var(--ink)' }}>{v}</div>
+              </div>
+            ))}
+            {s.curve.length > 1 && <div style={{ flex: '1 1 150px', minWidth: 140, display: 'flex', alignItems: 'center', paddingLeft: 14 }}><EquityCurve points={s.curve} money={money} height={56} showAxis={false} /></div>}
           </div>
         </div>
         <RoutineMemoRow routine={routine} memo={memo} showRoutine={showRoutine} />
