@@ -69,7 +69,7 @@ function renderPrinciples(principles, checks, toggle) {
         </div>
       )}
       {G.routineLabel && <div style={{ fontWeight: 800, fontSize: 12, color: 'var(--ink-3)', margin: '2px 2px 8px' }}>{G.routineLabel}</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gcols}, minmax(0, 1fr))`, gap: 9, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gcols}, minmax(0, 1fr))`, gap: 9, alignItems: 'stretch' }}>
         {grid.map((s, i) => card(s, i))}
       </div>
     </div>

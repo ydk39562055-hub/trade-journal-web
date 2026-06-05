@@ -220,7 +220,7 @@ function PrinciplesModal({ text, onSave, onClose }) {
 
           {P.routineLabel && <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--ink-3)', margin: '2px 2px 10px' }}>{P.routineLabel}</div>}
 
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${window.innerWidth >= 980 ? 3 : 2}, minmax(0, 1fr))`, gap: 12, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${window.innerWidth >= 980 ? 3 : 2}, minmax(0, 1fr))`, gap: 12, alignItems: 'stretch' }}>
             {grid.map((s, i) => {
               const risk = s.kind === 'risk';
               return (
