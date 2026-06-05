@@ -123,7 +123,11 @@ function App() {
   const [settings, setSettings] = useState(() => {
     try { return { ...TJ.SEED, ...JSON.parse(localStorage.getItem('tj_settings_v2') || '{}') }; } catch { return { ...TJ.SEED }; }
   });
-  const [principles, setPrinciples] = useState(() => localStorage.getItem('tj_principles_v2') || TJ.DEFAULT_PRINCIPLES);
+  const [principles, setPrinciples] = useState(() => {
+    const stored = localStorage.getItem('tj_principles_v2');
+    const custom = localStorage.getItem('tj_principles_custom') === '1';
+    return (stored && custom) ? stored : TJ.DEFAULT_PRINCIPLES;   // 직접 편집·저장한 경우만 유지, 아니면 최신 기본 문구
+  });
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState('all');
@@ -396,7 +400,7 @@ function App() {
       {modal?.type === 'editor' && <EditorModal entry={modal.entry} onSave={saveEntry} onClose={() => setModal(null)} />}
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
-      {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
+      {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} syncId={syncId} onImport={importEntries} onReset={clearAll} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}
 
