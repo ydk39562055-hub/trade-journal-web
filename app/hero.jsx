@@ -135,7 +135,6 @@ function RoutineCard({ routine, defaultOpen }) {
   const { items, checks, done, total, toggle, principles, open, setOpen, onEdit } = routine;
   const isOpen = defaultOpen ? true : open;
   const allDone = done === total && total > 0;
-  const wideR = window.matchMedia('(min-width:680px)').matches;
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <button onClick={() => !defaultOpen && setOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 13, padding: '15px 18px', minHeight: 68, textAlign: 'left' }}>
@@ -154,7 +153,7 @@ function RoutineCard({ routine, defaultOpen }) {
       </button>
       {isOpen && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px 14px' }}>
-          <div style={{ maxHeight: defaultOpen ? 'none' : (wideR ? 560 : 320), overflow: defaultOpen ? 'visible' : 'auto', paddingRight: 4 }}>
+          <div style={{ paddingRight: 2 }}>
             {renderPrinciples(principles, checks, toggle)}
           </div>
           <div style={{ textAlign: 'right', marginTop: 8 }}>
