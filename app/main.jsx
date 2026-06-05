@@ -92,23 +92,23 @@ function RedFolderCard({ items }) {
     .filter(e => { if (isNaN(e.d)) return false; const x = e.d; const y = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; return y === today; })
     .sort((a, b) => a.d - b.d);
   return (
-    <div className="card" style={{ padding: 'var(--card-pad)', marginBottom: 16, borderColor: 'var(--violet-100)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: list.length ? 10 : 0 }}>
-        <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--violet)', flexShrink: 0 }} />
-        <b style={{ fontSize: 14 }}>오늘 레드폴더 (고임팩트 뉴스)</b>
-        <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{list.length ? list.length + '건' : '없음 ✓'}</span>
+    <div className="card" style={{ padding: '11px 13px', marginBottom: 12, borderColor: 'var(--violet-100)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: list.length ? 6 : 0 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--violet)', flexShrink: 0 }} />
+        <b style={{ fontSize: 12.5 }}>오늘 레드폴더</b>
+        <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{list.length ? list.length + '건' : '없음 ✓'}</span>
       </div>
       {list.map((e, i) => (
-        <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 0', fontSize: 13.5, borderTop: i ? '1px solid var(--border)' : 'none' }}>
+        <div key={i} style={{ display: 'flex', gap: 8, padding: '3px 0', fontSize: 12, borderTop: i ? '1px solid var(--border)' : 'none', alignItems: 'baseline' }}>
           <span className="mono" style={{ fontWeight: 700, color: 'var(--ink)', flexShrink: 0 }}>{e.d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
-          <span style={{ color: 'var(--ink-3)', flexShrink: 0, minWidth: 62 }}>{koCountry(e.country)}</span>
-          <span style={{ color: 'var(--ink-2)', display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <span>{e.title}</span>
-            {koEvent(e.title) && <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>{koEvent(e.title)}</span>}
+          <span style={{ color: 'var(--ink-3)', flexShrink: 0, minWidth: 54, fontSize: 11.5 }}>{koCountry(e.country)}</span>
+          <span style={{ color: 'var(--ink-2)' }}>
+            {koEvent(e.title) || e.title}
+            {koEvent(e.title) && <span style={{ color: 'var(--ink-4)' }}> · {e.title}</span>}
           </span>
         </div>
       ))}
-      <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 8 }}>발표 직전 신규 진입 자제 · 발표 후 스윕은 트리거로 (시간=내 기기 기준)</div>
+      <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 6 }}>발표 직전 신규 진입 자제 · 시간=내 기기 기준</div>
     </div>
   );
 }

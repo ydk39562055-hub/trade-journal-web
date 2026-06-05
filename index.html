@@ -30,18 +30,24 @@
   </svg>
 </template>
 
-<!-- 데이터 + 로직 (plain) -->
-<script src="app/data.js"></script>
-<script src="app/stats.js"></script>
-<script src="app/sync.js"></script>
-
-<!-- 컴포넌트 (babel) -->
-<script type="text/babel" src="app/tweaks-panel.jsx"></script>
-<script type="text/babel" src="app/charts.jsx"></script>
-<script type="text/babel" src="app/components.jsx"></script>
-<script type="text/babel" src="app/modals.jsx"></script>
-<script type="text/babel" src="app/dashboard.jsx"></script>
-<script type="text/babel" src="app/hero.jsx"></script>
-<script type="text/babel" src="app/main.jsx"></script>
+<!-- 자동 최신화 로더: 매 로드마다 ?v=타임스탬프로 받아 항상 최신 버전을 띄움(캐시 무력화) -->
+<script>
+(async function () {
+  const bust = '?v=' + Date.now();
+  const plain = ['app/data.js', 'app/stats.js', 'app/sync.js'];
+  const babel = ['app/tweaks-panel.jsx', 'app/charts.jsx', 'app/components.jsx', 'app/modals.jsx', 'app/dashboard.jsx', 'app/hero.jsx', 'app/main.jsx'];
+  const fail = (m) => { document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#9a5a34;font-family:sans-serif">로딩 실패 — 인터넷 확인 후 새로고침<br><small>' + m + '</small></div>'; };
+  try {
+    for (const src of plain) {
+      await new Promise((res, rej) => { const s = document.createElement('script'); s.src = src + bust; s.onload = res; s.onerror = () => rej(new Error(src)); document.body.appendChild(s); });
+    }
+    for (const src of babel) {
+      const code = await fetch(src + bust).then(r => { if (!r.ok) throw new Error(src + ' ' + r.status); return r.text(); });
+      const out = Babel.transform(code, { presets: ['react'], filename: src }).code;
+      const s = document.createElement('script'); s.textContent = out; document.body.appendChild(s);
+    }
+  } catch (e) { fail(e.message); }
+})();
+</script>
 </body>
 </html>
