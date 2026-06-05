@@ -174,17 +174,17 @@ function parsePrinciples(text) {
   return { title, routineLabel, sections };
 }
 function PItem({ text }) {
-  const m = text.match(/^(☐|▸|·|\d+\.)\s*(.*)$/);
-  const marker = m ? m[1] : ''; const body = m ? m[2] : text;
-  let glyph = '·', color = 'var(--violet)';
-  if (marker === '☐') { glyph = '☐'; color = 'var(--ink-4)'; }
-  else if (marker === '▸') { glyph = '▸'; color = 'var(--loss)'; }
-  else if (/^\d+\.$/.test(marker)) { glyph = marker; color = 'var(--violet-600)'; }
-  else if (!marker) { glyph = ''; }
+  const m = text.match(/^(☐|☑|▸|·|•|\d+[.)])\s*(.*)$/);
+  const mk = m ? m[1] : ''; const body = m ? m[2] : text;
+  const isNum = /^\d/.test(mk);
+  let lead;
+  if (mk === '☐' || mk === '☑') lead = <span style={{ flexShrink: 0, width: 14, height: 14, marginTop: 3, borderRadius: 4, border: '1.8px solid var(--border-strong)' }} />;
+  else if (isNum) lead = <span style={{ flexShrink: 0, minWidth: 16, fontWeight: 800, color: 'var(--violet-600)', fontVariantNumeric: 'tabular-nums' }}>{mk.replace(/[).]/, '')}.</span>;
+  else lead = <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: '50%', marginTop: 8, background: mk === '▸' ? 'var(--loss)' : 'var(--violet)' }} />;
   return (
-    <div style={{ display: 'flex', gap: 7, fontSize: 13, lineHeight: 1.5, padding: '3px 0', color: 'var(--ink-2)' }}>
-      {glyph && <span style={{ color, flexShrink: 0, fontWeight: 700, minWidth: glyph.length > 1 ? 15 : 9, textAlign: 'left' }}>{glyph}</span>}
-      <span style={{ wordBreak: 'break-word' }}>{body}</span>
+    <div style={{ display: 'flex', gap: 9, fontSize: 13, lineHeight: 1.6, padding: '3.5px 0', color: 'var(--ink-2)' }}>
+      {lead}
+      <span style={{ wordBreak: 'break-word', flex: 1 }}>{body}</span>
     </div>
   );
 }

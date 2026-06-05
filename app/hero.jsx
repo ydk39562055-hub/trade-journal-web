@@ -37,12 +37,18 @@ function PrincipleLine({ item, checks, toggle }) {
   }
   const m = tx.match(/^([·▸•\-]|\d+[.)])\s*(.*)$/);
   if (m) {
-    const g = m[1]; const color = g === '▸' ? 'var(--loss)' : 'var(--violet)';
-    return <div style={{ display: 'flex', gap: 7, fontSize: 12.5, lineHeight: 1.5, padding: '3px 4px', color: 'var(--ink-2)' }}>
-      <span style={{ color, flexShrink: 0, fontWeight: 700, minWidth: g.length > 1 ? 15 : 9 }}>{g}</span><span style={{ wordBreak: 'break-word' }}>{m[2]}</span>
-    </div>;
+    const isNum = /^\d/.test(m[1]);
+    const risk = m[1] === '▸';
+    return (
+      <div style={{ display: 'flex', gap: 9, fontSize: 12.5, lineHeight: 1.6, padding: '3.5px 2px', color: 'var(--ink-2)' }}>
+        {isNum
+          ? <span style={{ flexShrink: 0, minWidth: 16, fontWeight: 800, color: 'var(--violet-600)', fontVariantNumeric: 'tabular-nums' }}>{m[1].replace(/[).]/, '')}.</span>
+          : <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: '50%', marginTop: 7, background: risk ? 'var(--loss)' : 'var(--violet)' }} />}
+        <span style={{ wordBreak: 'break-word', flex: 1 }}>{m[2]}</span>
+      </div>
+    );
   }
-  return <div style={{ fontSize: 12.5, lineHeight: 1.5, padding: '2px 4px', color: 'var(--ink-3)', wordBreak: 'break-word' }}>{tx}</div>;
+  return <div style={{ fontSize: 12.5, lineHeight: 1.6, padding: '2px 2px', color: 'var(--ink-3)', wordBreak: 'break-word' }}>{tx}</div>;
 }
 /* 원칙/루틴 본문 — 섹션 카드 그리드(좌우 펼침) + 체크박스 */
 function renderPrinciples(principles, checks, toggle) {
