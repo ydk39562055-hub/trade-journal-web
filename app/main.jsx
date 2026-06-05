@@ -51,6 +51,40 @@ function mergeBlobs(a, b) {
   return { v: 1, entries, settings, principles, memos, deleted };
 }
 
+/* 레드폴더(ForexFactory 경제지표) 한글 표기 */
+const FF_CTY_KO = { USD: '🇺🇸 미국', EUR: '🇪🇺 유로존', JPY: '🇯🇵 일본', GBP: '🇬🇧 영국', AUD: '🇦🇺 호주', CAD: '🇨🇦 캐나다', NZD: '🇳🇿 뉴질랜드', CHF: '🇨🇭 스위스', CNY: '🇨🇳 중국' };
+const koCountry = c => FF_CTY_KO[c] || c;
+const FF_EVT_KO = {
+  'Non-Farm Employment Change': '비농업 고용지표', 'ADP Non-Farm Employment Change': 'ADP 민간고용',
+  'Unemployment Rate': '실업률', 'Unemployment Claims': '신규 실업수당청구', 'Employment Change': '고용 변화',
+  'Average Hourly Earnings m/m': '시간당 평균임금(전월대비)',
+  'ISM Manufacturing PMI': 'ISM 제조업 PMI', 'ISM Services PMI': 'ISM 서비스업 PMI',
+  'Flash Manufacturing PMI': '제조업 PMI 속보', 'Flash Services PMI': '서비스업 PMI 속보',
+  'GDP q/q': 'GDP(전분기대비)', 'GDP m/m': 'GDP(전월대비)', 'Prelim GDP q/q': 'GDP 잠정치(전분기대비)', 'Advance GDP q/q': 'GDP 속보치(전분기대비)',
+  'CPI m/m': '소비자물가 CPI(전월대비)', 'CPI y/y': '소비자물가 CPI(전년대비)', 'Core CPI m/m': '근원 소비자물가(전월대비)',
+  'PPI m/m': '생산자물가 PPI(전월대비)', 'Core PCE Price Index m/m': '근원 PCE 물가(전월대비)',
+  'Retail Sales m/m': '소매판매(전월대비)', 'Core Retail Sales m/m': '근원 소매판매(전월대비)',
+  'Federal Funds Rate': '미국 기준금리 결정', 'FOMC Statement': 'FOMC 성명', 'FOMC Press Conference': 'FOMC 기자회견', 'FOMC Meeting Minutes': 'FOMC 의사록', 'FOMC Economic Projections': 'FOMC 경제전망',
+  'Main Refinancing Rate': 'ECB 기준금리 결정', 'Official Bank Rate': '영란은행 기준금리 결정', 'Cash Rate': '호주 기준금리 결정', 'Overnight Rate': '캐나다 기준금리 결정',
+  'JOLTS Job Openings': 'JOLTS 구인건수', 'Consumer Confidence': '소비자신뢰지수', 'Prelim UoM Consumer Sentiment': '미시간대 소비자심리(잠정)',
+  'Building Permits': '건축 허가', 'Trade Balance': '무역수지',
+};
+const BANK_KO = { BOE: '영란은행', BOJ: '일본은행', RBA: '호주중앙은행', RBNZ: '뉴질랜드중앙은행', BOC: '캐나다중앙은행', SNB: '스위스중앙은행', ECB: '유럽중앙은행', Fed: '연준', PBOC: '중국인민은행' };
+const NAME_KO = { Bailey: '베일리', Ueda: '우에다', Bullock: '불록', Powell: '파월', Lagarde: '라가르드', Macklem: '매클럼' };
+function koEvent(t) {
+  if (!t) return '';
+  if (FF_EVT_KO[t]) return FF_EVT_KO[t];
+  if (/Speaks$/.test(t)) {
+    const p = t.replace(/\s+Speaks$/, '').split(/\s+/);
+    const bank = BANK_KO[p[0]] || p[0];
+    const nm = p[p.length - 1]; const name = NAME_KO[nm] || nm;
+    return `${bank} ${name} 연설`;
+  }
+  let s = t.replace(/\bm\/m\b/, '(전월대비)').replace(/\bq\/q\b/, '(전분기대비)').replace(/\by\/y\b/, '(전년대비)')
+    .replace(/\bCPI\b/, '소비자물가').replace(/\bRetail Sales\b/, '소매판매').replace(/\bUnemployment\b/, '실업').replace(/\bEmployment\b/, '고용');
+  return s === t ? '' : s;
+}
+
 function RedFolderCard({ items }) {
   if (!items || !items.length) return null;
   const today = todayStr();
@@ -65,10 +99,13 @@ function RedFolderCard({ items }) {
         <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{list.length ? list.length + '건' : '없음 ✓'}</span>
       </div>
       {list.map((e, i) => (
-        <div key={i} style={{ display: 'flex', gap: 10, padding: '5px 0', fontSize: 13.5, borderTop: i ? '1px solid var(--border)' : 'none' }}>
+        <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 0', fontSize: 13.5, borderTop: i ? '1px solid var(--border)' : 'none' }}>
           <span className="mono" style={{ fontWeight: 700, color: 'var(--ink)', flexShrink: 0 }}>{e.d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
-          <span style={{ color: 'var(--ink-3)', flexShrink: 0 }}>{e.country}</span>
-          <span style={{ color: 'var(--ink-2)' }}>{e.title}</span>
+          <span style={{ color: 'var(--ink-3)', flexShrink: 0, minWidth: 62 }}>{koCountry(e.country)}</span>
+          <span style={{ color: 'var(--ink-2)', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <span>{e.title}</span>
+            {koEvent(e.title) && <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>{koEvent(e.title)}</span>}
+          </span>
         </div>
       ))}
       <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 8 }}>발표 직전 신규 진입 자제 · 발표 후 스윕은 트리거로 (시간=내 기기 기준)</div>
