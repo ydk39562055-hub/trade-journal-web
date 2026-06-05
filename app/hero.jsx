@@ -49,6 +49,7 @@ function renderPrinciples(principles, checks, toggle) {
   const G = groupPrincipleLines(principles);
   const order = G.sections.find(s => s.kind === 'order');
   const grid = G.sections.filter(s => s.kind !== 'order');
+  const gcols = window.innerWidth >= 980 ? 3 : 2;   // 좁아도 항상 최소 2열(좌우로 나눔)
   const card = (s, key) => {
     const risk = s.kind === 'risk';
     return (
@@ -68,7 +69,7 @@ function renderPrinciples(principles, checks, toggle) {
         </div>
       )}
       {G.routineLabel && <div style={{ fontWeight: 800, fontSize: 12, color: 'var(--ink-3)', margin: '2px 2px 8px' }}>{G.routineLabel}</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gcols}, minmax(0, 1fr))`, gap: 9, alignItems: 'start' }}>
         {grid.map((s, i) => card(s, i))}
       </div>
     </div>
