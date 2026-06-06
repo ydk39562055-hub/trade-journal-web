@@ -161,7 +161,7 @@ function App() {
   const applyBlob = (b) => {
     if (Array.isArray(b.entries)) setEntries(b.entries);
     if (b.settings) setSettings(b.settings);
-    if (typeof b.principles === 'string' && b.principles.trim()) setPrinciples(b.principles);
+    if (typeof b.principles === 'string' && b.principles.trim() && localStorage.getItem('tj_principles_custom') === '1') setPrinciples(b.principles); // 직접 편집본만 동기화 반영, 기본문구는 항상 최신 유지
     if (Array.isArray(b.memos)) setMemos(b.memos);
     if (b.deleted) setDeleted(b.deleted);
   };
