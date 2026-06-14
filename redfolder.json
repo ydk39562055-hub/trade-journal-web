@@ -1,93 +1,135 @@
 [
 {
-"title": "Core CPI m/m",
-"country": "USD",
-"date": "2026-06-10T08:30:00-04:00",
-"forecast": "0.3%",
-"previous": "0.4%"
-},
-{
-"title": "Core CPI y/y",
-"country": "USD",
-"date": "2026-06-10T08:30:00-04:00",
-"forecast": "2.9%",
-"previous": "2.8%"
-},
-{
-"title": "CPI m/m",
-"country": "USD",
-"date": "2026-06-10T08:30:00-04:00",
-"forecast": "0.5%",
-"previous": "0.6%"
-},
-{
-"title": "CPI y/y",
-"country": "USD",
-"date": "2026-06-10T08:30:00-04:00",
-"forecast": "4.2%",
-"previous": "3.8%"
-},
-{
-"title": "BOC Rate Statement",
-"country": "CAD",
-"date": "2026-06-10T09:45:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "Overnight Rate",
-"country": "CAD",
-"date": "2026-06-10T09:45:00-04:00",
-"forecast": "2.25%",
-"previous": "2.25%"
-},
-{
-"title": "BOC Press Conference",
-"country": "CAD",
-"date": "2026-06-10T10:30:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "Main Refinancing Rate",
-"country": "EUR",
-"date": "2026-06-11T08:15:00-04:00",
-"forecast": "2.40%",
-"previous": "2.15%"
+"title": "BOJ Policy Rate",
+"country": "JPY",
+"date": "2026-06-15T22:30:00-04:00",
+"forecast": "<1.00%",
+"previous": "<0.75%"
 },
 {
 "title": "Monetary Policy Statement",
-"country": "EUR",
-"date": "2026-06-11T08:15:00-04:00",
+"country": "JPY",
+"date": "2026-06-15T22:30:00-04:00",
 "forecast": "",
 "previous": ""
 },
 {
-"title": "Core PPI m/m",
-"country": "USD",
-"date": "2026-06-11T08:30:00-04:00",
-"forecast": "0.5%",
-"previous": "1.0%"
+"title": "Cash Rate",
+"country": "AUD",
+"date": "2026-06-16T00:30:00-04:00",
+"forecast": "4.35%",
+"previous": "4.35%"
 },
 {
-"title": "PPI m/m",
-"country": "USD",
-"date": "2026-06-11T08:30:00-04:00",
-"forecast": "0.7%",
-"previous": "1.4%"
-},
-{
-"title": "ECB Press Conference",
-"country": "EUR",
-"date": "2026-06-11T08:45:00-04:00",
+"title": "RBA Rate Statement",
+"country": "AUD",
+"date": "2026-06-16T00:30:00-04:00",
 "forecast": "",
 "previous": ""
 },
 {
-"title": "GDP m/m",
+"title": "RBA Press Conference",
+"country": "AUD",
+"date": "2026-06-16T01:30:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "BOJ Press Conference",
+"country": "JPY",
+"date": "2026-06-16T01:30:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "CPI y/y",
 "country": "GBP",
-"date": "2026-06-12T02:00:00-04:00",
-"forecast": "-0.1%",
-"previous": "0.3%"
+"date": "2026-06-17T02:00:00-04:00",
+"forecast": "3.0%",
+"previous": "2.8%"
+},
+{
+"title": "Federal Funds Rate",
+"country": "USD",
+"date": "2026-06-17T14:00:00-04:00",
+"forecast": "3.75%",
+"previous": "3.75%"
+},
+{
+"title": "FOMC Economic Projections",
+"country": "USD",
+"date": "2026-06-17T14:00:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "FOMC Statement",
+"country": "USD",
+"date": "2026-06-17T14:00:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "FOMC Press Conference",
+"country": "USD",
+"date": "2026-06-17T14:30:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "GDP q/q",
+"country": "NZD",
+"date": "2026-06-17T18:45:00-04:00",
+"forecast": "0.8%",
+"previous": "0.2%"
+},
+{
+"title": "Claimant Count Change",
+"country": "GBP",
+"date": "2026-06-18T02:00:00-04:00",
+"forecast": "25.8K",
+"previous": "26.5K"
+},
+{
+"title": "SNB Monetary Policy Assessment",
+"country": "CHF",
+"date": "2026-06-18T03:30:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "SNB Policy Rate",
+"country": "CHF",
+"date": "2026-06-18T03:30:00-04:00",
+"forecast": "0.00%",
+"previous": "0.00%"
+},
+{
+"title": "SNB Press Conference",
+"country": "CHF",
+"date": "2026-06-18T04:00:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "Monetary Policy Summary",
+"country": "GBP",
+"date": "2026-06-18T07:00:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "MPC Official Bank Rate Votes",
+"country": "GBP",
+"date": "2026-06-18T07:00:00-04:00",
+"forecast": "1-0-8",
+"previous": "1-0-8"
+},
+{
+"title": "Official Bank Rate",
+"country": "GBP",
+"date": "2026-06-18T07:00:00-04:00",
+"forecast": "3.75%",
+"previous": "3.75%"
 }
 ]
