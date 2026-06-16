@@ -2,14 +2,14 @@
 {
 "title": "BOJ Policy Rate",
 "country": "JPY",
-"date": "2026-06-15T23:30:00-04:00",
+"date": "2026-06-15T23:19:00-04:00",
 "forecast": "<1.00%",
 "previous": "<0.75%"
 },
 {
 "title": "Monetary Policy Statement",
 "country": "JPY",
-"date": "2026-06-15T23:30:00-04:00",
+"date": "2026-06-15T23:19:00-04:00",
 "forecast": "",
 "previous": ""
 },
@@ -37,7 +37,7 @@
 {
 "title": "BOJ Press Conference",
 "country": "JPY",
-"date": "2026-06-16T01:30:00-04:00",
+"date": "2026-06-16T02:30:00-04:00",
 "forecast": "",
 "previous": ""
 },
