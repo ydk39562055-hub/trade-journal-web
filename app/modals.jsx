@@ -34,6 +34,7 @@ function EditorModal({ entry, onSave, onClose }) {
   const set = (k, v) => setD(p => ({ ...p, [k]: v }));
   const toggleArr = (k, t) => setD(p => { const a = p[k].slice(); const i = a.indexOf(t); if (i >= 0) a.splice(i, 1); else a.push(t); return { ...p, [k]: a }; });
   const numOrNull = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+  const isSpot = d.market === '현물';
 
   const onFiles = async ev => {
     const arr = [];
@@ -53,12 +54,27 @@ function EditorModal({ entry, onSave, onClose }) {
         ))}
       </div>
 
-      <label style={fld}>진입 타임프레임</label>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-        {TJ.TIMEFRAMES.map(tf => (
-          <span key={tf} className={'chip' + (d.timeframe === tf ? ' on' : '')} onClick={() => set('timeframe', d.timeframe === tf ? null : tf)}>{tf}</span>
-        ))}
-      </div>
+      {isSpot ? (
+        <>
+          <label style={fld}>종목</label>
+          <input value={d.ticker ?? ''} onChange={e => set('ticker', e.target.value)} placeholder="BTC, 삼성전자, NVDA…" />
+          <label style={fld}>보유 유형</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {TJ.HOLD_TYPES.map(h => (
+              <span key={h} className={'chip' + (d.holdType === h ? ' on' : '')} onClick={() => set('holdType', d.holdType === h ? null : h)}>{h}</span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <label style={fld}>진입 타임프레임</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {TJ.TIMEFRAMES.map(tf => (
+              <span key={tf} className={'chip' + (d.timeframe === tf ? ' on' : '')} onClick={() => set('timeframe', d.timeframe === tf ? null : tf)}>{tf}</span>
+            ))}
+          </div>
+        </>
+      )}
 
       <label style={fld}>날짜</label>
       <input type="date" value={d.traded_at} onChange={e => set('traded_at', e.target.value)} />
@@ -89,37 +105,83 @@ function EditorModal({ entry, onSave, onClose }) {
 
       {detailOpen && (
         <div style={{ animation: 'rise .2s ease' }}>
-          <label style={fld}>방향</label>
-          <div className="seg" style={{ width: '100%' }}>
-            {[['long', '롱'], ['short', '숏']].map(([v, l]) => (
-              <button key={v} className={d.direction === v ? 'on' : ''} onClick={() => set('direction', d.direction === v ? null : v)}>{l}</button>
-            ))}
-          </div>
+          {isSpot ? (
+            <>
+              <label style={fld}>진입 근거</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {TJ.SPOT_REASON_TAGS.map(t => <span key={t} className={'chip' + (d.setups.includes(t) ? ' on' : '')} onClick={() => toggleArr('setups', t)}>{t}</span>)}
+              </div>
 
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}><label style={fld}>진입가</label><input type="number" inputMode="decimal" value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} /></div>
-            <div style={{ flex: 1 }}><label style={fld}>청산가</label><input type="number" inputMode="decimal" value={d.exit_price ?? ''} onChange={e => set('exit_price', numOrNull(e.target.value))} /></div>
-          </div>
+              <label style={fld}>진입 근거 (직접 작성)</label>
+              <textarea value={d.reason ?? ''} onChange={e => set('reason', e.target.value)} placeholder="왜 샀나 — 내 생각 그대로…" style={{ minHeight: 70 }} />
 
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1.4 }}>
-              <label style={fld}>결과</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}><label style={fld}>비중 (%)</label><input type="number" inputMode="decimal" value={d.weight ?? ''} onChange={e => set('weight', numOrNull(e.target.value))} placeholder="12" /></div>
+                <div style={{ flex: 1 }}><label style={fld}>평단가</label><input type="number" inputMode="decimal" value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} /></div>
+              </div>
+
+              <label style={fld}>분할 단계</label>
               <div className="seg" style={{ width: '100%' }}>
-                {[['win', '익절'], ['loss', '손절'], ['be', '본전']].map(([v, l]) => (
-                  <button key={v} className={d.result === v ? 'on' : ''} onClick={() => set('result', d.result === v ? null : v)}>{l}</button>
+                {['1차', '2차', '3차', '추가'].map(sp => (
+                  <button key={sp} className={d.split === sp ? 'on' : ''} onClick={() => set('split', d.split === sp ? null : sp)}>{sp}</button>
                 ))}
               </div>
-            </div>
-            <div style={{ flex: 1 }}><label style={fld}>R배수</label><input type="number" inputMode="decimal" placeholder="2 / -1" value={d.realized_r ?? ''} onChange={e => set('realized_r', numOrNull(e.target.value))} /></div>
-          </div>
 
-          <label style={fld}>손익금액 ($ · +이익 / −손실)</label>
-          <input type="number" inputMode="decimal" value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}><label style={fld}>목표가</label><input type="number" inputMode="decimal" value={d.target_price ?? ''} onChange={e => set('target_price', numOrNull(e.target.value))} /></div>
+                <div style={{ flex: 1 }}><label style={fld}>손절가</label><input type="number" inputMode="decimal" value={d.stop_price ?? ''} onChange={e => set('stop_price', numOrNull(e.target.value))} /></div>
+              </div>
 
-          <label style={fld}>셋업 태그 (ICT)</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {TJ.SETUP_TAGS.map(t => <span key={t} className={'chip' + (d.setups.includes(t) ? ' on' : '')} onClick={() => toggleArr('setups', t)}>{t}</span>)}
-          </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                <div style={{ flex: 1.6 }}>
+                  <label style={fld}>결과</label>
+                  <div className="seg" style={{ width: '100%' }}>
+                    {[['win', '익절'], ['loss', '손절'], ['holding', '보유중']].map(([v, l]) => (
+                      <button key={v} className={d.result === v ? 'on' : ''} onClick={() => set('result', d.result === v ? null : v)}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}><label style={fld}>수익률 (%)</label><input type="number" inputMode="decimal" placeholder="+18 / -5" value={d.return_pct ?? ''} onChange={e => set('return_pct', numOrNull(e.target.value))} /></div>
+              </div>
+
+              <label style={fld}>손익금액 ($ · +이익 / −손실)</label>
+              <input type="number" inputMode="decimal" value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
+            </>
+          ) : (
+            <>
+              <label style={fld}>방향</label>
+              <div className="seg" style={{ width: '100%' }}>
+                {[['long', '롱'], ['short', '숏']].map(([v, l]) => (
+                  <button key={v} className={d.direction === v ? 'on' : ''} onClick={() => set('direction', d.direction === v ? null : v)}>{l}</button>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}><label style={fld}>진입가</label><input type="number" inputMode="decimal" value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} /></div>
+                <div style={{ flex: 1 }}><label style={fld}>청산가</label><input type="number" inputMode="decimal" value={d.exit_price ?? ''} onChange={e => set('exit_price', numOrNull(e.target.value))} /></div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                <div style={{ flex: 1.4 }}>
+                  <label style={fld}>결과</label>
+                  <div className="seg" style={{ width: '100%' }}>
+                    {[['win', '익절'], ['loss', '손절'], ['be', '본전']].map(([v, l]) => (
+                      <button key={v} className={d.result === v ? 'on' : ''} onClick={() => set('result', d.result === v ? null : v)}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}><label style={fld}>R배수</label><input type="number" inputMode="decimal" placeholder="2 / -1" value={d.realized_r ?? ''} onChange={e => set('realized_r', numOrNull(e.target.value))} /></div>
+              </div>
+
+              <label style={fld}>손익금액 ($ · +이익 / −손실)</label>
+              <input type="number" inputMode="decimal" value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
+
+              <label style={fld}>셋업 태그 (ICT)</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {TJ.SETUP_TAGS.map(t => <span key={t} className={'chip' + (d.setups.includes(t) ? ' on' : '')} onClick={() => toggleArr('setups', t)}>{t}</span>)}
+              </div>
+            </>
+          )}
 
           <label style={fld}>실수 태그 (직접 입력 가능)</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
@@ -143,14 +205,37 @@ function EditorModal({ entry, onSave, onClose }) {
 function SettingsModal({ settings, onSave, onClose }) {
   const [fs, setFs] = useStateM(settings.futuresSeed ?? '');
   const [ss, setSs] = useStateM(settings.spotSeed ?? '');
+  const [fd, setFd] = useStateM(settings.futuresDeposit || 0);
+  const [sd, setSd] = useStateM(settings.spotDeposit || 0);
+  const [addF, setAddF] = useStateM('');
+  const [addS, setAddS] = useStateM('');
   const fld = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
+  const usd = n => '$' + (Number(n) || 0).toLocaleString('en-US');
+  const doAdd = (val, setTotal, total, setVal) => { const v = parseFloat(val); if (!isNaN(v) && v !== 0) { setTotal(total + v); setVal(''); } };
+  const depBox = (val, setVal, total, setTotal, ph) => (
+    <>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input type="number" inputMode="decimal" value={val} onChange={e => setVal(e.target.value)} placeholder={ph}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); doAdd(val, setTotal, total, setVal); } }} style={{ flex: 1 }} />
+        <button className="btn-ghost btn-sm" onClick={() => doAdd(val, setTotal, total, setVal)} style={{ whiteSpace: 'nowrap' }}>＋ 입금</button>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+        누적 입금 <b style={{ color: 'var(--ink)' }}>{usd(total)}</b>
+        {total !== 0 && <button onClick={() => setTotal(0)} style={{ fontSize: 11.5, color: 'var(--ink-4)' }}>초기화</button>}
+      </div>
+    </>
+  );
   return (
-    <Modal open onClose={onClose} title="시드 (초기자본) 설정" sub="달러($) 기준 · 손익금액과 합쳐 잔고가 자동 계산됩니다" maxWidth={420}>
+    <Modal open onClose={onClose} title="시드 · 입금 설정" sub="시드 + 추가 입금 + 손익 = 잔고로 자동 계산됩니다" maxWidth={420}>
       <label style={fld}>선물 시드 ($)</label>
       <input type="number" inputMode="decimal" value={fs} onChange={e => setFs(e.target.value)} placeholder="10000" />
+      <label style={fld}>선물 추가 입금 — 금액 넣고 ＋입금</label>
+      {depBox(addF, setAddF, fd, setFd, '예: 1000')}
       <label style={fld}>현물 시드 ($)</label>
       <input type="number" inputMode="decimal" value={ss} onChange={e => setSs(e.target.value)} placeholder="5000" />
-      <button className="btn" onClick={() => { onSave({ futuresSeed: fs === '' ? null : +fs, spotSeed: ss === '' ? null : +ss }); }} style={{ width: '100%', marginTop: 18, padding: 13 }}>저장</button>
+      <label style={fld}>현물 추가 입금 — 금액 넣고 ＋입금</label>
+      {depBox(addS, setAddS, sd, setSd, '예: 500')}
+      <button className="btn" onClick={() => { onSave({ futuresSeed: fs === '' ? null : +fs, spotSeed: ss === '' ? null : +ss, futuresDeposit: +fd || 0, spotDeposit: +sd || 0 }); }} style={{ width: '100%', marginTop: 18, padding: 13 }}>저장</button>
     </Modal>
   );
 }

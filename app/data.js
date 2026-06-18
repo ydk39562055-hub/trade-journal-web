@@ -4,14 +4,19 @@
   const ERROR_TAGS = ['포모', '추격', '손절 밀기', '물타기', '복수매매', '오버사이즈', '조기청산', '근거없음'];
   const TIMEFRAMES = ['1M', '3M', '5M', '15M', '1H', '4H'];
 
+  // 현물(투자·스윙) 전용 — 진입근거 태그 / 보유유형
+  const SPOT_REASON_TAGS = ['돌파', '눌림목', '바닥분할', '추세추종', '가치/펀더', '내러티브/테마', '수급/거래량', '매물대', '유동성 제거', '이벤트'];
+  const HOLD_TYPES = ['스윙', '중기', '장기', '적립(DCA)'];
+
   // 결과 라벨
   const RESULT = {
     win: { ko: '익절', cls: 'win' },
     loss: { ko: '손절', cls: 'loss' },
     be: { ko: '본전', cls: 'be' },
+    holding: { ko: '보유중', cls: 'be' },
   };
 
-  const SEED = { futuresSeed: 10000, spotSeed: 5000 };
+  const SEED = { futuresSeed: 10000, spotSeed: 5000, futuresDeposit: 0, spotDeposit: 0 };
 
   // ── 샘플 거래 (시간순으로 작성; 앱이 최신순 정렬) ──
   const T = [
@@ -127,6 +132,6 @@
   }
 
   window.TJ = {
-    SETUP_TAGS, ERROR_TAGS, TIMEFRAMES, RESULT, SEED, ENTRIES, DEFAULT_PRINCIPLES, getErrorTags, addErrorTag,
+    SETUP_TAGS, SPOT_REASON_TAGS, HOLD_TYPES, ERROR_TAGS, TIMEFRAMES, RESULT, SEED, ENTRIES, DEFAULT_PRINCIPLES, getErrorTags, addErrorTag,
   };
 })();

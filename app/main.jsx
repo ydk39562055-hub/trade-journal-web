@@ -264,7 +264,7 @@ function App() {
     if (!confirm('샘플 데이터(예시 28건)와 시드를 비우고 빈 일지로 시작할까요?\n되돌릴 수 없어요. (필요하면 먼저 더보기 → JSON 백업)')) return;
     const ts = new Date().toISOString();
     setDeleted(prev => { const n = { ...prev }; entries.forEach(e => { n[e.id] = ts; }); return n; }); // 동기화 시 다른 기기에서도 비워지도록
-    setEntries([]); setSettings({ futuresSeed: null, spotSeed: null });
+    setEntries([]); setSettings({ futuresSeed: null, spotSeed: null, futuresDeposit: 0, spotDeposit: 0 });
     setModal(null); doFlash('초기화됨 — 새로 시작 ✓');
   };
 
@@ -280,11 +280,11 @@ function App() {
     return l;
   }, [entries, filter, search, period]);
 
-  const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed);
-  const balS = TJStats.balanceOf(entries, '현물', settings.spotSeed);
-  const totalBal = (balF.seed || 0) + (balS.seed || 0) + balF.pnl + balS.pnl;
+  const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
+  const balS = TJStats.balanceOf(entries, '현물', settings.spotSeed, settings.spotDeposit);
+  const totalBal = balF.bal + balS.bal;
   const totalPnl = balF.pnl + balS.pnl;
-  const totalSeed = (balF.seed || 0) + (balS.seed || 0);
+  const totalSeed = balF.base + balS.base;   // 시드+입금 (수익률 분모)
   const totalRet = totalSeed ? totalPnl / totalSeed * 100 : null;
 
   const heroStats = useMemo(() => TJStats.computeStats(entries, filter === 'all' ? 'all' : filter), [entries, filter]);

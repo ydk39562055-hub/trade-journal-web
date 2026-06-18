@@ -112,11 +112,13 @@
   }
 
   // 잔고 계산
-  function balanceOf(entries, market, seed) {
+  function balanceOf(entries, market, seed, deposit) {
     const pnl = entries.filter(e => e.market === market)
       .reduce((a, e) => { const v = num(e.pnl); return a + (v || 0); }, 0);
     const s = num(seed);
-    return { seed: s, pnl, bal: (s || 0) + pnl, ret: s ? pnl / s * 100 : null };
+    const dep = num(deposit) || 0;            // 추가 입금 누계
+    const base = (s || 0) + dep;              // 투입 원금 = 시드 + 입금
+    return { seed: s, deposit: dep, base, pnl, bal: base + pnl, ret: base ? pnl / base * 100 : null };
   }
 
   // 누적 곡선을 마켓별(선물/현물)로 분리

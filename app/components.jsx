@@ -95,6 +95,7 @@ function IconBtn({ onClick, title, danger, children }) {
 function EntryCard({ e, onEdit, onDelete, index }) {
   const [hov, setHov] = useStateCo(false);
   const rv = TJStats.num(e.realized_r);
+  const rpv = TJStats.num(e.return_pct);   // 현물 수익률%
   const pv = TJStats.num(e.pnl);
   const res = e.result && TJ.RESULT[e.result];
   const hasMoney = pv != null && pv !== 0;
@@ -118,10 +119,11 @@ function EntryCard({ e, onEdit, onDelete, index }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, paddingRight: 4 }}>
         <MarketTag market={e.market} />
         <DirArrow dir={e.direction} />
+        {e.ticker && <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--ink)', whiteSpace: 'nowrap', flexShrink: 0 }}>{e.ticker}</span>}
         <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--ink-4)', flexShrink: 0 }} />
         <span className="mono" style={{ fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>{e.traded_at}</span>
-        {e.timeframe && (
-          <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', background: 'var(--bg-tint)', padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0 }}>{e.timeframe}</span>
+        {(e.timeframe || e.holdType) && (
+          <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', background: 'var(--bg-tint)', padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0 }}>{e.timeframe || e.holdType}</span>
         )}
         <div style={{ flex: 1, minWidth: 4 }} />
         {hasMoney ? (
@@ -129,30 +131,41 @@ function EntryCard({ e, onEdit, onDelete, index }) {
             {pv >= 0 ? '+' : '−'}${Math.abs(Math.round(pv)).toLocaleString('en-US')}
           </span>
         ) : (res && <span className={`resbadge ${res.cls}`} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{res.ko}</span>)}
-        {rv != null && rv !== 0 && (
-          <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-            {rv > 0 ? '+' : ''}{rv}R
-          </span>
-        )}
+        {e.market === '현물'
+          ? (rpv != null && rpv !== 0 && (
+            <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: rpv > 0 ? 'var(--win)' : 'var(--loss)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {rpv > 0 ? '+' : ''}{rpv}%
+            </span>
+          ))
+          : (rv != null && rv !== 0 && (
+            <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {rv > 0 ? '+' : ''}{rv}R
+            </span>
+          ))}
       </div>
 
-      {/* body */}
-      {e.body && <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.62, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{e.body}</div>}
+      {/* body — 2줄 말줄임 (카드 높이 균일) */}
+      {e.body && <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.62, whiteSpace: 'pre-wrap', wordBreak: 'break-word', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{e.body}</div>}
 
-      {/* photos */}
+      {/* photos — 한 줄 고정 (최대 4장 + N) */}
       {e.photos?.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {e.photos.map((p, i) => <img key={i} src={p} onClick={() => openLightbox(p)} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 9, border: '1px solid var(--border)', cursor: 'zoom-in' }} />)}
+        <div style={{ display: 'flex', gap: 6, overflow: 'hidden' }}>
+          {e.photos.slice(0, 4).map((p, i) => <img key={i} src={p} onClick={() => openLightbox(p)} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 9, border: '1px solid var(--border)', cursor: 'zoom-in', flexShrink: 0 }} />)}
+          {e.photos.length > 4 && <div style={{ width: 72, height: 72, borderRadius: 9, border: '1px solid var(--border)', background: 'var(--surface-2)', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 700, color: 'var(--ink-3)', flexShrink: 0 }}>+{e.photos.length - 4}</div>}
         </div>
       )}
 
-      {/* tags */}
-      {(e.setups?.length || e.errors?.length) ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {(e.setups || []).map(t => <span key={t} className="chip static setup">{t}</span>)}
-          {(e.errors || []).map(t => <span key={t} className="chip static err">{t}</span>)}
-        </div>
-      ) : null}
+      {/* tags — 한 줄 고정 (+N) */}
+      {(e.setups?.length || e.errors?.length) ? (() => {
+        const tags = [...(e.setups || []).map(t => ({ t, cls: 'setup' })), ...(e.errors || []).map(t => ({ t, cls: 'err' }))];
+        const show = tags.slice(0, 5); const more = tags.length - show.length;
+        return (
+          <div style={{ display: 'flex', gap: 6, overflow: 'hidden', flexWrap: 'nowrap' }}>
+            {show.map((x, i) => <span key={i} className={'chip static ' + x.cls} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{x.t}</span>)}
+            {more > 0 && <span className="chip static" style={{ whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--ink-4)' }}>+{more}</span>}
+          </div>
+        );
+      })() : null}
     </div>
   );
 }
