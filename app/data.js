@@ -1,6 +1,6 @@
 /* 거래일지 — 상수 + 샘플 데이터 (window 전역) */
 (function () {
-  const SETUP_TAGS = ['IFVG', 'OB', 'Breaker', 'SFP', 'Liquidity sweep', 'MSS', 'Displacement', 'SMT', 'OTE'];
+  const SETUP_TAGS = ['FVG', 'IFVG', 'OB', 'Breaker', 'Rejection Block', 'SFP', 'Liquidity sweep', 'MSS', 'Displacement', 'SMT', 'OTE'];
   const ERROR_TAGS = ['포모', '추격', '손절 밀기', '물타기', '복수매매', '오버사이즈', '조기청산', '근거없음'];
   const TIMEFRAMES = ['1M', '3M', '5M', '15M', '1H', '4H'];
 
