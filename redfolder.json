@@ -1,135 +1,72 @@
 [
 {
-"title": "BOJ Policy Rate",
-"country": "JPY",
-"date": "2026-06-15T23:19:00-04:00",
-"forecast": "<1.00%",
-"previous": "<0.75%"
+"title": "CPI m/m",
+"country": "CAD",
+"date": "2026-06-22T08:30:00-04:00",
+"forecast": "0.7%",
+"previous": "0.4%"
 },
 {
-"title": "Monetary Policy Statement",
-"country": "JPY",
-"date": "2026-06-15T23:19:00-04:00",
-"forecast": "",
-"previous": ""
+"title": "Median CPI y/y",
+"country": "CAD",
+"date": "2026-06-22T08:30:00-04:00",
+"forecast": "2.1%",
+"previous": "2.1%"
 },
 {
-"title": "Cash Rate",
+"title": "Trimmed CPI y/y",
+"country": "CAD",
+"date": "2026-06-22T08:30:00-04:00",
+"forecast": "2.0%",
+"previous": "2.0%"
+},
+{
+"title": "CPI m/m",
 "country": "AUD",
-"date": "2026-06-16T00:30:00-04:00",
-"forecast": "4.35%",
-"previous": "4.35%"
-},
-{
-"title": "RBA Rate Statement",
-"country": "AUD",
-"date": "2026-06-16T00:30:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "RBA Press Conference",
-"country": "AUD",
-"date": "2026-06-16T01:30:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "BOJ Press Conference",
-"country": "JPY",
-"date": "2026-06-16T02:30:00-04:00",
-"forecast": "",
-"previous": ""
+"date": "2026-06-23T21:30:00-04:00",
+"forecast": "-0.4%",
+"previous": "0.4%"
 },
 {
 "title": "CPI y/y",
-"country": "GBP",
-"date": "2026-06-17T02:00:00-04:00",
-"forecast": "3.0%",
-"previous": "2.8%"
+"country": "AUD",
+"date": "2026-06-23T21:30:00-04:00",
+"forecast": "4.3%",
+"previous": "4.2%"
 },
 {
-"title": "Federal Funds Rate",
+"title": "Trimmed Mean CPI m/m",
+"country": "AUD",
+"date": "2026-06-23T21:30:00-04:00",
+"forecast": "0.3%",
+"previous": "0.3%"
+},
+{
+"title": "Employment Change",
+"country": "AUD",
+"date": "2026-06-24T21:30:00-04:00",
+"forecast": "30.3K",
+"previous": "-18.6K"
+},
+{
+"title": "Unemployment Rate",
+"country": "AUD",
+"date": "2026-06-24T21:30:00-04:00",
+"forecast": "4.4%",
+"previous": "4.5%"
+},
+{
+"title": "Core PCE Price Index m/m",
 "country": "USD",
-"date": "2026-06-17T14:00:00-04:00",
-"forecast": "3.75%",
-"previous": "3.75%"
-},
-{
-"title": "FOMC Economic Projections",
-"country": "USD",
-"date": "2026-06-17T14:00:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "FOMC Statement",
-"country": "USD",
-"date": "2026-06-17T14:00:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "FOMC Press Conference",
-"country": "USD",
-"date": "2026-06-17T14:30:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "GDP q/q",
-"country": "NZD",
-"date": "2026-06-17T18:45:00-04:00",
-"forecast": "0.8%",
+"date": "2026-06-25T08:30:00-04:00",
+"forecast": "0.3%",
 "previous": "0.2%"
 },
 {
-"title": "Claimant Count Change",
-"country": "GBP",
-"date": "2026-06-18T02:00:00-04:00",
-"forecast": "25.8K",
-"previous": "26.5K"
-},
-{
-"title": "SNB Monetary Policy Assessment",
-"country": "CHF",
-"date": "2026-06-18T03:30:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "SNB Policy Rate",
-"country": "CHF",
-"date": "2026-06-18T03:30:00-04:00",
-"forecast": "0.00%",
-"previous": "0.00%"
-},
-{
-"title": "SNB Press Conference",
-"country": "CHF",
-"date": "2026-06-18T04:00:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "Monetary Policy Summary",
-"country": "GBP",
-"date": "2026-06-18T07:00:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "MPC Official Bank Rate Votes",
-"country": "GBP",
-"date": "2026-06-18T07:00:00-04:00",
-"forecast": "1-0-8",
-"previous": "1-0-8"
-},
-{
-"title": "Official Bank Rate",
-"country": "GBP",
-"date": "2026-06-18T07:00:00-04:00",
-"forecast": "3.75%",
-"previous": "3.75%"
+"title": "Final GDP q/q",
+"country": "USD",
+"date": "2026-06-25T08:30:00-04:00",
+"forecast": "1.6%",
+"previous": "1.6%"
 }
 ]
