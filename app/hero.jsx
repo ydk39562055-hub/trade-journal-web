@@ -222,6 +222,8 @@ function CalendarMemoCard({ memo }) {
   const [view, setView] = useStateH({ y: now.getFullYear(), m: now.getMonth() });
   const [sel, setSel] = useStateH(todayStr);
   const [text, setText] = useStateH('');
+  const [open, setOpen] = useStateH(() => { try { return localStorage.getItem('tj_memo_open') === '1'; } catch { return false; } });
+  const toggleOpen = () => setOpen(v => { const nv = !v; try { localStorage.setItem('tj_memo_open', nv ? '1' : '0'); } catch {} return nv; });
 
   const byDate = {};
   items.forEach(mm => { const d = (mm.at || '').slice(0, 10); if (d) (byDate[d] = byDate[d] || []).push(mm); });
@@ -292,11 +294,15 @@ function CalendarMemoCard({ memo }) {
   );
 
   return (
-    <div className="card" style={{ padding: 18 }}>
-      <div style={{ fontSize: 14.5, fontWeight: 700, marginBottom: 14 }}>회고 메모 <span style={{ color: 'var(--ink-4)', fontWeight: 500, fontSize: 12.5 }}>실수 복기 · 날짜를 눌러 기록</span></div>
-      {wide
+    <div className="card" style={{ padding: open ? 18 : '14px 18px' }}>
+      <button onClick={toggleOpen} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', marginBottom: open ? 14 : 0 }}>
+        <div style={{ flex: 1, fontSize: 14.5, fontWeight: 700 }}>회고 메모 <span style={{ color: 'var(--ink-4)', fontWeight: 500, fontSize: 12.5 }}>실수 복기 · 날짜를 눌러 기록</span></div>
+        {items.length > 0 && <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 700 }}>{items.length}개</span>}
+        <span style={{ color: 'var(--ink-4)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>▾</span>
+      </button>
+      {open && (wide
         ? <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 20, alignItems: 'start' }}>{calendar}{panel}</div>
-        : <div>{calendar}{panel}</div>}
+        : <div>{calendar}{panel}</div>)}
     </div>
   );
 }
