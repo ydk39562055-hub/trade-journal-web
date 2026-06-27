@@ -152,7 +152,6 @@ function EditorModal({ entry, onSave, onClose, spotAcct }) {
 
       {detailOpen && (
         <div style={{ animation: 'rise .2s ease' }}>
-          <GradePicker value={d.grade} onChange={g => set('grade', g)} />
           {isSpot ? (
             <>
               <label style={fld}>진입 근거</label>
@@ -202,6 +201,8 @@ function EditorModal({ entry, onSave, onClose, spotAcct }) {
             </>
           ) : (
             <>
+              <GradePicker value={d.grade} onChange={g => set('grade', g)} />
+
               <label style={fld}>방향</label>
               <div className="seg" style={{ width: '100%' }}>
                 {[['long', '롱'], ['short', '숏']].map(([v, l]) => (
