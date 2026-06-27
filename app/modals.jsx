@@ -86,7 +86,7 @@ function compressImage(file) {
 }
 
 /* ───────────── 새 일지 / 수정 ───────────── */
-function EditorModal({ entry, onSave, onClose, spotAcct, futAcct }) {
+function EditorModal({ entry, onSave, onClose, spotAcct, futAcct, onAddMemo }) {
   const [d, setD] = useStateM(() => {
     const base = entry || { id: 'e-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), market: '선물', traded_at: new Date().toISOString().slice(0, 10), body: '', photos: [], created_at: new Date().toISOString() };
     const c = JSON.parse(JSON.stringify(base));
@@ -98,7 +98,7 @@ function EditorModal({ entry, onSave, onClose, spotAcct, futAcct }) {
   const [detailOpen, setDetailOpen] = useStateM(!!(entry && (entry.result || entry.direction || entry.entry_price || (entry.errors || []).length)));
   const fileRef = useRefM();
   const errRef = useRefM();
-  const addErr = () => { const v = (errRef.current.value || '').trim(); if (v) { TJ.addErrorTag(v); if (!d.errors.includes(v)) toggleArr('errors', v); errRef.current.value = ''; } };
+  const addErr = () => { const v = (errRef.current.value || '').trim(); if (v) { TJ.addErrorTag(v); if (!d.errors.includes(v)) toggleArr('errors', v); if (onAddMemo) onAddMemo(d.traded_at || new Date().toISOString().slice(0, 10), '⚠ 실수 — ' + v); errRef.current.value = ''; } };
   const set = (k, v) => setD(p => ({ ...p, [k]: v }));
   const toggleArr = (k, t) => setD(p => { const a = p[k].slice(); const i = a.indexOf(t); if (i >= 0) a.splice(i, 1); else a.push(t); return { ...p, [k]: a }; });
   const numOrNull = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
@@ -285,6 +285,7 @@ function EditorModal({ entry, onSave, onClose, spotAcct, futAcct }) {
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addErr(); } }} />
             <button className="btn-ghost btn-sm" onClick={addErr}>추가</button>
           </div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6 }}>직접 입력한 실수는 거래 날짜의 회고 메모에도 자동 저장돼요</div>
         </div>
       )}
 

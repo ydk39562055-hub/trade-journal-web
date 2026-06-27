@@ -409,7 +409,7 @@ function App() {
       </button>
 
       {/* ── 모달 ── */}
-      {modal?.type === 'editor' && <EditorModal entry={modal.entry} spotAcct={balS.bal} futAcct={balF.bal} onSave={saveEntry} onClose={() => setModal(null)} />}
+      {modal?.type === 'editor' && <EditorModal entry={modal.entry} spotAcct={balS.bal} futAcct={balF.bal} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
