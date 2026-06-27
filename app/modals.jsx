@@ -4,9 +4,9 @@ const usdM = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleStrin
 
 /* 진입 등급 → 권장 리스크 (선물·현물 공용) */
 const GRADES = [
-  { g: 'A+', risk: '1%', cond: '정렬 다 맞고 + SMT 버프까지', c: 'var(--win)' },
-  { g: 'B', risk: '0.5%', cond: '컨펌은 됐는데 SMT 없음 / HTF 약함', c: 'var(--violet)' },
-  { g: 'C', risk: '0% · 진입 안 함', cond: '애매하면', c: 'var(--loss)' },
+  { g: 'A+', risk: '1% (혹은 풀 사이즈)', cond: '다 정렬 + SMT · delivery sentence가 한 번에 써진다', c: 'var(--win)' },
+  { g: 'B', risk: '0.5%', cond: '컨펌은 됐는데 SMT 없음 / HTF 약하게 반대 / DOL 가까움', c: 'var(--violet)' },
+  { g: 'C', risk: '0.25%', cond: '2~3개 빠지거나 애매함', c: 'var(--loss)' },
 ];
 function GradePicker({ value, onChange }) {
   const lbl = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
