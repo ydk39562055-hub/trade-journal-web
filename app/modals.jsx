@@ -1,5 +1,6 @@
 /* 거래일지 — 새 일지 / 시드 / 원칙 / 더보기 모달 */
-const { useState: useStateM, useRef: useRefM } = React;
+const { useState: useStateM, useRef: useRefM, useEffect: useEffectM } = React;
+const usdM = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
 
 function compressImage(file) {
   return new Promise(res => {
@@ -18,7 +19,7 @@ function compressImage(file) {
 }
 
 /* ───────────── 새 일지 / 수정 ───────────── */
-function EditorModal({ entry, onSave, onClose }) {
+function EditorModal({ entry, onSave, onClose, spotAcct }) {
   const [d, setD] = useStateM(() => {
     const base = entry || { id: 'e-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), market: '선물', traded_at: new Date().toISOString().slice(0, 10), body: '', photos: [], created_at: new Date().toISOString() };
     const c = JSON.parse(JSON.stringify(base));
@@ -35,6 +36,19 @@ function EditorModal({ entry, onSave, onClose }) {
   const toggleArr = (k, t) => setD(p => { const a = p[k].slice(); const i = a.indexOf(t); if (i >= 0) a.splice(i, 1); else a.push(t); return { ...p, [k]: a }; });
   const numOrNull = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
   const isSpot = d.market === '현물';
+  // 현물 자동 계산 — 매수금액 = 수량 × 평단가
+  const cost = (isSpot && d.shares != null && d.entry_price != null) ? d.shares * d.entry_price : null;
+  const autoW = cost != null && spotAcct > 0;            // 비중 자동(매수금액 ÷ 현물 잔고)
+  const autoR = cost != null && cost !== 0 && d.pnl != null;  // 수익률 자동(손익 ÷ 매수금액)
+  useEffectM(() => {
+    if (cost == null) return;
+    setD(p => {
+      let n = p;
+      if (spotAcct > 0) { const w = Math.round(cost / spotAcct * 1000) / 10; if (p.weight !== w) n = { ...n, weight: w }; }
+      if (cost !== 0 && p.pnl != null) { const r = Math.round(p.pnl / cost * 1000) / 10; if ((n.return_pct ?? null) !== r) n = { ...n, return_pct: r }; }
+      return n;
+    });
+  }, [cost, d.pnl, spotAcct]);
 
   const onFiles = async ev => {
     const arr = [];
@@ -116,9 +130,14 @@ function EditorModal({ entry, onSave, onClose }) {
               <textarea value={d.reason ?? ''} onChange={e => set('reason', e.target.value)} placeholder="왜 샀나 — 내 생각 그대로…" style={{ minHeight: 70 }} />
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ flex: 1 }}><label style={fld}>비중 (%)</label><input type="number" inputMode="decimal" value={d.weight ?? ''} onChange={e => set('weight', numOrNull(e.target.value))} placeholder="12" /></div>
+                <div style={{ flex: 1 }}><label style={fld}>수량 (주)</label><input type="number" inputMode="decimal" value={d.shares ?? ''} onChange={e => set('shares', numOrNull(e.target.value))} placeholder="10" /></div>
                 <div style={{ flex: 1 }}><label style={fld}>평단가</label><input type="number" inputMode="decimal" value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} /></div>
               </div>
+
+              <label style={fld}>비중 (%) {autoW && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
+              <input type="number" inputMode="decimal" value={d.weight ?? ''} onChange={e => set('weight', numOrNull(e.target.value))} placeholder="12" />
+              {autoW && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>매수금액 {usdM(cost)} ÷ 현물 잔고 {usdM(spotAcct)} = 계좌의 {d.weight}%</div>}
+              {cost != null && !(spotAcct > 0) && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>현물 시드를 설정하면 비중이 자동 계산돼요</div>}
 
               <label style={fld}>분할 단계</label>
               <div className="seg" style={{ width: '100%' }}>
@@ -132,20 +151,20 @@ function EditorModal({ entry, onSave, onClose }) {
                 <div style={{ flex: 1 }}><label style={fld}>손절가</label><input type="number" inputMode="decimal" value={d.stop_price ?? ''} onChange={e => set('stop_price', numOrNull(e.target.value))} /></div>
               </div>
 
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                <div style={{ flex: 1.6 }}>
-                  <label style={fld}>결과</label>
-                  <div className="seg" style={{ width: '100%' }}>
-                    {[['win', '익절'], ['loss', '손절'], ['holding', '보유중']].map(([v, l]) => (
-                      <button key={v} className={d.result === v ? 'on' : ''} onClick={() => set('result', d.result === v ? null : v)}>{l}</button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ flex: 1 }}><label style={fld}>수익률 (%)</label><input type="number" inputMode="decimal" placeholder="+18 / -5" value={d.return_pct ?? ''} onChange={e => set('return_pct', numOrNull(e.target.value))} /></div>
+              <label style={fld}>결과</label>
+              <div className="seg" style={{ width: '100%' }}>
+                {[['win', '익절'], ['loss', '손절'], ['holding', '보유중']].map(([v, l]) => (
+                  <button key={v} className={d.result === v ? 'on' : ''} onClick={() => set('result', d.result === v ? null : v)}>{l}</button>
+                ))}
               </div>
 
               <label style={fld}>손익금액 ($ · +이익 / −손실)</label>
               <input type="number" inputMode="decimal" value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
+
+              <label style={fld}>수익률 (%) {autoR && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
+              <input type="number" inputMode="decimal" placeholder="+18 / -5" value={d.return_pct ?? ''} onChange={e => set('return_pct', numOrNull(e.target.value))} />
+              {autoR && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>손익 {usdM(d.pnl)} ÷ 매수금액 {usdM(cost)} = {d.return_pct}%</div>}
+              {cost != null && cost !== 0 && d.pnl == null && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>손익금액을 적으면 수익률이 자동 계산돼요</div>}
             </>
           ) : (
             <>
@@ -154,11 +173,6 @@ function EditorModal({ entry, onSave, onClose }) {
                 {[['long', '롱'], ['short', '숏']].map(([v, l]) => (
                   <button key={v} className={d.direction === v ? 'on' : ''} onClick={() => set('direction', d.direction === v ? null : v)}>{l}</button>
                 ))}
-              </div>
-
-              <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ flex: 1 }}><label style={fld}>진입가</label><input type="number" inputMode="decimal" value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} /></div>
-                <div style={{ flex: 1 }}><label style={fld}>청산가</label><input type="number" inputMode="decimal" value={d.exit_price ?? ''} onChange={e => set('exit_price', numOrNull(e.target.value))} /></div>
               </div>
 
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
