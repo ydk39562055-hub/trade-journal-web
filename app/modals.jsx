@@ -2,6 +2,39 @@
 const { useState: useStateM, useRef: useRefM, useEffect: useEffectM } = React;
 const usdM = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
 
+/* 진입 등급 → 권장 리스크 (선물·현물 공용) */
+const GRADES = [
+  { g: 'A+', risk: '1%', cond: '정렬 다 맞고 + SMT 버프까지', c: 'var(--win)' },
+  { g: 'B', risk: '0.5%', cond: '컨펌은 됐는데 SMT 없음 / HTF 약함', c: 'var(--violet)' },
+  { g: 'C', risk: '0% · 진입 안 함', cond: '애매하면', c: 'var(--loss)' },
+];
+function GradePicker({ value, onChange }) {
+  const lbl = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
+  const sel = GRADES.find(x => x.g === value);
+  return (
+    <>
+      <label style={lbl}>등급 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>셋업 품질 → 권장 리스크</span></label>
+      <div className="seg" style={{ width: '100%' }}>
+        {GRADES.map(x => (
+          <button key={x.g} className={value === x.g ? 'on' : ''} onClick={() => onChange(value === x.g ? null : x.g)}
+            style={value === x.g ? { background: x.c, borderColor: x.c, color: '#fff' } : {}}>
+            {x.g} <span style={{ opacity: .85, fontSize: 11.5 }}>· {x.risk.split(' ')[0]}</span>
+          </button>
+        ))}
+      </div>
+      {sel && (
+        <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', marginTop: 8, padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', borderLeft: `3px solid ${sel.c}` }}>
+          <div className="mono" style={{ fontWeight: 800, color: sel.c, minWidth: 26 }}>{sel.g}</div>
+          <div style={{ flex: 1, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+            <div>{sel.cond}</div>
+            <div style={{ marginTop: 2, fontWeight: 700 }}>리스크 {sel.risk}</div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function compressImage(file) {
   return new Promise(res => {
     const img = new Image(); const url = URL.createObjectURL(file);
@@ -119,6 +152,7 @@ function EditorModal({ entry, onSave, onClose, spotAcct }) {
 
       {detailOpen && (
         <div style={{ animation: 'rise .2s ease' }}>
+          <GradePicker value={d.grade} onChange={g => set('grade', g)} />
           {isSpot ? (
             <>
               <label style={fld}>진입 근거</label>

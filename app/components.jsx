@@ -125,6 +125,9 @@ function EntryCard({ e, onEdit, onDelete, index }) {
         {(e.timeframe || e.holdType) && (
           <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', background: 'var(--bg-tint)', padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0 }}>{e.timeframe || e.holdType}</span>
         )}
+        {e.grade && (
+          <span className="mono" style={{ fontSize: 11, fontWeight: 800, color: '#fff', padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0, background: e.grade === 'A+' ? 'var(--win)' : e.grade === 'B' ? 'var(--violet)' : 'var(--loss)' }}>{e.grade}</span>
+        )}
         <div style={{ flex: 1, minWidth: 4 }} />
         {hasMoney ? (
           <span className="mono" style={{ fontSize: 16, fontWeight: 800, color: 'var(--ink)', whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: '-.01em' }}>
