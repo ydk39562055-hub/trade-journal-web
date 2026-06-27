@@ -66,6 +66,14 @@ function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose 
             </>
           )}
 
+          {/* 등급별 성과 */}
+          {s.gradeStats.length > 0 && (
+            <>
+              <SectionTitle>등급별 성과 (등급 체계가 작동하나)</SectionTitle>
+              <GradeTable rows={s.gradeStats} />
+            </>
+          )}
+
           {/* 자세한 지표 */}
           <SectionTitle>상세 지표</SectionTitle>
           <div className="card" style={{ padding: '4px 16px' }}>
@@ -144,6 +152,28 @@ function TagTable({ rows, money, warn }) {
           </span>
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700 }}>{r.n}</span>
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, color: 'var(--ink-2)' }}>{r.wr == null ? '–' : r.wr + '%'}</span>
+          <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{r.p >= 0 ? '+' : '−'}${Math.abs(Math.round(r.p)).toLocaleString('en-US')}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* 등급별 성과 표 (등급 배지 + 평균R) */
+function GradeTable({ rows }) {
+  const col = g => g === 'A+' ? 'var(--win)' : g === 'B' ? 'var(--violet)' : g === '—' ? 'var(--ink-4)' : 'var(--loss)';
+  const hcol = { textAlign: 'right' };
+  return (
+    <div className="card" style={{ padding: '4px 16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', gap: 10, fontSize: 11.5, color: 'var(--ink-4)', fontWeight: 700, padding: '10px 0 8px', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '.03em' }}>
+        <span>등급</span><span style={hcol}>건수</span><span style={hcol}>승률</span><span style={hcol}>평균R</span><span style={{ ...hcol, minWidth: 66 }}>손익</span>
+      </div>
+      {rows.map((r, i) => (
+        <div key={r.tag} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', gap: 10, alignItems: 'center', padding: '11px 0', borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none' }}>
+          <span><span className="mono" style={{ fontWeight: 800, color: '#fff', background: col(r.tag), padding: '2px 9px', borderRadius: 6, fontSize: 12.5 }}>{r.tag}</span></span>
+          <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700 }}>{r.n}</span>
+          <span className="mono" style={{ textAlign: 'right', fontSize: 13, color: 'var(--ink-2)' }}>{r.wr == null ? '–' : r.wr + '%'}</span>
+          <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: r.avgR == null ? 'var(--ink-4)' : r.avgR >= 0 ? 'var(--win)' : 'var(--loss)' }}>{r.avgR == null ? '–' : (r.avgR > 0 ? '+' : '') + r.avgR + 'R'}</span>
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{r.p >= 0 ? '+' : '−'}${Math.abs(Math.round(r.p)).toLocaleString('en-US')}</span>
         </div>
       ))}

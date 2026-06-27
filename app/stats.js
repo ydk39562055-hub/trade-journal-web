@@ -102,11 +102,29 @@
     const clean = closed.filter(e => !(e.errors && e.errors.length)).length;
     const adherence = closed.length ? Math.round(clean / closed.length * 100) : null;
 
+    // 등급별 (선물 — 등급 체계 검증)
+    const GRADE_ORDER = ['A+', 'B', 'C', '—'];
+    const gradeAgg = {};
+    for (const e of pool) {
+      const g = e.grade; if (!g) continue;
+      const gs = gradeAgg[g] = gradeAgg[g] || { n: 0, w: 0, l: 0, p: 0, rs: [] };
+      gs.n++; if (e.result === 'win') gs.w++; if (e.result === 'loss') gs.l++;
+      const pv = num(e.pnl); if (pv != null) gs.p += pv;
+      const rv = num(e.realized_r); if (rv != null) gs.rs.push(rv);
+    }
+    const gradeStats = GRADE_ORDER.filter(g => gradeAgg[g]).map(g => {
+      const gs = gradeAgg[g]; const sumr = gs.rs.reduce((a, b) => a + b, 0);
+      return { tag: g, n: gs.n, w: gs.w, l: gs.l, p: gs.p,
+        wr: (gs.w + gs.l) ? Math.round(gs.w / (gs.w + gs.l) * 100) : null,
+        avgR: gs.rs.length ? Math.round(sumr / gs.rs.length * 100) / 100 : null,
+        sumR: Math.round(sumr * 100) / 100 };
+    });
+
     return {
       pool, closed, wins, losses, bes, decisive, winRate,
       rs, sumR, avgR, pf, pls, sumP, avgP, best, worst, avgWin, avgLoss, payoff,
       curve, useMoney, mdd, maxW, maxL, curStreak, curType,
-      long, short, months, setupStats, errorStats, tfStats, adherence,
+      long, short, months, setupStats, errorStats, tfStats, gradeStats, adherence,
       hasAny: closed.length || rs.length || pls.length,
     };
   }
