@@ -8,26 +8,59 @@ const GRADES = [
   { g: 'B', risk: '0.5%', cond: '컨펌은 됐는데 SMT 없음 / HTF 약하게 반대 / DOL 가까움', c: 'var(--violet)' },
   { g: 'C', risk: '0.25%', cond: '2~3개 빠지거나 애매함', c: 'var(--loss)' },
 ];
-function GradePicker({ value, onChange }) {
+/* 진입 근거 7체크 — 개수로 등급 기계 판정 */
+const GRADE_CHECKS = [
+  'HTF(일·4H) 방향과 일치',
+  '위치 — 할인(롱)/프리미엄(숏) or 키 레벨(FVG·OB)',
+  '시간 — 킬존·본장 + 매크로 윈도우',
+  '스윕 — 키풀(아시아·전일 H/L·Equal) 청산',
+  '컨펌 — SFP→Displacement→MSS/CISD+FVG 깔끔',
+  'SMT 버프 — 상관자산 괴리',
+  'DOL 멀고 명확 (R 잘 나옴)',
+];
+// 컨펌(스윕4·진입확인5) 미충족 → 진입 안 함, 전부=A+, 1개 빠짐=B, 그 외=C
+function gradeFromChecks(arr) {
+  if (!arr || !arr.length) return null;
+  const has = i => arr.includes(i);
+  if (!(has(4) && has(5))) return '—';
+  if (arr.length === 7) return 'A+';
+  if (arr.length === 6) return 'B';
+  return 'C';
+}
+function GradeChecklist({ checks, onChange }) {
+  const arr = Array.isArray(checks) ? checks : [];
   const lbl = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
-  const sel = GRADES.find(x => x.g === value);
+  const toggle = i => {
+    const next = arr.includes(i) ? arr.filter(x => x !== i) : [...arr, i].sort((a, b) => a - b);
+    onChange(next, gradeFromChecks(next));
+  };
+  const g = gradeFromChecks(arr);
+  const NOTRADE = { g: '—', cond: '컨펌(스윕 4 · 진입확인 5)이 안 됨 — 진입 보류', risk: '진입 안 함', c: 'var(--loss)' };
+  const result = g === '—' ? NOTRADE : (g ? GRADES.find(x => x.g === g) : null);
   return (
     <>
-      <label style={lbl}>등급 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>셋업 품질 → 권장 리스크</span></label>
-      <div className="seg" style={{ width: '100%' }}>
-        {GRADES.map(x => (
-          <button key={x.g} className={value === x.g ? 'on' : ''} onClick={() => onChange(value === x.g ? null : x.g)}
-            style={value === x.g ? { background: x.c, borderColor: x.c, color: '#fff' } : {}}>
-            {x.g} <span style={{ opacity: .85, fontSize: 11.5 }}>· {x.risk.split(' ')[0]}</span>
-          </button>
-        ))}
+      <label style={lbl}>등급 판정 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>체크하면 사이즈 자동 판정</span></label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {GRADE_CHECKS.map((txt, idx) => {
+          const i = idx + 1, on = arr.includes(i);
+          return (
+            <button key={i} onClick={() => toggle(i)} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', textAlign: 'left', width: '100%', padding: '8px 10px', borderRadius: 9, border: '1px solid ' + (on ? 'var(--violet-100)' : 'var(--border)'), background: on ? 'var(--violet-50)' : 'var(--surface)', transition: 'all .12s' }}>
+              <span style={{ flexShrink: 0, width: 17, height: 17, marginTop: 1, borderRadius: 5, border: '1.8px solid ' + (on ? 'var(--violet)' : 'var(--border-strong)'), background: on ? 'var(--violet)' : 'transparent', display: 'grid', placeItems: 'center' }}>
+                {on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>}
+              </span>
+              <span style={{ flex: 1, fontSize: 12.5, color: on ? 'var(--ink)' : 'var(--ink-2)', lineHeight: 1.45 }}>
+                <b className="mono" style={{ color: on ? 'var(--violet-600)' : 'var(--ink-4)', marginRight: 7 }}>{i}</b>{txt}
+              </span>
+            </button>
+          );
+        })}
       </div>
-      {sel && (
-        <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', marginTop: 8, padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', borderLeft: `3px solid ${sel.c}` }}>
-          <div className="mono" style={{ fontWeight: 800, color: sel.c, minWidth: 26 }}>{sel.g}</div>
+      {result && (
+        <div style={{ display: 'flex', gap: 11, alignItems: 'center', marginTop: 10, padding: '11px 13px', borderRadius: 11, background: 'var(--surface-2)', border: '1px solid var(--border)', borderLeft: `3px solid ${result.c}` }}>
+          <div className="mono" style={{ fontWeight: 800, fontSize: 22, color: result.c, minWidth: 34, textAlign: 'center' }}>{result.g}</div>
           <div style={{ flex: 1, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
-            <div>{sel.cond}</div>
-            <div style={{ marginTop: 2, fontWeight: 700 }}>리스크 {sel.risk}</div>
+            <div>{result.cond}</div>
+            <div style={{ marginTop: 2, fontWeight: 800, color: 'var(--ink)' }}>리스크 {result.risk} <span style={{ color: 'var(--ink-4)', fontWeight: 500 }}>· 체크 {arr.length}/7</span></div>
           </div>
         </div>
       )}
@@ -201,7 +234,7 @@ function EditorModal({ entry, onSave, onClose, spotAcct }) {
             </>
           ) : (
             <>
-              <GradePicker value={d.grade} onChange={g => set('grade', g)} />
+              <GradeChecklist checks={d.gradeChecks} onChange={(c, g) => setD(p => ({ ...p, gradeChecks: c, grade: g }))} />
 
               <label style={fld}>방향</label>
               <div className="seg" style={{ width: '100%' }}>
