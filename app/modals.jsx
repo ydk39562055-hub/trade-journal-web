@@ -4,10 +4,11 @@ const usdM = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleStrin
 
 /* 진입 등급 → 권장 리스크 (선물·현물 공용) */
 const GRADES = [
-  { g: 'A+', risk: '1% (혹은 풀 사이즈)', cond: '다 정렬 + SMT · delivery sentence가 한 번에 써진다', c: 'var(--win)' },
-  { g: 'B', risk: '0.5%', cond: '컨펌은 됐는데 SMT 없음 / HTF 약하게 반대 / DOL 가까움', c: 'var(--violet)' },
-  { g: 'C', risk: '0.25%', cond: '2~3개 빠지거나 애매함', c: 'var(--loss)' },
+  { g: 'A+', rp: 1, risk: '1% (혹은 풀 사이즈)', cond: '다 정렬 + SMT · delivery sentence가 한 번에 써진다', c: 'var(--win)' },
+  { g: 'B', rp: 0.5, risk: '0.5%', cond: '컨펌은 됐는데 SMT 없음 / HTF 약하게 반대 / DOL 가까움', c: 'var(--violet)' },
+  { g: 'C', rp: 0.25, risk: '0.25%', cond: '2~3개 빠지거나 애매함', c: 'var(--loss)' },
 ];
+const gradeRp = g => { const x = GRADES.find(y => y.g === g); return x ? x.rp : null; };
 /* 진입 근거 7체크 — 개수로 등급 기계 판정 */
 const GRADE_CHECKS = [
   'HTF(일·4H) 방향과 일치',
@@ -85,7 +86,7 @@ function compressImage(file) {
 }
 
 /* ───────────── 새 일지 / 수정 ───────────── */
-function EditorModal({ entry, onSave, onClose, spotAcct }) {
+function EditorModal({ entry, onSave, onClose, spotAcct, futAcct }) {
   const [d, setD] = useStateM(() => {
     const base = entry || { id: 'e-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), market: '선물', traded_at: new Date().toISOString().slice(0, 10), body: '', photos: [], created_at: new Date().toISOString() };
     const c = JSON.parse(JSON.stringify(base));
@@ -115,6 +116,15 @@ function EditorModal({ entry, onSave, onClose, spotAcct }) {
       return n;
     });
   }, [cost, d.pnl, spotAcct]);
+
+  // 선물 자동 R — 1R = 선물 잔고 × 등급 리스크%
+  const oneR = (!isSpot && d.grade && d.grade !== '—' && gradeRp(d.grade) && futAcct > 0) ? futAcct * (gradeRp(d.grade) / 100) : null;
+  const autoFR = oneR != null && oneR !== 0 && d.pnl != null;
+  useEffectM(() => {
+    if (!autoFR) return;
+    const r = Math.round(d.pnl / oneR * 100) / 100;
+    setD(p => (p.realized_r === r ? p : { ...p, realized_r: r }));
+  }, [autoFR, d.pnl, oneR]);
 
   const onFiles = async ev => {
     const arr = [];
@@ -243,20 +253,20 @@ function EditorModal({ entry, onSave, onClose, spotAcct }) {
                 ))}
               </div>
 
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                <div style={{ flex: 1.4 }}>
-                  <label style={fld}>결과</label>
-                  <div className="seg" style={{ width: '100%' }}>
-                    {[['win', '익절'], ['loss', '손절'], ['be', '본전']].map(([v, l]) => (
-                      <button key={v} className={d.result === v ? 'on' : ''} onClick={() => set('result', d.result === v ? null : v)}>{l}</button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ flex: 1 }}><label style={fld}>R배수</label><input type="number" inputMode="decimal" placeholder="2 / -1" value={d.realized_r ?? ''} onChange={e => set('realized_r', numOrNull(e.target.value))} /></div>
+              <label style={fld}>결과</label>
+              <div className="seg" style={{ width: '100%' }}>
+                {[['win', '익절'], ['loss', '손절'], ['be', '본전']].map(([v, l]) => (
+                  <button key={v} className={d.result === v ? 'on' : ''} onClick={() => set('result', d.result === v ? null : v)}>{l}</button>
+                ))}
               </div>
 
               <label style={fld}>손익금액 ($ · +이익 / −손실)</label>
               <input type="number" inputMode="decimal" value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
+
+              <label style={fld}>R배수 {autoFR && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
+              <input type="number" inputMode="decimal" placeholder="2 / -1" value={d.realized_r ?? ''} onChange={e => set('realized_r', numOrNull(e.target.value))} />
+              {autoFR && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>손익 {usdM(d.pnl)} ÷ 1R {usdM(oneR)} = {d.realized_r}R <span style={{ color: 'var(--ink-4)' }}>({d.grade} {gradeRp(d.grade)}% × 선물 잔고)</span></div>}
+              {!isSpot && d.pnl != null && oneR == null && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>등급을 정하고 선물 시드를 설정하면 R이 자동 계산돼요</div>}
 
               <label style={fld}>셋업 태그 (ICT)</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
