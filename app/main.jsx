@@ -262,6 +262,25 @@ function App() {
     });
     setModal(null); doFlash('복원 완료 ✓');
   };
+  // 과거 선물 R 대략 채우기 — 1R = (선물 시드+입금, 없으면 현재 잔고) × 등급 리스크%(기본 0.5%)
+  const backfillR = () => {
+    const base = ((Number(settings.futuresSeed) || 0) + (Number(settings.futuresDeposit) || 0)) || balF.bal;
+    if (!base || base <= 0) { alert('선물 시드를 먼저 설정해주세요.\n대략적 R 계산에 기준 잔고가 필요해요.'); return; }
+    const RP = { 'A+': 1, 'B': 0.5, 'C': 0.25 };
+    const target = entries.filter(e => e.market === '선물' && typeof e.pnl === 'number' && (e.realized_r == null || e.realized_r === ''));
+    if (!target.length) { setModal(null); doFlash('채울 거래가 없어요'); return; }
+    if (!confirm(`R배수가 비어 있는 과거 선물 거래 ${target.length}건을 손익금액으로 대략 채웁니다.\n기준 1R = 선물 잔고 ${usd(base)} × 등급 리스크%.\n계속할까요?`)) return;
+    const ts = new Date().toISOString();
+    let n = 0;
+    setEntries(prev => prev.map(e => {
+      if (e.market !== '선물' || typeof e.pnl !== 'number' || (e.realized_r != null && e.realized_r !== '')) return e;
+      const oneR = base * ((RP[e.grade] || 0.5) / 100);
+      if (!oneR) return e;
+      n++;
+      return { ...e, realized_r: Math.round(e.pnl / oneR * 100) / 100, r_estimated: true, updated_at: ts };
+    }));
+    setModal(null); doFlash(`과거 ${n}건에 대략 R 채움 ✓`);
+  };
   const clearAll = () => {
     if (!confirm('샘플 데이터(예시 28건)와 시드를 비우고 빈 일지로 시작할까요?\n되돌릴 수 없어요. (필요하면 먼저 더보기 → JSON 백업)')) return;
     const ts = new Date().toISOString();
@@ -394,7 +413,7 @@ function App() {
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
-      {modal?.type === 'menu' && <MenuModal entries={entries} syncId={syncId} onImport={importEntries} onReset={clearAll} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
+      {modal?.type === 'menu' && <MenuModal entries={entries} syncId={syncId} onImport={importEntries} onReset={clearAll} onSync={() => setModal({ type: 'sync' })} onBackfillR={backfillR} onClose={() => setModal(null)} />}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}
 
       {/* ── Tweaks ── */}
