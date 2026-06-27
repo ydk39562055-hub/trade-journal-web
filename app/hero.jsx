@@ -171,45 +171,43 @@ function RoutineCard({ routine, defaultOpen }) {
   );
 }
 
-/* 잔고 밴드 (대시보드/포커스 공용) */
-function BalanceBand({ balF, balS, totalBal, totalPnl, totalRet, onSeed, big }) {
-  const empty = balF.seed == null && balS.seed == null && totalPnl === 0;
+/* 잔고 밴드 — 선택한 시장(선물/현물)만 표시 (완전 분리) */
+function BalanceBand({ market, bal, onSeed, big }) {
+  const c = market === '현물' ? 'var(--spot)' : 'var(--futures)';
+  const empty = bal.seed == null && bal.pnl === 0;
   if (empty) {
     return (
       <button onClick={onSeed} className="card" style={{ width: '100%', padding: 18, display: 'flex', alignItems: 'center', gap: 13, textAlign: 'left', borderStyle: 'dashed' }}>
-        <span style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, background: 'var(--violet-50)', display: 'grid', placeItems: 'center', color: 'var(--violet)' }}>
+        <span style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, background: 'var(--violet-50)', display: 'grid', placeItems: 'center', color: c }}>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7" /><path d="M16 12h.5" /></svg>
         </span>
-        <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14.5 }}>시드(초기자본) 설정</div><div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>탭해서 선물·현물 자본을 입력하세요</div></div>
-        <span style={{ color: 'var(--violet)', fontSize: 22 }}>＋</span>
+        <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14.5 }}>{market} 시드(초기자본) 설정</div><div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>탭해서 {market} 자본을 입력하세요</div></div>
+        <span style={{ color: c, fontSize: 22 }}>＋</span>
       </button>
     );
   }
-  const pos = totalPnl >= 0;
+  const pos = bal.pnl >= 0;
   return (
     <button onClick={onSeed} className="card" style={{
       width: '100%', textAlign: 'left', padding: big ? '24px 26px' : '20px 22px',
       background: 'linear-gradient(135deg, var(--surface), var(--violet-50))',
+      borderTop: `3px solid ${c}`,
       display: 'flex', flexDirection: 'column', gap: big ? 16 : 12,
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 160 }}>
-          <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>총 잔고 <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>시드 설정</span></div>
-          <div className="mono" style={{ fontSize: big ? 44 : 32, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-.02em', marginTop: 4 }}>{usdH(totalBal)}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 3, background: c }} />
+            <span style={{ color: c }}>{market}</span>
+            <span style={{ color: 'var(--ink-3)', fontWeight: 600 }}>잔고</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 500 }}>시드 설정</span>
+          </div>
+          <div className="mono" style={{ fontSize: big ? 44 : 32, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-.02em', marginTop: 4 }}>{usdH(bal.bal)}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="mono" style={{ fontSize: big ? 19 : 16, fontWeight: 800, color: 'var(--ink)' }}>{pos ? '+' : '−'}${Math.abs(Math.round(totalPnl)).toLocaleString('en-US')}</span>
-          {totalRet != null && <span className="pill mono" style={{ background: 'var(--bg-tint)', color: 'var(--ink-2)', fontSize: 12.5 }}>{pos ? '+' : '−'}{Math.abs(totalRet).toFixed(1)}%</span>}
+          <span className="mono" style={{ fontSize: big ? 19 : 16, fontWeight: 800, color: 'var(--ink)' }}>{pos ? '+' : '−'}${Math.abs(Math.round(bal.pnl)).toLocaleString('en-US')}</span>
+          {bal.ret != null && <span className="pill mono" style={{ background: 'var(--bg-tint)', color: 'var(--ink-2)', fontSize: 12.5 }}>{pos ? '+' : '−'}{Math.abs(bal.ret).toFixed(1)}%</span>}
         </div>
-      </div>
-      <div style={{ display: 'flex', gap: 10 }}>
-        {[['선물', balF, 'var(--futures)'], ['현물', balS, 'var(--spot)']].map(([lab, b, c]) => (
-          <div key={lab} style={{ flex: 1, background: 'var(--surface)', borderRadius: 11, padding: '10px 13px', border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: c }}>{lab}</div>
-            <div className="mono" style={{ fontSize: 16, fontWeight: 800, marginTop: 2 }}>{b.seed != null || b.pnl !== 0 ? usdH(b.bal) : '–'}</div>
-            <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>{b.pnl >= 0 ? '+' : '−'}${Math.abs(Math.round(b.pnl)).toLocaleString('en-US')}{b.ret != null ? ` · ${b.ret >= 0 ? '+' : ''}${b.ret.toFixed(1)}%` : ''}</div>
-          </div>
-        ))}
       </div>
     </button>
   );
@@ -314,61 +312,16 @@ function RoutineMemoRow({ routine, memo, showRoutine }) {
 }
 
 /* ─────────────── HERO ─────────────── */
-function Hero({ layout, stats: s, balF, balS, totalBal, totalPnl, totalRet, onSeed, onStats, routine, memo, showRoutine }) {
+function Hero({ layout, stats: s, market, bal, onSeed, onStats, routine, memo, showRoutine }) {
   const money = s.useMoney;
 
-  /* ===== 레저: 미니멀 한 줄 요약 ===== */
-  if (layout === 'ledger') {
-    const cells = [
-      ['총 잔고', usdH(totalBal), null],
-      ['누적 손익', (totalPnl >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(totalPnl)).toLocaleString('en-US'), null],
-      ['승률', Math.round(s.winRate) + '%', null],
-      ['손익비', fnumH(s.pf), null],
-      ['마감', s.closed.length + '건', null],
-    ];
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-        <div className="card" style={{ padding: '4px 12px', cursor: 'pointer' }} onClick={onStats}>
-          <div style={{ display: 'flex', alignItems: 'stretch', flexWrap: 'wrap' }}>
-            {cells.map(([l, v, c], i) => (
-              <div key={l} style={{ flex: '1 1 96px', minWidth: 90, padding: '15px 10px', borderRight: i < cells.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>{l}</div>
-                <div className="mono" style={{ fontSize: 20, fontWeight: 800, marginTop: 3, color: c || 'var(--ink)' }}>{v}</div>
-              </div>
-            ))}
-            {s.curve.length > 1 && <div style={{ flex: '1 1 150px', minWidth: 140, display: 'flex', alignItems: 'center', paddingLeft: 14 }}><EquityCurve points={s.curve} money={money} height={56} showAxis={false} /></div>}
-          </div>
-        </div>
-        <RoutineMemoRow routine={routine} memo={memo} showRoutine={showRoutine} />
-      </div>
-    );
-  }
-
-  /* ===== 포커스: 큰 잔고 + 루틴 전면 ===== */
-  if (layout === 'focus') {
-    return (
-      <div style={{ display: 'grid', gridTemplateColumns: window.matchMedia('(min-width:860px)').matches ? '1fr 1fr' : '1fr', gap: 'var(--gap)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-          <BalanceBand balF={balF} balS={balS} totalBal={totalBal} totalPnl={totalPnl} totalRet={totalRet} onSeed={onSeed} big />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-            <KPI label="승률" value={Math.round(s.winRate) + '%'} />
-            <KPI label="손익비" value={fnumH(s.pf)} />
-            <KPI label="누적 R" value={(s.sumR > 0 ? '+' : '') + fnumH(s.sumR)} />
-          </div>
-          <CalendarMemoCard memo={memo} />
-        </div>
-        {showRoutine && <RoutineCard routine={routine} defaultOpen />}
-      </div>
-    );
-  }
-
-  /* ===== 대시보드(cockpit): KPI + 차트 ===== */
+  /* ===== 차트형(cockpit): 선택한 시장만 — 잔고 + KPI + 차트 ===== */
   const wide = window.matchMedia('(min-width:860px)').matches;
   const split = TJStats.curveSplit(s.pool);
   const multi = split.series.length > 1;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <BalanceBand balF={balF} balS={balS} totalBal={totalBal} totalPnl={totalPnl} totalRet={totalRet} onSeed={onSeed} />
+      <BalanceBand market={market} bal={bal} onSeed={onSeed} />
       <div style={{ display: 'grid', gridTemplateColumns: wide ? '2fr 1fr' : '1fr', gap: 'var(--gap)' }}>
         {/* 자본 곡선 */}
         <div className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>

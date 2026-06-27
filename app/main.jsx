@@ -128,7 +128,9 @@ function App() {
     const custom = localStorage.getItem('tj_principles_custom') === '1';
     return (stored && custom) ? stored : TJ.DEFAULT_PRINCIPLES;   // 직접 편집·저장한 경우만 유지, 아니면 최신 기본 문구
   });
-  const [filter, setFilter] = useState('all');
+  // 시장 모드 — 선물/현물 완전 분리(합산 '전체' 없음). 마지막 선택 기억.
+  const [filter, setFilter] = useState(() => { const m = localStorage.getItem('tj_market'); return (m === '현물' || m === '선물') ? m : '선물'; });
+  useEffect(() => { localStorage.setItem('tj_market', filter); }, [filter]);
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState('all');
   const [modal, setModal] = useState(null);
@@ -273,7 +275,7 @@ function App() {
     const q = search.trim().toLowerCase();
     const ym = todayStr().slice(0, 7);
     const d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-    let l = entries.filter(e => filter === 'all' || e.market === filter);
+    let l = entries.filter(e => e.market === filter);
     if (q) l = l.filter(e => ((e.body || '') + ' ' + (e.setups || []).join(' ') + ' ' + (e.errors || []).join(' ')).toLowerCase().includes(q));
     if (period === 'month') l = l.filter(e => (e.traded_at || '').startsWith(ym));
     else if (period === '30d') l = l.filter(e => (e.traded_at || '') >= d30);
@@ -282,12 +284,10 @@ function App() {
 
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
   const balS = TJStats.balanceOf(entries, '현물', settings.spotSeed, settings.spotDeposit);
-  const totalBal = balF.bal + balS.bal;
-  const totalPnl = balF.pnl + balS.pnl;
-  const totalSeed = balF.base + balS.base;   // 시드+입금 (수익률 분모)
-  const totalRet = totalSeed ? totalPnl / totalSeed * 100 : null;
+  // 선물/현물 완전 분리 — 활성 시장만 표시(합산 없음)
+  const bal = filter === '현물' ? balS : balF;
 
-  const heroStats = useMemo(() => TJStats.computeStats(entries, filter === 'all' ? 'all' : filter), [entries, filter]);
+  const heroStats = useMemo(() => TJStats.computeStats(entries, filter), [entries, filter]);
 
   // routine checklist render
   const toggleCheck = (i) => setChecks(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
@@ -317,31 +317,31 @@ function App() {
               </span>
             )}
           </div>
-          <div className="seg" style={{ display: isMobile ? 'none' : 'inline-flex' }}>
-            {[['cockpit', '차트형'], ['ledger', '목록형'], ['focus', '원칙형']].map(([v, l]) => (
-              <button key={v} className={t.homeLayout === v ? 'on' : ''} onClick={() => setTweak('homeLayout', v)} style={{ fontSize: 12.5, padding: '7px 12px' }}>{l}</button>
-            ))}
-          </div>
           <button className="btn-ghost btn-sm" onClick={() => setModal({ type: 'principles' })}>원칙</button>
         </div>
       </header>
 
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '22px' }}>
-        {/* 모바일용 레이아웃 스위처 */}
-        {isMobile && (
-          <div className="seg" style={{ width: '100%', marginBottom: 16 }}>
-            {[['cockpit', '차트형'], ['ledger', '목록형'], ['focus', '원칙형']].map(([v, l]) => (
-              <button key={v} className={t.homeLayout === v ? 'on' : ''} onClick={() => setTweak('homeLayout', v)}>{l}</button>
-            ))}
-          </div>
-        )}
+        {/* ── 시장 모드 (선물 · 현물 완전 분리) ── */}
+        <div style={{ display: 'flex', gap: 8, width: '100%', marginBottom: 16 }}>
+          {[['선물', 'var(--futures)'], ['현물', 'var(--spot)']].map(([m, c]) => {
+            const on = filter === m;
+            return (
+              <button key={m} onClick={() => setFilter(m)} style={{
+                flex: 1, padding: '13px 0', borderRadius: 12, fontSize: 15.5, fontWeight: 800,
+                border: '1.5px solid ' + (on ? c : 'var(--border)'),
+                background: on ? c : 'var(--surface)', color: on ? '#fff' : 'var(--ink-3)',
+                boxShadow: on ? 'var(--shadow-sm)' : 'none', transition: 'all .15s',
+              }}>{m}</button>
+            );
+          })}
+        </div>
 
         {/* ── 레드폴더 (오늘 고임팩트 뉴스) ── */}
         <RedFolderCard items={redfolder} />
 
-        {/* ── HERO (레이아웃별) ── */}
-        <Hero layout={t.homeLayout} stats={heroStats} balF={balF} balS={balS}
-          totalBal={totalBal} totalPnl={totalPnl} totalRet={totalRet}
+        {/* ── HERO (선택한 시장만) ── */}
+        <Hero layout={t.homeLayout} stats={heroStats} market={filter} bal={bal}
           onSeed={() => setModal({ type: 'settings' })} onStats={() => setModal({ type: 'stats' })}
           routine={{ items: checkItems, checks, done: doneCount, total: checkItems.length, toggle: toggleCheck, principles, open: routineOpen, setOpen: setRoutineOpen, onEdit: () => setModal({ type: 'principles' }) }}
           memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }}
@@ -359,13 +359,6 @@ function App() {
           </select>
           <button className="btn-ghost" onClick={() => setModal({ type: 'stats' })}>통계</button>
           <button className="btn-ghost" onClick={() => setModal({ type: 'menu' })}>더보기</button>
-        </div>
-
-        {/* ── 필터 탭 ── */}
-        <div className="seg" style={{ width: '100%', marginTop: 12 }}>
-          {[['all', '전체'], ['선물', '선물'], ['현물', '현물']].map(([v, l]) => (
-            <button key={v} className={filter === v ? 'on' : ''} onClick={() => setFilter(v)}>{l}</button>
-          ))}
         </div>
 
         {/* ── 일지 리스트 ── */}
@@ -407,7 +400,6 @@ function App() {
       {/* ── Tweaks ── */}
       <TweaksPanel title="Tweaks">
         <TweakSection label="레이아웃" />
-        <TweakRadio label="홈 화면" value={t.homeLayout} options={[{ value: 'cockpit', label: '차트형' }, { value: 'ledger', label: '목록형' }, { value: 'focus', label: '원칙형' }]} onChange={v => setTweak('homeLayout', v)} />
         <TweakRadio label="밀도" value={t.density} options={['compact', 'regular', 'comfy']} onChange={v => setTweak('density', v)} />
         <TweakToggle label="루틴 카드 표시" value={t.showRoutine} onChange={v => setTweak('showRoutine', v)} />
         <TweakSection label="색상" />
