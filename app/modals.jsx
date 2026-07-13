@@ -309,7 +309,7 @@ function SettingsModal({ settings, onSave, onClose }) {
   const [addv, setAddv] = useStateM({ '선물': '', '스윙': '', '장기': '' });
   const [cur, setCur] = useStateM(settings.currency === '₩' ? '₩' : '$');
   const fld = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
-  const usd = n => cur + (Number(n) || 0).toLocaleString('en-US');
+  const usd = n => '$' + (Number(n) || 0).toLocaleString('en-US');   // 시드·입금 입력은 항상 달러 기준
   const setSeed = (k, v) => setSeeds(p => ({ ...p, [k]: v }));
   const setDep = (k, v) => setDeps(p => ({ ...p, [k]: v }));
   const setAdd = (k, v) => setAddv(p => ({ ...p, [k]: v }));
@@ -321,20 +321,26 @@ function SettingsModal({ settings, onSave, onClose }) {
   };
   return (
     <Modal open onClose={onClose} title="시드 · 입금 설정" sub="시드 + 추가 입금 + 손익 = 잔고로 자동 계산됩니다 (계좌별 분리)" maxWidth={420}>
-      {/* 통화 — 앱 전체 표시 단위 ($ 달러 / ₩ 원화) */}
+      {/* 통화 — 앱 전체 표시 단위 ($ 달러 / ₩ 원화, ₩는 실시간 환산) */}
       <label style={{ ...fld, marginTop: 0 }}>통화 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>전체 표시 단위</span></label>
       <div className="seg" style={{ width: '100%' }}>
         {TJ.CURRENCIES.map(o => (
           <button key={o.v} className={cur === o.v ? 'on' : ''} onClick={() => setCur(o.v)}>{o.label}</button>
         ))}
       </div>
+      {cur === '₩' && (
+        <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 7, lineHeight: 1.5 }}>
+          실시간 환율 <b style={{ color: 'var(--ink)' }}>$1 = ₩{Math.round(TJ.rateKRW()).toLocaleString('en-US')}</b> 로 환산해 표시합니다.
+          <span style={{ color: 'var(--ink-4)' }}> 입력(시드·손익)은 달러 기준으로 넣어주세요.</span>
+        </div>
+      )}
       {MK.map((m, i) => (
         <div key={m.key} style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 800, fontSize: 13.5 }}>
             <span style={{ width: 9, height: 9, borderRadius: 3, background: m.c }} />
             <span style={{ color: m.c }}>{m.key}</span>
           </div>
-          <label style={fld}>{m.key} 시드 ({cur})</label>
+          <label style={fld}>{m.key} 시드 ($)</label>
           <input type="number" inputMode="decimal" value={seeds[m.key]} onChange={e => setSeed(m.key, e.target.value)} placeholder={m.seedPh} />
           <label style={fld}>{m.key} 추가 입금 — 금액 넣고 ＋입금</label>
           <div style={{ display: 'flex', gap: 8 }}>

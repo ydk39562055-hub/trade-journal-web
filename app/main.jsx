@@ -24,6 +24,18 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const usd = n => TJ.money(n);   // 통화 기호는 전역 토글($/₩)을 따름
 
+/* 실시간 USD→KRW 환율 — 무료·키없음·CORS허용 소스 폴백. 실패 시 null(캐시/폴백 유지) */
+async function fetchKrwRate() {
+  const sources = [
+    ['https://open.er-api.com/v6/latest/USD', j => j && j.rates && j.rates.KRW],
+    ['https://api.exchangerate-api.com/v4/latest/USD', j => j && j.rates && j.rates.KRW],
+  ];
+  for (const [u, pick] of sources) {
+    try { const r = await fetch(u); if (!r.ok) continue; const v = pick(await r.json()); if (v && v > 0) return Math.round(v * 100) / 100; } catch (e) {}
+  }
+  return null;
+}
+
 /* 동기화용 블롭 병합 — 두 기기 기록을 합치되 삭제(tombstone)는 반영.
    a=로컬, b=클라우드. 스칼라(설정/원칙)는 클라우드(b)가 있으면 우선. */
 const _mtime = e => e.updated_at || e.created_at || '';
@@ -116,6 +128,8 @@ function RedFolderCard({ items }) {
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [redfolder, setRedfolder] = useState([]);
+  // 실시간 USD→KRW 환율 (캐시 우선 → 마운트/주기적 갱신). {rate, at}
+  const [fx, setFx] = useState(() => { try { const c = JSON.parse(localStorage.getItem('tj_fx_krw') || 'null'); if (c && c.rate > 0) return c; } catch {} return { rate: 1350, at: null }; });
   const [entries, setEntries] = useState(() => {
     try { const raw = localStorage.getItem('tj_entries_v3'); if (raw !== null) { const c = JSON.parse(raw); if (Array.isArray(c)) return TJ.migrateEntries(c); } } catch {}
     return TJ.ENTRIES;   // 첫 방문만 샘플. 비웠으면([]) 빈 채로 유지
@@ -213,6 +227,15 @@ function App() {
   // 레드폴더(ForexFactory 고임팩트) — 같은 주소 redfolder.json (GH Action이 갱신)
   useEffect(() => { fetch('redfolder.json?t=' + Date.now()).then(r => r.ok ? r.json() : []).then(j => { if (Array.isArray(j)) setRedfolder(j); }).catch(() => {}); }, []);
 
+  // 실시간 환율 — 마운트 즉시 + 10분마다 갱신. 성공 시 localStorage 캐시(오프라인 대비)
+  useEffect(() => {
+    let alive = true;
+    const load = async () => { const r = await fetchKrwRate(); if (alive && r) { const next = { rate: r, at: new Date().toISOString() }; setFx(next); localStorage.setItem('tj_fx_krw', JSON.stringify(next)); } };
+    load();
+    const id = setInterval(load, 10 * 60 * 1000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
   const addMemo = (text) => {
     const now = new Date();
     const at = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -302,7 +325,7 @@ function App() {
     return l;
   }, [entries, filter, search, period]);
 
-  TJ.setCurrency(settings.currency);   // 전역 통화($/₩) — 렌더 전 동기 반영(자식 포매터가 읽음)
+  TJ.setCurrency(settings.currency); TJ.setRate(fx.rate);   // 전역 통화($/₩)+실시간환율 — 렌더 전 동기 반영(자식 포매터가 읽음)
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
   const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit);
   const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit);
@@ -339,6 +362,13 @@ function App() {
               </span>
             )}
           </div>
+          {settings.currency === '₩' && (
+            <span title={fx.at ? '실시간 환율 · ' + new Date(fx.at).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준' : '기본 환율(실시간 로딩 전)'}
+              style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--bg-tint)', padding: '4px 9px', borderRadius: 8, whiteSpace: 'nowrap' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: fx.at ? 'var(--win)' : 'var(--ink-4)' }} />
+              $1=₩{Math.round(fx.rate).toLocaleString('en-US')}
+            </span>
+          )}
           <button className="btn-ghost btn-sm" onClick={() => setModal({ type: 'principles' })}>원칙</button>
         </div>
       </header>

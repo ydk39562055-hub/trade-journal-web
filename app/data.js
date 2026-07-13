@@ -23,14 +23,19 @@
 
   const SEED = { futuresSeed: 10000, swingSeed: 5000, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0, currency: '$' };
 
-  // ── 통화 (전역 토글: $ 달러 / ₩ 원화). 숫자는 그대로, 기호·형식만 전환 ──
+  // ── 통화 (전역 토글: $ 달러 / ₩ 원화) ──
+  // 저장값은 항상 달러(기준). ₩ 모드는 실시간 환율(USD→KRW)로 표시만 환산(비파괴).
   const CURRENCIES = [{ v: '$', label: '$ 달러' }, { v: '₩', label: '₩ 원화' }];
   let _CUR = '$';
+  let _RATE = 1350;                                 // USD→KRW 폴백(실시간 로드 전/오프라인)
   const setCurrency = c => { _CUR = (c === '₩') ? '₩' : '$'; };
+  const setRate = r => { const n = Number(r); if (n && n > 0) _RATE = n; };
+  const rateKRW = () => _RATE;
   const curSym = () => _CUR;
+  const conv = n => (_CUR === '₩') ? (Number(n) || 0) * _RATE : (Number(n) || 0); // 달러 기준 → 표시통화
   const _grp = n => Math.abs(Math.round(n)).toLocaleString('en-US');
-  const money = n => (n < 0 ? '−' : '') + _CUR + _grp(n);          // 부호 없는 표기 (음수만 −)
-  const moneyS = n => (n > 0 ? '+' : n < 0 ? '−' : '') + _CUR + _grp(n); // 부호 있는 표기 (+/−)
+  const money = n => { const v = conv(n); return (v < 0 ? '−' : '') + _CUR + _grp(v); };          // 부호 없는 표기 (음수만 −)
+  const moneyS = n => { const v = conv(n); return (v > 0 ? '+' : v < 0 ? '−' : '') + _CUR + _grp(v); }; // 부호 있는 표기 (+/−)
 
   // ── 샘플 거래 (시간순으로 작성; 앱이 최신순 정렬) ──
   const T = [
@@ -162,6 +167,6 @@
     SETUP_TAGS, SPOT_REASON_TAGS, HOLD_TYPES, MARKETS, SPOT_MARKETS, isFutures,
     ERROR_TAGS, TIMEFRAMES, RESULT, SEED, ENTRIES, DEFAULT_PRINCIPLES,
     getErrorTags, addErrorTag, migrateEntries, migrateSettings,
-    CURRENCIES, setCurrency, curSym, money, moneyS,
+    CURRENCIES, setCurrency, setRate, rateKRW, curSym, money, moneyS,
   };
 })();
