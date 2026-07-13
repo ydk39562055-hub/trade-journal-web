@@ -1,6 +1,6 @@
 /* 거래일지 — 새 일지 / 시드 / 원칙 / 더보기 모달 */
 const { useState: useStateM, useRef: useRefM, useEffect: useEffectM } = React;
-const usdM = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
+const usdM = n => TJ.money(n);   // 통화 기호는 전역 토글($/₩)을 따름
 
 /* 진입 등급 → 권장 리스크 (선물·현물 공용) */
 const GRADES = [
@@ -307,26 +307,34 @@ function SettingsModal({ settings, onSave, onClose }) {
   const [seeds, setSeeds] = useStateM(() => { const o = {}; MK.forEach(m => o[m.key] = settings[m.seedK] ?? ''); return o; });
   const [deps, setDeps] = useStateM(() => { const o = {}; MK.forEach(m => o[m.key] = settings[m.depK] || 0); return o; });
   const [addv, setAddv] = useStateM({ '선물': '', '스윙': '', '장기': '' });
+  const [cur, setCur] = useStateM(settings.currency === '₩' ? '₩' : '$');
   const fld = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
-  const usd = n => '$' + (Number(n) || 0).toLocaleString('en-US');
+  const usd = n => cur + (Number(n) || 0).toLocaleString('en-US');
   const setSeed = (k, v) => setSeeds(p => ({ ...p, [k]: v }));
   const setDep = (k, v) => setDeps(p => ({ ...p, [k]: v }));
   const setAdd = (k, v) => setAddv(p => ({ ...p, [k]: v }));
   const doAdd = (k) => { const v = parseFloat(addv[k]); if (!isNaN(v) && v !== 0) { setDep(k, (deps[k] || 0) + v); setAdd(k, ''); } };
   const save = () => {
-    const out = {};
+    const out = { currency: cur };
     MK.forEach(m => { out[m.seedK] = seeds[m.key] === '' ? null : +seeds[m.key]; out[m.depK] = +deps[m.key] || 0; });
     onSave(out);
   };
   return (
     <Modal open onClose={onClose} title="시드 · 입금 설정" sub="시드 + 추가 입금 + 손익 = 잔고로 자동 계산됩니다 (계좌별 분리)" maxWidth={420}>
+      {/* 통화 — 앱 전체 표시 단위 ($ 달러 / ₩ 원화) */}
+      <label style={{ ...fld, marginTop: 0 }}>통화 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>전체 표시 단위</span></label>
+      <div className="seg" style={{ width: '100%' }}>
+        {TJ.CURRENCIES.map(o => (
+          <button key={o.v} className={cur === o.v ? 'on' : ''} onClick={() => setCur(o.v)}>{o.label}</button>
+        ))}
+      </div>
       {MK.map((m, i) => (
-        <div key={m.key} style={{ marginTop: i ? 18 : 0, paddingTop: i ? 16 : 0, borderTop: i ? '1px solid var(--border)' : 'none' }}>
+        <div key={m.key} style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 800, fontSize: 13.5 }}>
             <span style={{ width: 9, height: 9, borderRadius: 3, background: m.c }} />
             <span style={{ color: m.c }}>{m.key}</span>
           </div>
-          <label style={fld}>{m.key} 시드 ($)</label>
+          <label style={fld}>{m.key} 시드 ({cur})</label>
           <input type="number" inputMode="decimal" value={seeds[m.key]} onChange={e => setSeed(m.key, e.target.value)} placeholder={m.seedPh} />
           <label style={fld}>{m.key} 추가 입금 — 금액 넣고 ＋입금</label>
           <div style={{ display: 'flex', gap: 8 }}>

@@ -152,7 +152,7 @@ function TagTable({ rows, money, warn }) {
           </span>
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700 }}>{r.n}</span>
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, color: 'var(--ink-2)' }}>{r.wr == null ? '–' : r.wr + '%'}</span>
-          <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{r.p >= 0 ? '+' : '−'}${Math.abs(Math.round(r.p)).toLocaleString('en-US')}</span>
+          <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{TJ.moneyS(r.p)}</span>
         </div>
       ))}
     </div>
@@ -174,7 +174,7 @@ function GradeTable({ rows }) {
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700 }}>{r.n}</span>
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, color: 'var(--ink-2)' }}>{r.wr == null ? '–' : r.wr + '%'}</span>
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: r.avgR == null ? 'var(--ink-4)' : r.avgR >= 0 ? 'var(--win)' : 'var(--loss)' }}>{r.avgR == null ? '–' : (r.avgR > 0 ? '+' : '') + r.avgR + 'R'}</span>
-          <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{r.p >= 0 ? '+' : '−'}${Math.abs(Math.round(r.p)).toLocaleString('en-US')}</span>
+          <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{TJ.moneyS(r.p)}</span>
         </div>
       ))}
     </div>

@@ -131,7 +131,7 @@ function EntryCard({ e, onEdit, onDelete, index }) {
         <div style={{ flex: 1, minWidth: 4 }} />
         {hasMoney ? (
           <span className="mono" style={{ fontSize: 16, fontWeight: 800, color: 'var(--ink)', whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: '-.01em' }}>
-            {pv >= 0 ? '+' : '−'}${Math.abs(Math.round(pv)).toLocaleString('en-US')}
+            {TJ.moneyS(pv)}
           </span>
         ) : (res && <span className={`resbadge ${res.cls}`} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{res.ko}</span>)}
         {e.market !== '선물'

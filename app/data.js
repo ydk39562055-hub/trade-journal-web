@@ -21,7 +21,16 @@
     holding: { ko: '보유중', cls: 'be' },
   };
 
-  const SEED = { futuresSeed: 10000, swingSeed: 5000, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0 };
+  const SEED = { futuresSeed: 10000, swingSeed: 5000, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0, currency: '$' };
+
+  // ── 통화 (전역 토글: $ 달러 / ₩ 원화). 숫자는 그대로, 기호·형식만 전환 ──
+  const CURRENCIES = [{ v: '$', label: '$ 달러' }, { v: '₩', label: '₩ 원화' }];
+  let _CUR = '$';
+  const setCurrency = c => { _CUR = (c === '₩') ? '₩' : '$'; };
+  const curSym = () => _CUR;
+  const _grp = n => Math.abs(Math.round(n)).toLocaleString('en-US');
+  const money = n => (n < 0 ? '−' : '') + _CUR + _grp(n);          // 부호 없는 표기 (음수만 −)
+  const moneyS = n => (n > 0 ? '+' : n < 0 ? '−' : '') + _CUR + _grp(n); // 부호 있는 표기 (+/−)
 
   // ── 샘플 거래 (시간순으로 작성; 앱이 최신순 정렬) ──
   const T = [
@@ -153,5 +162,6 @@
     SETUP_TAGS, SPOT_REASON_TAGS, HOLD_TYPES, MARKETS, SPOT_MARKETS, isFutures,
     ERROR_TAGS, TIMEFRAMES, RESULT, SEED, ENTRIES, DEFAULT_PRINCIPLES,
     getErrorTags, addErrorTag, migrateEntries, migrateSettings,
+    CURRENCIES, setCurrency, curSym, money, moneyS,
   };
 })();

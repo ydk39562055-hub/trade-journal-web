@@ -22,7 +22,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const usd = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
+const usd = n => TJ.money(n);   // 통화 기호는 전역 토글($/₩)을 따름
 
 /* 동기화용 블롭 병합 — 두 기기 기록을 합치되 삭제(tombstone)는 반영.
    a=로컬, b=클라우드. 스칼라(설정/원칙)는 클라우드(b)가 있으면 우선. */
@@ -302,6 +302,7 @@ function App() {
     return l;
   }, [entries, filter, search, period]);
 
+  TJ.setCurrency(settings.currency);   // 전역 통화($/₩) — 렌더 전 동기 반영(자식 포매터가 읽음)
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
   const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit);
   const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit);

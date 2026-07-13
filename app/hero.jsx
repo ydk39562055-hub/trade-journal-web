@@ -1,7 +1,7 @@
 /* 거래일지 — 홈 HERO (대시보드 / 레저 / 포커스) + 루틴 카드 */
 const { useState: useStateH } = React;
 
-const usdH = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US');
+const usdH = n => TJ.money(n);   // 통화 기호는 전역 토글($/₩)을 따름
 const fnumH = n => (n === Infinity ? '∞' : Math.round(n * 100) / 100);
 
 /* 원칙 원문 → 섹션 그룹(줄 원본 인덱스 보존: 체크박스 toggle용) */
@@ -205,7 +205,7 @@ function BalanceBand({ market, bal, onSeed, big }) {
           <div className="mono" style={{ fontSize: big ? 44 : 32, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-.02em', marginTop: 4 }}>{usdH(bal.bal)}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="mono" style={{ fontSize: big ? 19 : 16, fontWeight: 800, color: 'var(--ink)' }}>{pos ? '+' : '−'}${Math.abs(Math.round(bal.pnl)).toLocaleString('en-US')}</span>
+          <span className="mono" style={{ fontSize: big ? 19 : 16, fontWeight: 800, color: 'var(--ink)' }}>{TJ.moneyS(bal.pnl)}</span>
           {bal.ret != null && <span className="pill mono" style={{ background: 'var(--bg-tint)', color: 'var(--ink-2)', fontSize: 12.5 }}>{pos ? '+' : '−'}{Math.abs(bal.ret).toFixed(1)}%</span>}
         </div>
       </div>
@@ -334,7 +334,7 @@ function Hero({ layout, stats: s, market, bal, onSeed, onStats, routine, memo, s
           <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 6 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>누적 손익 곡선 ({money ? '금액' : 'R'})</div>
-              <div className="mono" style={{ fontSize: 24, fontWeight: 800, color: 'var(--ink)' }}>{money ? ((s.sumP >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(s.sumP)).toLocaleString('en-US')) : ((s.sumR > 0 ? '+' : '') + fnumH(s.sumR) + 'R')}</div>
+              <div className="mono" style={{ fontSize: 24, fontWeight: 800, color: 'var(--ink)' }}>{money ? TJ.moneyS(s.sumP) : ((s.sumR > 0 ? '+' : '') + fnumH(s.sumR) + 'R')}</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
               <button className="btn-ghost btn-sm" onClick={onStats}>통계 더보기</button>

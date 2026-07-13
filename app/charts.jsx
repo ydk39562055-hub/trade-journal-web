@@ -1,12 +1,8 @@
 /* 거래일지 — SVG 차트 컴포넌트 */
 const { useState: useStateC } = React;
 
-/* 작은 유틸 */
-const fmtMoney = (n, sign) => {
-  const v = Math.round(Math.abs(n)).toLocaleString('en-US');
-  if (sign) return (n > 0 ? '+$' : n < 0 ? '−$' : '$') + v;
-  return (n < 0 ? '−$' : '$') + v;
-};
+/* 작은 유틸 — 통화 기호는 TJ 전역 토글($/₩)을 따름 */
+const fmtMoney = (n, sign) => sign ? TJ.moneyS(n) : TJ.money(n);
 const fmtR = (n) => (n > 0 ? '+' : '') + (Math.round(n * 100) / 100) + 'R';
 
 /* ─────────── 자본/누적손익 곡선 (단일 또는 선물·현물 다중) ─────────── */
