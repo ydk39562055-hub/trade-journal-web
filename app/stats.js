@@ -155,7 +155,7 @@
       const lab = (e.traded_at || '').slice(5);
       present.forEach(m => data[m].push({ label: lab, value: Math.round(cum[m] * 100) / 100 }));
     }
-    const COL = { '선물': 'var(--futures)', '현물': 'var(--spot)' };
+    const COL = { '선물': 'var(--futures)', '스윙': 'var(--swing)', '장기': 'var(--long)', '현물': 'var(--spot)' };
     const series = present.filter(m => data[m].length > 1)
       .map(m => ({ name: m, color: COL[m] || 'var(--violet)', points: data[m] }));
     return { useMoney, series };

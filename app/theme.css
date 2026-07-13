@@ -23,10 +23,14 @@
   --loss-soft: #e9e1d4;
   --be: #c4b9a7;
 
-  /* market hues (모노) */
+  /* market hues (모노) — 선물/스윙/장기 3분할 */
   --futures: #6b5640;       /* 선물 = 진한 브라운 */
   --futures-soft: #efe8df;
-  --spot: #b1a48f;          /* 현물 = 옅은 탄 */
+  --swing: #a07c3e;         /* 스윙 = 카멜(중간 톤) */
+  --swing-soft: #f0e6d3;
+  --long: #b1a48f;          /* 장기 = 옅은 탄 */
+  --long-soft: #efe8df;
+  --spot: #b1a48f;          /* (구) 현물 별칭 — 남은 참조 안전용 */
   --spot-soft: #efe8df;
 
   /* --- neutrals (warm paper) --- */

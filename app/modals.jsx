@@ -86,9 +86,9 @@ function compressImage(file) {
 }
 
 /* ───────────── 새 일지 / 수정 ───────────── */
-function EditorModal({ entry, onSave, onClose, spotAcct, futAcct, onAddMemo }) {
+function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo }) {
   const [d, setD] = useStateM(() => {
-    const base = entry || { id: 'e-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), market: '선물', traded_at: new Date().toISOString().slice(0, 10), body: '', photos: [], created_at: new Date().toISOString() };
+    const base = entry || { id: 'e-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), market: defaultMarket || '선물', traded_at: new Date().toISOString().slice(0, 10), body: '', photos: [], created_at: new Date().toISOString() };
     const c = JSON.parse(JSON.stringify(base));
     if (!Array.isArray(c.setups)) c.setups = [];
     if (!Array.isArray(c.errors)) c.errors = [];
@@ -102,10 +102,12 @@ function EditorModal({ entry, onSave, onClose, spotAcct, futAcct, onAddMemo }) {
   const set = (k, v) => setD(p => ({ ...p, [k]: v }));
   const toggleArr = (k, t) => setD(p => { const a = p[k].slice(); const i = a.indexOf(t); if (i >= 0) a.splice(i, 1); else a.push(t); return { ...p, [k]: a }; });
   const numOrNull = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-  const isSpot = d.market === '현물';
-  // 현물 자동 계산 — 매수금액 = 수량 × 평단가
+  const isSpot = d.market !== '선물';                     // 스윙·장기 = 현물성(종목·비중·수익률)
+  const spotAcct = (accts && accts[d.market]) || 0;       // 활성 시장(스윙/장기)의 잔고
+  const futAcct = (accts && accts['선물']) || 0;
+  // 현물성 자동 계산 — 매수금액 = 수량 × 평단가
   const cost = (isSpot && d.shares != null && d.entry_price != null) ? d.shares * d.entry_price : null;
-  const autoW = cost != null && spotAcct > 0;            // 비중 자동(매수금액 ÷ 현물 잔고)
+  const autoW = cost != null && spotAcct > 0;            // 비중 자동(매수금액 ÷ 해당 시장 잔고)
   const autoR = cost != null && cost !== 0 && d.pnl != null;  // 수익률 자동(손익 ÷ 매수금액)
   useEffectM(() => {
     if (cost == null) return;
@@ -139,7 +141,7 @@ function EditorModal({ entry, onSave, onClose, spotAcct, futAcct, onAddMemo }) {
     <Modal open onClose={onClose} title={entry ? '일지 수정' : '새 일지'} maxWidth={560} sheet={window.matchMedia('(max-width:560px)').matches}>
       {/* market */}
       <div className="seg" style={{ width: '100%' }}>
-        {['선물', '현물'].map(m => (
+        {TJ.MARKETS.map(m => (
           <button key={m} className={d.market === m ? 'on' : ''} onClick={() => set('market', m)}>{m}</button>
         ))}
       </div>
@@ -212,8 +214,8 @@ function EditorModal({ entry, onSave, onClose, spotAcct, futAcct, onAddMemo }) {
 
               <label style={fld}>비중 (%) {autoW && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
               <input type="number" inputMode="decimal" value={d.weight ?? ''} onChange={e => set('weight', numOrNull(e.target.value))} placeholder="12" />
-              {autoW && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>매수금액 {usdM(cost)} ÷ 현물 잔고 {usdM(spotAcct)} = 계좌의 {d.weight}%</div>}
-              {cost != null && !(spotAcct > 0) && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>현물 시드를 설정하면 비중이 자동 계산돼요</div>}
+              {autoW && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>매수금액 {usdM(cost)} ÷ {d.market} 잔고 {usdM(spotAcct)} = 계좌의 {d.weight}%</div>}
+              {cost != null && !(spotAcct > 0) && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>{d.market} 시드를 설정하면 비중이 자동 계산돼요</div>}
 
               <label style={fld}>분할 단계</label>
               <div className="seg" style={{ width: '100%' }}>
@@ -296,39 +298,49 @@ function EditorModal({ entry, onSave, onClose, spotAcct, futAcct, onAddMemo }) {
 
 /* ───────────── 시드 설정 ───────────── */
 function SettingsModal({ settings, onSave, onClose }) {
-  const [fs, setFs] = useStateM(settings.futuresSeed ?? '');
-  const [ss, setSs] = useStateM(settings.spotSeed ?? '');
-  const [fd, setFd] = useStateM(settings.futuresDeposit || 0);
-  const [sd, setSd] = useStateM(settings.spotDeposit || 0);
-  const [addF, setAddF] = useStateM('');
-  const [addS, setAddS] = useStateM('');
+  // 선물 · 스윙 · 장기 3계좌 각각 시드/입금 분리
+  const MK = [
+    { key: '선물', seedK: 'futuresSeed', depK: 'futuresDeposit', c: 'var(--futures)', seedPh: '10000', depPh: '예: 1000' },
+    { key: '스윙', seedK: 'swingSeed', depK: 'swingDeposit', c: 'var(--swing)', seedPh: '5000', depPh: '예: 500' },
+    { key: '장기', seedK: 'longSeed', depK: 'longDeposit', c: 'var(--long)', seedPh: '5000', depPh: '예: 500' },
+  ];
+  const [seeds, setSeeds] = useStateM(() => { const o = {}; MK.forEach(m => o[m.key] = settings[m.seedK] ?? ''); return o; });
+  const [deps, setDeps] = useStateM(() => { const o = {}; MK.forEach(m => o[m.key] = settings[m.depK] || 0); return o; });
+  const [addv, setAddv] = useStateM({ '선물': '', '스윙': '', '장기': '' });
   const fld = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
   const usd = n => '$' + (Number(n) || 0).toLocaleString('en-US');
-  const doAdd = (val, setTotal, total, setVal) => { const v = parseFloat(val); if (!isNaN(v) && v !== 0) { setTotal(total + v); setVal(''); } };
-  const depBox = (val, setVal, total, setTotal, ph) => (
-    <>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <input type="number" inputMode="decimal" value={val} onChange={e => setVal(e.target.value)} placeholder={ph}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); doAdd(val, setTotal, total, setVal); } }} style={{ flex: 1 }} />
-        <button className="btn-ghost btn-sm" onClick={() => doAdd(val, setTotal, total, setVal)} style={{ whiteSpace: 'nowrap' }}>＋ 입금</button>
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-        누적 입금 <b style={{ color: 'var(--ink)' }}>{usd(total)}</b>
-        {total !== 0 && <button onClick={() => setTotal(0)} style={{ fontSize: 11.5, color: 'var(--ink-4)' }}>초기화</button>}
-      </div>
-    </>
-  );
+  const setSeed = (k, v) => setSeeds(p => ({ ...p, [k]: v }));
+  const setDep = (k, v) => setDeps(p => ({ ...p, [k]: v }));
+  const setAdd = (k, v) => setAddv(p => ({ ...p, [k]: v }));
+  const doAdd = (k) => { const v = parseFloat(addv[k]); if (!isNaN(v) && v !== 0) { setDep(k, (deps[k] || 0) + v); setAdd(k, ''); } };
+  const save = () => {
+    const out = {};
+    MK.forEach(m => { out[m.seedK] = seeds[m.key] === '' ? null : +seeds[m.key]; out[m.depK] = +deps[m.key] || 0; });
+    onSave(out);
+  };
   return (
-    <Modal open onClose={onClose} title="시드 · 입금 설정" sub="시드 + 추가 입금 + 손익 = 잔고로 자동 계산됩니다" maxWidth={420}>
-      <label style={fld}>선물 시드 ($)</label>
-      <input type="number" inputMode="decimal" value={fs} onChange={e => setFs(e.target.value)} placeholder="10000" />
-      <label style={fld}>선물 추가 입금 — 금액 넣고 ＋입금</label>
-      {depBox(addF, setAddF, fd, setFd, '예: 1000')}
-      <label style={fld}>현물 시드 ($)</label>
-      <input type="number" inputMode="decimal" value={ss} onChange={e => setSs(e.target.value)} placeholder="5000" />
-      <label style={fld}>현물 추가 입금 — 금액 넣고 ＋입금</label>
-      {depBox(addS, setAddS, sd, setSd, '예: 500')}
-      <button className="btn" onClick={() => { onSave({ futuresSeed: fs === '' ? null : +fs, spotSeed: ss === '' ? null : +ss, futuresDeposit: +fd || 0, spotDeposit: +sd || 0 }); }} style={{ width: '100%', marginTop: 18, padding: 13 }}>저장</button>
+    <Modal open onClose={onClose} title="시드 · 입금 설정" sub="시드 + 추가 입금 + 손익 = 잔고로 자동 계산됩니다 (계좌별 분리)" maxWidth={420}>
+      {MK.map((m, i) => (
+        <div key={m.key} style={{ marginTop: i ? 18 : 0, paddingTop: i ? 16 : 0, borderTop: i ? '1px solid var(--border)' : 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 800, fontSize: 13.5 }}>
+            <span style={{ width: 9, height: 9, borderRadius: 3, background: m.c }} />
+            <span style={{ color: m.c }}>{m.key}</span>
+          </div>
+          <label style={fld}>{m.key} 시드 ($)</label>
+          <input type="number" inputMode="decimal" value={seeds[m.key]} onChange={e => setSeed(m.key, e.target.value)} placeholder={m.seedPh} />
+          <label style={fld}>{m.key} 추가 입금 — 금액 넣고 ＋입금</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input type="number" inputMode="decimal" value={addv[m.key]} onChange={e => setAdd(m.key, e.target.value)} placeholder={m.depPh}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); doAdd(m.key); } }} style={{ flex: 1 }} />
+            <button className="btn-ghost btn-sm" onClick={() => doAdd(m.key)} style={{ whiteSpace: 'nowrap' }}>＋ 입금</button>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+            누적 입금 <b style={{ color: 'var(--ink)' }}>{usd(deps[m.key])}</b>
+            {deps[m.key] !== 0 && <button onClick={() => setDep(m.key, 0)} style={{ fontSize: 11.5, color: 'var(--ink-4)' }}>초기화</button>}
+          </div>
+        </div>
+      ))}
+      <button className="btn" onClick={save} style={{ width: '100%', marginTop: 18, padding: 13 }}>저장</button>
     </Modal>
   );
 }

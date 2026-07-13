@@ -2,8 +2,8 @@
 const { useState: useStateD } = React;
 
 function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose }) {
-  // 선물·현물 완전 분리 — 통계도 한 시장만(합산 '전체' 없음)
-  const [mkt, setMkt] = useStateD(initMarket === '현물' ? '현물' : '선물');
+  // 선물·스윙·장기 완전 분리 — 통계도 한 시장만(합산 '전체' 없음)
+  const [mkt, setMkt] = useStateD(TJ.MARKETS.includes(initMarket) ? initMarket : '선물');
   const s = TJStats.computeStats(entries, mkt);
   const money = s.useMoney;
   const fnum = n => (n === Infinity ? '∞' : Math.round(n * 100) / 100);
@@ -13,7 +13,7 @@ function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose 
       title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>통계 대시보드</span>}
       sub="입력한 결과·R·손익 기준으로 자동 집계됩니다">
       <Segmented value={mkt} onChange={setMkt} style={{ width: '100%', marginBottom: 4 }}
-        options={[{ v: '선물', label: '선물' }, { v: '현물', label: '현물' }]} />
+        options={TJ.MARKETS.map(m => ({ v: m, label: m }))} />
 
       {!s.hasAny ? (
         <div style={{ color: 'var(--ink-3)', textAlign: 'center', padding: '40px 0', fontSize: 14 }}>

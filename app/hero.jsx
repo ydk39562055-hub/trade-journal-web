@@ -171,9 +171,9 @@ function RoutineCard({ routine, defaultOpen }) {
   );
 }
 
-/* 잔고 밴드 — 선택한 시장(선물/현물)만 표시 (완전 분리) */
+/* 잔고 밴드 — 선택한 시장(선물/스윙/장기)만 표시 (완전 분리) */
 function BalanceBand({ market, bal, onSeed, big }) {
-  const c = market === '현물' ? 'var(--spot)' : 'var(--futures)';
+  const c = market === '선물' ? 'var(--futures)' : market === '장기' ? 'var(--long)' : 'var(--swing)';
   const empty = bal.seed == null && bal.pnl === 0;
   if (empty) {
     return (

@@ -57,10 +57,10 @@ function Modal({ open, onClose, children, maxWidth = 560, title, sub, sheet }) {
 
 /* ─── 마켓 라벨 (중립 점 + 글자) ─── */
 function MarketTag({ market }) {
-  const f = market === '선물';
+  const c = market === '선물' ? 'var(--futures)' : market === '장기' ? 'var(--long)' : 'var(--swing)';
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', flexShrink: 0 }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: f ? 'var(--futures)' : 'var(--spot)' }} />
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: c }} />
       <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)' }}>{market}</span>
     </span>
   );
@@ -134,7 +134,7 @@ function EntryCard({ e, onEdit, onDelete, index }) {
             {pv >= 0 ? '+' : '−'}${Math.abs(Math.round(pv)).toLocaleString('en-US')}
           </span>
         ) : (res && <span className={`resbadge ${res.cls}`} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{res.ko}</span>)}
-        {e.market === '현물'
+        {e.market !== '선물'
           ? (rpv != null && rpv !== 0 && (
             <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: rpv > 0 ? 'var(--win)' : 'var(--loss)', whiteSpace: 'nowrap', flexShrink: 0 }}>
               {rpv > 0 ? '+' : ''}{rpv}%

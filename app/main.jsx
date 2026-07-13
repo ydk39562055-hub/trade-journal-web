@@ -117,19 +117,19 @@ function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [redfolder, setRedfolder] = useState([]);
   const [entries, setEntries] = useState(() => {
-    try { const raw = localStorage.getItem('tj_entries_v3'); if (raw !== null) { const c = JSON.parse(raw); if (Array.isArray(c)) return c; } } catch {}
+    try { const raw = localStorage.getItem('tj_entries_v3'); if (raw !== null) { const c = JSON.parse(raw); if (Array.isArray(c)) return TJ.migrateEntries(c); } } catch {}
     return TJ.ENTRIES;   // 첫 방문만 샘플. 비웠으면([]) 빈 채로 유지
   });
   const [settings, setSettings] = useState(() => {
-    try { return { ...TJ.SEED, ...JSON.parse(localStorage.getItem('tj_settings_v2') || '{}') }; } catch { return { ...TJ.SEED }; }
+    try { return { ...TJ.SEED, ...TJ.migrateSettings(JSON.parse(localStorage.getItem('tj_settings_v2') || '{}')) }; } catch { return { ...TJ.SEED }; }
   });
   const [principles, setPrinciples] = useState(() => {
     const stored = localStorage.getItem('tj_principles_v2');
     const custom = localStorage.getItem('tj_principles_custom') === '1';
     return (stored && custom) ? stored : TJ.DEFAULT_PRINCIPLES;   // 직접 편집·저장한 경우만 유지, 아니면 최신 기본 문구
   });
-  // 시장 모드 — 선물/현물 완전 분리(합산 '전체' 없음). 마지막 선택 기억.
-  const [filter, setFilter] = useState(() => { const m = localStorage.getItem('tj_market'); return (m === '현물' || m === '선물') ? m : '선물'; });
+  // 시장 모드 — 선물/스윙/장기 완전 분리(합산 '전체' 없음). 마지막 선택 기억.
+  const [filter, setFilter] = useState(() => { let m = localStorage.getItem('tj_market'); if (m === '현물') m = '스윙'; return TJ.MARKETS.includes(m) ? m : '선물'; });
   useEffect(() => { localStorage.setItem('tj_market', filter); }, [filter]);
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState('all');
@@ -161,8 +161,8 @@ function App() {
 
   const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, deleted });
   const applyBlob = (b) => {
-    if (Array.isArray(b.entries)) setEntries(b.entries);
-    if (b.settings) setSettings(b.settings);
+    if (Array.isArray(b.entries)) setEntries(TJ.migrateEntries(b.entries));
+    if (b.settings) setSettings(TJ.migrateSettings(b.settings));
     if (typeof b.principles === 'string' && b.principles.trim() && localStorage.getItem('tj_principles_custom') === '1') setPrinciples(b.principles); // 직접 편집본만 동기화 반영, 기본문구는 항상 최신 유지
     if (Array.isArray(b.memos)) setMemos(b.memos);
     if (b.deleted) setDeleted(b.deleted);
@@ -179,8 +179,9 @@ function App() {
         const local = gatherBlob();
         let merged, needPush;
         if (cloud && cloud.data && Object.keys(cloud.data).length) {
-          merged = mergeBlobs(local, cloud.data);
-          needPush = JSON.stringify(merged) !== JSON.stringify({ v: 1, ...cloud.data });
+          const cd = { ...cloud.data, entries: TJ.migrateEntries(cloud.data.entries), settings: TJ.migrateSettings(cloud.data.settings) }; // 옛 '현물' 이관
+          merged = mergeBlobs(local, cd);
+          needPush = JSON.stringify(merged) !== JSON.stringify({ v: 1, ...cd });
         } else { merged = mergeBlobs(local, {}); needPush = true; }
         applyBlob(merged);
         lastSentRef.current = JSON.stringify(merged);
@@ -285,7 +286,7 @@ function App() {
     if (!confirm('샘플 데이터(예시 28건)와 시드를 비우고 빈 일지로 시작할까요?\n되돌릴 수 없어요. (필요하면 먼저 더보기 → JSON 백업)')) return;
     const ts = new Date().toISOString();
     setDeleted(prev => { const n = { ...prev }; entries.forEach(e => { n[e.id] = ts; }); return n; }); // 동기화 시 다른 기기에서도 비워지도록
-    setEntries([]); setSettings({ futuresSeed: null, spotSeed: null, futuresDeposit: 0, spotDeposit: 0 });
+    setEntries([]); setSettings({ futuresSeed: null, swingSeed: null, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0 });
     setModal(null); doFlash('초기화됨 — 새로 시작 ✓');
   };
 
@@ -302,9 +303,10 @@ function App() {
   }, [entries, filter, search, period]);
 
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
-  const balS = TJStats.balanceOf(entries, '현물', settings.spotSeed, settings.spotDeposit);
-  // 선물/현물 완전 분리 — 활성 시장만 표시(합산 없음)
-  const bal = filter === '현물' ? balS : balF;
+  const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit);
+  const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit);
+  // 선물/스윙/장기 완전 분리 — 활성 시장만 표시(합산 없음)
+  const bal = filter === '스윙' ? balW : filter === '장기' ? balL : balF;
 
   const heroStats = useMemo(() => TJStats.computeStats(entries, filter), [entries, filter]);
 
@@ -341,9 +343,9 @@ function App() {
       </header>
 
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '22px' }}>
-        {/* ── 시장 모드 (선물 · 현물 완전 분리) ── */}
+        {/* ── 시장 모드 (선물 · 스윙 · 장기 완전 분리) ── */}
         <div style={{ display: 'flex', gap: 8, width: '100%', marginBottom: 16 }}>
-          {[['선물', 'var(--futures)'], ['현물', 'var(--spot)']].map(([m, c]) => {
+          {[['선물', 'var(--futures)'], ['스윙', 'var(--swing)'], ['장기', 'var(--long)']].map(([m, c]) => {
             const on = filter === m;
             return (
               <button key={m} onClick={() => setFilter(m)} style={{
@@ -409,7 +411,7 @@ function App() {
       </button>
 
       {/* ── 모달 ── */}
-      {modal?.type === 'editor' && <EditorModal entry={modal.entry} spotAcct={balS.bal} futAcct={balF.bal} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}
+      {modal?.type === 'editor' && <EditorModal entry={modal.entry} accts={{ '선물': balF.bal, '스윙': balW.bal, '장기': balL.bal }} defaultMarket={filter} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
