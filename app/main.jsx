@@ -366,7 +366,7 @@ function App() {
   // 선물/스윙/장기 완전 분리 — 활성 시장만 표시(합산 없음)
   const bal = filter === '스윙' ? balW : filter === '장기' ? balL : balF;
 
-  const heroStats = useMemo(() => TJStats.computeStats(entries, filter), [entries, filter]);
+  const heroStats = useMemo(() => TJStats.computeStats(entries, filter), [entries, filter, fx.rate]);   // 환율 바뀌면 ₩거래 환산 재계산
 
   // routine checklist render
   const toggleCheck = (i) => setChecks(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });

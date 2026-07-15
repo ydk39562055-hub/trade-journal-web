@@ -103,11 +103,15 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo }
   const toggleArr = (k, t) => setD(p => { const a = p[k].slice(); const i = a.indexOf(t); if (i >= 0) a.splice(i, 1); else a.push(t); return { ...p, [k]: a }; });
   const numOrNull = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
   const isSpot = d.market !== '선물';                     // 스윙·장기 = 현물성(종목·비중·수익률)
-  const spotAcct = (accts && accts[d.market]) || 0;       // 활성 시장(스윙/장기)의 잔고
+  const cur = isSpot ? (d.currency || '$') : '$';         // 거래 통화 (선물은 항상 $)
+  const curFmt = n => TJ.fmt(n, cur);                     // 이 거래 통화 그대로 표기(환산 없음)
+  const spotAcctUSD = (accts && accts[d.market]) || 0;    // 활성 시장 잔고(달러 기준)
+  const spotAcct = cur === '₩' ? spotAcctUSD * TJ.rateKRW() : spotAcctUSD; // 거래 통화로 환산한 잔고(비중 계산용)
   const futAcct = (accts && accts['선물']) || 0;
-  // 현물성 자동 계산 — 매수금액 = 수량 × 평단가
+  const setMarket = m => setD(p => ({ ...p, market: m, currency: m === '선물' ? '$' : (p.currency || '$') }));
+  // 현물성 자동 계산 — 매수금액 = 수량 × 평단가 (거래 통화 그대로)
   const cost = (isSpot && d.shares != null && d.entry_price != null) ? d.shares * d.entry_price : null;
-  const autoW = cost != null && spotAcct > 0;            // 비중 자동(매수금액 ÷ 해당 시장 잔고)
+  const autoW = cost != null && spotAcct > 0;            // 비중 자동(매수금액 ÷ 해당 시장 잔고, 같은 통화)
   const autoR = cost != null && cost !== 0 && d.pnl != null;  // 수익률 자동(손익 ÷ 매수금액)
   useEffectM(() => {
     if (cost == null) return;
@@ -142,9 +146,21 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo }
       {/* market */}
       <div className="seg" style={{ width: '100%' }}>
         {TJ.MARKETS.map(m => (
-          <button key={m} className={d.market === m ? 'on' : ''} onClick={() => set('market', m)}>{m}</button>
+          <button key={m} className={d.market === m ? 'on' : ''} onClick={() => setMarket(m)}>{m}</button>
         ))}
       </div>
+
+      {/* 통화 — 스윙·장기만(선물은 항상 달러). 국내주식은 ₩로 그대로 입력 */}
+      {isSpot && (
+        <>
+          <label style={fld}>통화 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>이 거래를 입력할 단위</span></label>
+          <div className="seg" style={{ width: '100%' }}>
+            {TJ.CURRENCIES.map(o => (
+              <button key={o.v} className={cur === o.v ? 'on' : ''} onClick={() => set('currency', o.v)}>{o.label}</button>
+            ))}
+          </div>
+        </>
+      )}
 
       {isSpot ? (
         <>
@@ -214,7 +230,7 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo }
 
               <label style={fld}>비중 (%) {autoW && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
               <input type="number" inputMode="decimal" value={d.weight ?? ''} onChange={e => set('weight', numOrNull(e.target.value))} placeholder="12" />
-              {autoW && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>매수금액 {usdM(cost)} ÷ {d.market} 잔고 {usdM(spotAcct)} = 계좌의 {d.weight}%</div>}
+              {autoW && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>매수금액 {curFmt(cost)} ÷ {d.market} 잔고 {curFmt(spotAcct)} = 계좌의 {d.weight}%</div>}
               {cost != null && !(spotAcct > 0) && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>{d.market} 시드를 설정하면 비중이 자동 계산돼요</div>}
 
               <label style={fld}>분할 단계</label>
@@ -236,12 +252,12 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo }
                 ))}
               </div>
 
-              <label style={fld}>손익금액 ($ · +이익 / −손실)</label>
+              <label style={fld}>손익금액 ({cur} · +이익 / −손실)</label>
               <input type="number" inputMode="decimal" value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
 
               <label style={fld}>수익률 (%) {autoR && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
               <input type="number" inputMode="decimal" placeholder="+18 / -5" value={d.return_pct ?? ''} onChange={e => set('return_pct', numOrNull(e.target.value))} />
-              {autoR && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>손익 {usdM(d.pnl)} ÷ 매수금액 {usdM(cost)} = {d.return_pct}%</div>}
+              {autoR && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>손익 {curFmt(d.pnl)} ÷ 매수금액 {curFmt(cost)} = {d.return_pct}%</div>}
               {cost != null && cost !== 0 && d.pnl == null && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>손익금액을 적으면 수익률이 자동 계산돼요</div>}
             </>
           ) : (
@@ -267,7 +283,7 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo }
 
               <label style={fld}>R배수 {autoFR && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
               <input type="number" inputMode="decimal" placeholder="2 / -1" value={d.realized_r ?? ''} onChange={e => set('realized_r', numOrNull(e.target.value))} />
-              {autoFR && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>손익 {usdM(d.pnl)} ÷ 1R {usdM(oneR)} = {d.realized_r}R <span style={{ color: 'var(--ink-4)' }}>({d.grade} {gradeRp(d.grade)}% × 선물 잔고)</span></div>}
+              {autoFR && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>손익 {curFmt(d.pnl)} ÷ 1R {curFmt(oneR)} = {d.realized_r}R <span style={{ color: 'var(--ink-4)' }}>({d.grade} {gradeRp(d.grade)}% × 선물 잔고)</span></div>}
               {!isSpot && d.pnl != null && oneR == null && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>등급을 정하고 선물 시드를 설정하면 R이 자동 계산돼요</div>}
 
               <label style={fld}>셋업 태그 (ICT)</label>
@@ -512,7 +528,7 @@ function MenuModal({ entries, syncId, onImport, onReset, onSync, onBackfillR, on
   const today = new Date().toISOString().slice(0, 10);
   const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
   const exportCSV = () => {
-    const cols = ['traded_at', 'market', 'direction', 'entry_price', 'exit_price', 'result', 'realized_r', 'pnl', 'setups', 'errors', 'body'];
+    const cols = ['traded_at', 'market', 'currency', 'direction', 'entry_price', 'exit_price', 'result', 'realized_r', 'pnl', 'setups', 'errors', 'body'];
     const cell = (e, c) => { let v = (c === 'errors' || c === 'setups') ? (e[c] || []).join('|') : (e[c] ?? ''); v = String(v).replace(/"/g, '""'); return /[",\n]/.test(v) ? `"${v}"` : v; };
     const csv = '\uFEFF' + [cols.join(','), ...entries.map(e => cols.map(c => cell(e, c)).join(','))].join('\n');
     dl(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `거래일지_${today}.csv`); onClose();

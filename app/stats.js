@@ -1,6 +1,8 @@
 /* 거래일지 — 통계 계산 (순수 로직) */
 (function () {
   const num = v => (v != null && v !== '' && !isNaN(Number(v))) ? Number(v) : null;
+  // 거래별 손익을 달러로 정규화(₩ 거래는 실시간 환율로 환산). 합계·통계는 전부 달러 기준.
+  const pnlUSD = e => { const v = num(e.pnl); return v == null ? null : TJ.toUSD(v, e.currency); };
 
   function computeStats(entries, market) {
     const pool = entries.filter(e => market === 'all' || e.market === market);
@@ -18,7 +20,7 @@
     const negR = Math.abs(rs.filter(r => r < 0).reduce((a, b) => a + b, 0));
     const pf = negR ? posR / negR : (posR > 0 ? Infinity : 0);
 
-    const pls = pool.map(e => num(e.pnl)).filter(v => v != null);
+    const pls = pool.map(pnlUSD).filter(v => v != null);
     const sumP = pls.reduce((a, b) => a + b, 0);
     const avgP = pls.length ? sumP / pls.length : 0;
     const best = pls.length ? Math.max(...pls) : 0;
@@ -36,7 +38,7 @@
     // equity curve points
     let cum = 0;
     const curve = chrono.map(e => {
-      const v = useMoney ? num(e.pnl) : num(e.realized_r);
+      const v = useMoney ? pnlUSD(e) : num(e.realized_r);
       if (v != null) cum += v;
       return { label: (e.traded_at || '').slice(5), value: Math.round(cum * 100) / 100 };
     });
@@ -64,14 +66,14 @@
       const c = pool.filter(e => e.direction === d);
       const cd = c.filter(e => ['win', 'loss'].includes(e.result));
       const w = cd.filter(e => e.result === 'win').length;
-      const p = c.map(e => num(e.pnl)).filter(v => v != null).reduce((a, b) => a + b, 0);
+      const p = c.map(pnlUSD).filter(v => v != null).reduce((a, b) => a + b, 0);
       return { n: c.length, wr: cd.length ? Math.round(w / cd.length * 100) : null, p };
     };
     const long = dirStat('long'), short = dirStat('short');
 
     // monthly
     const byMonth = {};
-    for (const e of pool) { const m = (e.traded_at || '').slice(0, 7); const v = num(e.pnl); if (!m || v == null) continue; byMonth[m] = (byMonth[m] || 0) + v; }
+    for (const e of pool) { const m = (e.traded_at || '').slice(0, 7); const v = pnlUSD(e); if (!m || v == null) continue; byMonth[m] = (byMonth[m] || 0) + v; }
     const months = Object.entries(byMonth).sort((a, b) => a[0].localeCompare(b[0])).map(([m, v]) => ({ label: m.slice(5) + '월', value: v }));
 
     // tag stats
@@ -80,7 +82,7 @@
       for (const e of pool) for (const t of (e[field] || [])) {
         const s = agg[t] = agg[t] || { n: 0, w: 0, l: 0, p: 0 };
         s.n++; if (e.result === 'win') s.w++; if (e.result === 'loss') s.l++;
-        const pv = num(e.pnl); if (pv != null) s.p += pv;
+        const pv = pnlUSD(e); if (pv != null) s.p += pv;
       }
       return Object.entries(agg).map(([t, s]) => ({ tag: t, ...s, wr: (s.w + s.l) ? Math.round(s.w / (s.w + s.l) * 100) : null }))
         .sort((a, b) => b.n - a.n);
@@ -94,7 +96,7 @@
       const tf = e.timeframe; if (!tf) continue;
       const ts = tfAgg[tf] = tfAgg[tf] || { n: 0, w: 0, l: 0, p: 0 };
       ts.n++; if (e.result === 'win') ts.w++; if (e.result === 'loss') ts.l++;
-      const pv = num(e.pnl); if (pv != null) ts.p += pv;
+      const pv = pnlUSD(e); if (pv != null) ts.p += pv;
     }
     const TF_ORDER = ['1M', '3M', '5M', '15M', '1H', '4H'];
     const tfStats = TF_ORDER.filter(tf => tfAgg[tf]).map(tf => ({ tag: tf, ...tfAgg[tf], wr: (tfAgg[tf].w + tfAgg[tf].l) ? Math.round(tfAgg[tf].w / (tfAgg[tf].w + tfAgg[tf].l) * 100) : null }));
@@ -109,7 +111,7 @@
       const g = e.grade; if (!g) continue;
       const gs = gradeAgg[g] = gradeAgg[g] || { n: 0, w: 0, l: 0, p: 0, rs: [] };
       gs.n++; if (e.result === 'win') gs.w++; if (e.result === 'loss') gs.l++;
-      const pv = num(e.pnl); if (pv != null) gs.p += pv;
+      const pv = pnlUSD(e); if (pv != null) gs.p += pv;
       const rv = num(e.realized_r); if (rv != null) gs.rs.push(rv);
     }
     const gradeStats = GRADE_ORDER.filter(g => gradeAgg[g]).map(g => {
@@ -129,10 +131,10 @@
     };
   }
 
-  // 잔고 계산
+  // 잔고 계산 (시드=달러 기준, ₩ 거래 손익은 달러로 환산해 합산)
   function balanceOf(entries, market, seed, deposit) {
     const pnl = entries.filter(e => e.market === market)
-      .reduce((a, e) => { const v = num(e.pnl); return a + (v || 0); }, 0);
+      .reduce((a, e) => { const v = pnlUSD(e); return a + (v || 0); }, 0);
     const s = num(seed);
     const dep = num(deposit) || 0;            // 추가 입금 누계
     const base = (s || 0) + dep;              // 투입 원금 = 시드 + 입금
@@ -149,7 +151,7 @@
     const cum = {}, data = {};
     present.forEach(m => { cum[m] = 0; data[m] = []; });
     for (const e of all) {
-      const v = useMoney ? num(e.pnl) : num(e.realized_r);
+      const v = useMoney ? pnlUSD(e) : num(e.realized_r);
       if (v == null) continue;
       cum[e.market] += v;
       const lab = (e.traded_at || '').slice(5);

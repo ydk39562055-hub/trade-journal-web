@@ -36,6 +36,9 @@
   const _grp = n => Math.abs(Math.round(n)).toLocaleString('en-US');
   const money = n => { const v = conv(n); return (v < 0 ? '−' : '') + _CUR + _grp(v); };          // 부호 없는 표기 (음수만 −)
   const moneyS = n => { const v = conv(n); return (v > 0 ? '+' : v < 0 ? '−' : '') + _CUR + _grp(v); }; // 부호 있는 표기 (+/−)
+  // 거래별 네이티브 통화 그대로 표기(환율 환산 없음). sym = 그 거래의 통화($/₩)
+  const fmt = (n, sym, signed) => { const s = (sym === '₩') ? '₩' : '$'; const v = _grp(n); return signed ? ((n > 0 ? '+' : n < 0 ? '−' : '') + s + v) : ((n < 0 ? '−' : '') + s + v); };
+  const toUSD = (n, sym) => (sym === '₩') ? (Number(n) || 0) / _RATE : (Number(n) || 0); // 합계용: 네이티브→달러 정규화
 
   // ── 샘플 거래 (시간순으로 작성; 앱이 최신순 정렬) ──
   const T = [
@@ -167,6 +170,6 @@
     SETUP_TAGS, SPOT_REASON_TAGS, HOLD_TYPES, MARKETS, SPOT_MARKETS, isFutures,
     ERROR_TAGS, TIMEFRAMES, RESULT, SEED, ENTRIES, DEFAULT_PRINCIPLES,
     getErrorTags, addErrorTag, migrateEntries, migrateSettings,
-    CURRENCIES, setCurrency, setRate, rateKRW, curSym, money, moneyS,
+    CURRENCIES, setCurrency, setRate, rateKRW, curSym, money, moneyS, fmt, toUSD,
   };
 })();
