@@ -24,7 +24,7 @@
 "title": "Trimmed Mean CPI m/m",
 "country": "AUD",
 "date": "2026-07-28T21:30:00-04:00",
-"forecast": "0.4%",
+"forecast": "0.3%",
 "previous": "0.4%"
 },
 {
@@ -77,17 +77,24 @@
 "previous": "3.75%"
 },
 {
+"title": "BOE Gov Bailey Speaks",
+"country": "GBP",
+"date": "2026-07-30T07:30:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
 "title": "Advance GDP q/q",
 "country": "USD",
 "date": "2026-07-30T08:30:00-04:00",
-"forecast": "2.3%",
+"forecast": "2.0%",
 "previous": "2.0%"
 },
 {
 "title": "Core PCE Price Index m/m",
 "country": "USD",
 "date": "2026-07-30T08:30:00-04:00",
-"forecast": "0.1%",
+"forecast": "0.2%",
 "previous": "0.3%"
 },
 {
