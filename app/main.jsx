@@ -333,6 +333,25 @@ function App() {
     setHoldings(prev => [...prev, ...add]);
   };
   const removeHolding = (id) => { setHoldings(prev => prev.filter(h => h.id !== id)); setDeleted(p => ({ ...p, [id]: new Date().toISOString() })); };
+  // 스크린샷 보유종목 → 일지에도 '보유중' 항목으로 추가 (수동 새 일지처럼: 종목·수량·진입가만)
+  const addPositions = (account, list) => {
+    const now = new Date().toISOString(); const today = todayStr();
+    const rows = (list || []).map(h => {
+      const sym = (h.ticker || '').toUpperCase(); const nm = (h.name || '').trim();
+      return {
+        id: 'pos-' + Math.random().toString(36).slice(2, 10),
+        market: account, traded_at: today, direction: 'long', result: 'holding',
+        ticker: sym || nm || '종목',
+        shares: Number(h.qty) || 0,
+        entry_price: (h.avgPrice != null && h.avgPrice !== '') ? Number(h.avgPrice) : null,
+        currency: h.currency === 'KRW' ? '₩' : '$',
+        setups: [], errors: [], photos: [],
+        body: (nm && sym && nm !== sym) ? (nm + ' (' + sym + ')') : (nm || sym),
+        created_at: now, updated_at: now,
+      };
+    });
+    if (rows.length) setEntries(prev => [...rows, ...prev]);
+  };
   const clearHoldings = (account) => {
     const rm = holdings.filter(h => h.account === account).map(h => h.id);
     if (!rm.length) return;
@@ -591,7 +610,7 @@ function App() {
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
-      {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
+      {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
       {modal?.type === 'reset' && <ResetModal market={filter} entries={entries} onResetMarket={resetMarket} onResetAll={clearAll} onRestore={restoreSamples} onClose={() => setModal(null)} />}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}

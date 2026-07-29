@@ -628,7 +628,7 @@ function ResetModal({ market, entries, onResetMarket, onResetAll, onRestore, onC
 
 
 /* ───────────── 보유 현황 (스크린샷 자동입력 + 실시간 시세) ───────────── */
-function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, defaultAccount, onClose }) {
+function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, addPositions, defaultAccount, onClose }) {
   const [acct, setAcct] = useStateM(defaultAccount === '장기' ? '장기' : '스윙');
   const [quotes, setQuotes] = useStateM({});
   const [loading, setLoading] = useStateM(false);
@@ -679,7 +679,7 @@ function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, de
     } catch (e) { setErr('스크린샷 분석 실패: ' + e.message); }
     setBusy(false);
   };
-  const confirmAdd = () => { if (preview && preview.length) addHoldings(acct, preview); setPreview(null); };
+  const confirmAdd = () => { if (preview && preview.length) { addHoldings(acct, preview); if (addPositions) addPositions(acct, preview); } setPreview(null); };
 
   return (
     <Modal open onClose={onClose} title="보유 현황" sub="스크린샷으로 추가 · 실시간 시세로 평가" maxWidth={520} sheet={window.matchMedia('(max-width:560px)').matches}>
@@ -700,18 +700,20 @@ function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, de
         ? <div style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: 13, padding: '22px 0', lineHeight: 1.6 }}>아직 {acct} 보유 종목이 없어요.<br />아래 버튼으로 스크린샷을 올려보세요.</div>
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
             {list.map(h => {
-              const q = qOf(h), p = q ? q.price : null, lsym = liveSym(q);
-              const v = p != null ? p * h.qty : null;                             // 시세 통화 기준 평가액
-              const aps = avgUSD1(h), lps = p != null ? TJ.toUSD(p, lsym) : null;  // 1주 달러 환산
+              const q = qOf(h), p = q ? q.price : null;
+              const dsym = h.market === 'KR' ? '₩' : '$';                          // 국내주식=원, 해외=달러(한 행 한 통화)
+              const v = p != null ? p * h.qty : null;
+              const aps = avgUSD1(h), lps = p != null ? TJ.toUSD(p, dsym) : null;   // 1주 달러 환산
               const pl = (aps != null && lps != null) ? (lps - aps) / aps * 100 : null;
+              const avgShow = h.avgPrice == null ? null : (symOf(h.currency) === dsym ? h.avgPrice : (dsym === '₩' ? aps * TJ.rateKRW() : aps));  // 평단도 행 통화로
               return (
                 <div key={h.id} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.name} <span className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600 }}>{h.ticker}</span></div>
-                    <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1 }}>{h.qty}주{h.avgPrice != null ? ' · 평단 ' + TJ.fmt(h.avgPrice, symOf(h.currency)) : ''}{p != null ? ' · 현재 ' + TJ.fmt(p, lsym) : ''}</div>
+                    <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1 }}>{h.qty}주{avgShow != null ? ' · 평단 ' + TJ.fmt(avgShow, dsym) : ''}{p != null ? ' · 현재 ' + TJ.fmt(p, dsym) : ''}</div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div className="mono" style={{ fontSize: 14, fontWeight: 800, color: 'var(--ink)' }}>{v != null ? TJ.fmt(v, lsym) : '—'}</div>
+                    <div className="mono" style={{ fontSize: 14, fontWeight: 800, color: 'var(--ink)' }}>{v != null ? TJ.fmt(v, dsym) : '—'}</div>
                     {pl != null && <div className="mono" style={{ fontSize: 11.5, fontWeight: 700, color: pl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{pl >= 0 ? '+' : ''}{pl.toFixed(1)}%</div>}
                   </div>
                   <button onClick={() => removeHolding(h.id)} style={{ fontSize: 13, color: 'var(--ink-4)', flexShrink: 0 }} onMouseEnter={e => e.currentTarget.style.color = 'var(--loss)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-4)'}>✕</button>
@@ -744,7 +746,7 @@ function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, de
             <>
               <button className="btn-ghost" onClick={() => fileRef.current.click()} disabled={busy} style={{ width: '100%', justifyContent: 'center', borderStyle: 'dashed', color: 'var(--ink-3)' }}>{busy ? 'AI가 읽는 중…' : '📷 스크린샷으로 추가'}</button>
               <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
-              <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6, lineHeight: 1.5 }}>증권사 앱 보유목록을 찍어 올리면 종목·수량을 읽어 {acct}에 넣어요. (토스=스윙, 메리츠·나무=장기)</div>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6, lineHeight: 1.5 }}>증권사 보유목록을 찍어 올리면 종목·수량·진입가를 읽어 <b>{acct} 보유현황 + 일지(보유중)</b>에 넣어요. 나중에 그 일지를 손절/익절로 바꾸면 과거 거래처럼 기록됩니다. (토스=스윙, 메리츠·나무=장기)</div>
               {list.length > 0 && <button onClick={() => { if (confirm(acct + ' 보유 종목을 모두 비울까요?')) clearHoldings(acct); }} style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 10 }}>이 계좌 보유 비우기</button>}
             </>
           )}
