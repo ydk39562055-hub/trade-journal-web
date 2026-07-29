@@ -33,7 +33,9 @@
     const chrono = [...pool].sort((a, b) =>
       (a.traded_at || '').localeCompare(b.traded_at || '') ||
       (a.created_at || '').localeCompare(b.created_at || ''));
-    const useMoney = pls.length > 0;
+    // 금액 모드는 'R만 있고 금액 없는' 거래를 곡선에서 조용히 빠뜨리므로, 그런 거래가 하나라도 있으면 R 모드로
+    const rOnly = pool.filter(e => num(e.realized_r) != null && pnlUSD(e) == null).length;
+    const useMoney = pls.length > 0 && rOnly === 0;
 
     // equity curve points
     let cum = 0;
@@ -74,7 +76,7 @@
     // monthly
     const byMonth = {};
     for (const e of pool) { const m = (e.traded_at || '').slice(0, 7); const v = pnlUSD(e); if (!m || v == null) continue; byMonth[m] = (byMonth[m] || 0) + v; }
-    const months = Object.entries(byMonth).sort((a, b) => a[0].localeCompare(b[0])).map(([m, v]) => ({ label: m.slice(5) + '월', value: v }));
+    const months = Object.entries(byMonth).sort((a, b) => a[0].localeCompare(b[0])).map(([m, v]) => ({ label: m.slice(2), value: v }));   // 'YY-MM' — 연도 넘어가도 구분됨
 
     // tag stats
     const tagAgg = (field) => {
@@ -146,7 +148,7 @@
     const all = [...pool].sort((a, b) =>
       (a.traded_at || '').localeCompare(b.traded_at || '') ||
       (a.created_at || '').localeCompare(b.created_at || ''));
-    const useMoney = all.some(e => num(e.pnl) != null);
+    const useMoney = all.some(e => num(e.pnl) != null) && !all.some(e => num(e.realized_r) != null && pnlUSD(e) == null);
     const present = [...new Set(all.map(e => e.market))];
     const cum = {}, data = {};
     present.forEach(m => { cum[m] = 0; data[m] = []; });

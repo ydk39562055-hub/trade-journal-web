@@ -116,9 +116,10 @@ function EntryCard({ e, onEdit, onDelete, index }) {
       </div>
 
       {/* head */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, paddingRight: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 9, rowGap: 7, paddingRight: 4 }}>
         <MarketTag market={e.market} />
         <DirArrow dir={e.direction} />
+        {e.futType && <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', background: 'var(--bg-tint)', padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0 }}>{e.futType}</span>}
         {e.ticker && <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--ink)', whiteSpace: 'nowrap', flexShrink: 0 }}>{e.ticker}</span>}
         <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--ink-4)', flexShrink: 0 }} />
         <span className="mono" style={{ fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>{e.traded_at}</span>
@@ -128,23 +129,24 @@ function EntryCard({ e, onEdit, onDelete, index }) {
         {e.grade && (
           <span className="mono" style={{ fontSize: 11, fontWeight: 800, color: '#fff', padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0, background: e.grade === 'A+' ? 'var(--win)' : e.grade === 'B' ? 'var(--violet)' : 'var(--loss)' }}>{e.grade}</span>
         )}
-        <div style={{ flex: 1, minWidth: 4 }} />
-        {hasMoney ? (
-          <span className="mono" style={{ fontSize: 16, fontWeight: 800, color: 'var(--ink)', whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: '-.01em' }}>
-            {TJ.fmt(pv, e.currency, true)}
-          </span>
-        ) : (res && <span className={`resbadge ${res.cls}`} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{res.ko}</span>)}
-        {e.market !== '선물'
-          ? (rpv != null && rpv !== 0 && (
-            <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: rpv > 0 ? 'var(--win)' : 'var(--loss)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-              {rpv > 0 ? '+' : ''}{rpv}%
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginLeft: 'auto', flexShrink: 0 }}>
+          {hasMoney ? (
+            <span className="mono" style={{ fontSize: 16, fontWeight: 800, color: 'var(--ink)', whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: '-.01em' }}>
+              {TJ.fmt(pv, e.currency, true)}
             </span>
-          ))
-          : (rv != null && rv !== 0 && (
-            <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-              {rv > 0 ? '+' : ''}{rv}R
-            </span>
-          ))}
+          ) : (res && <span className={`resbadge ${res.cls}`} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{res.ko}</span>)}
+          {e.market !== '선물'
+            ? (rpv != null && rpv !== 0 && (
+              <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: rpv > 0 ? 'var(--win)' : 'var(--loss)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {rpv > 0 ? '+' : ''}{rpv}%
+              </span>
+            ))
+            : (rv != null && rv !== 0 && (
+              <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {rv > 0 ? '+' : ''}{rv}R
+              </span>
+            ))}
+        </div>
       </div>
 
       {/* body — 2줄 말줄임 (카드 높이 균일) */}

@@ -14,15 +14,7 @@ const DENSITY = {
   comfy: { gap: '18px', pad: '22px', fs: '15.5px' },
 };
 
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "homeLayout": "cockpit",
-  "accent": "코코아",
-  "density": "regular",
-  "showRoutine": true
-}/*EDITMODE-END*/;
-
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const usd = n => TJ.money(n);   // 통화 기호는 전역 토글($/₩)을 따름
 
 /* 실시간 USD→KRW 환율 — 무료·키없음·CORS허용 소스 폴백. 실패 시 null(캐시/폴백 유지) */
 async function fetchKrwRate() {
@@ -58,9 +50,17 @@ function mergeBlobs(a, b) {
   const mm = new Map();
   for (const m of [...(a.memos || []), ...(b.memos || [])]) if (m && m.id && !mm.has(m.id)) mm.set(m.id, m);
   const memos = [...mm.values()].filter(m => !deleted[m.id]);
+  // 일기: 날짜별 1개, updated_at 최신 우선
+  const dd = new Map();
+  for (const x of [...(a.diary || []), ...(b.diary || [])]) {
+    if (!x || !x.date) continue;
+    const prev = dd.get(x.date);
+    if (!prev || (x.updated_at || '') >= (prev.updated_at || '')) dd.set(x.date, x);
+  }
+  const diary = [...dd.values()];
   const settings = { ...(a.settings || {}), ...(b.settings || {}) };
   const principles = (b.principles && b.principles.trim()) ? b.principles : (a.principles || '');
-  return { v: 1, entries, settings, principles, memos, deleted };
+  return { v: 1, entries, settings, principles, memos, diary, deleted };
 }
 
 /* 레드폴더(ForexFactory 경제지표) 한글 표기 */
@@ -103,13 +103,16 @@ function RedFolderCard({ items }) {
   const today = todayStr();
   const pad = n => String(n).padStart(2, '0');
   const ymd = x => `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
-  const withD = items.map(e => ({ ...e, d: new Date(e.date) })).filter(e => !isNaN(e.d));
-  const todays = withD.filter(e => ymd(e.d) === today).sort((a, b) => a.d - b.d);
+  const _t = new Date(); const tomorrow = ymd(new Date(_t.getFullYear(), _t.getMonth(), _t.getDate() + 1));
+  const CCY = new Set(['USD', 'EUR', 'GBP']);   // 달러·유로·파운드만 (나스닥·S&P500=USD). 호주·일본 등 제외
+  const withD = items.map(e => ({ ...e, d: new Date(e.date) })).filter(e => !isNaN(e.d) && CCY.has(e.country));
   // 이번 주 전체 — 날짜별 그룹
   const byDay = {};
   withD.forEach(e => { const k = ymd(e.d); (byDay[k] = byDay[k] || []).push(e); });
   const days = Object.keys(byDay).sort();
   days.forEach(k => byDay[k].sort((a, b) => a.d - b.d));
+  const soonKeys = [today, tomorrow].filter(k => byDay[k]);            // 오늘+내일(있는 날만)
+  const soonCount = soonKeys.reduce((n, k) => n + byDay[k].length, 0);
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const dayLabel = k => { const [Y, M, D] = k.split('-').map(Number); return `${M}/${D} (${WD[new Date(Y, M - 1, D).getDay()]})`; };
 
@@ -128,15 +131,25 @@ function RedFolderCard({ items }) {
     <div className="card" style={{ padding: '11px 13px', marginBottom: 12, borderColor: 'var(--violet-100)' }}>
       <button onClick={() => setOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, textAlign: 'left' }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--violet)', flexShrink: 0 }} />
-        <b style={{ fontSize: 12.5 }}>{open ? '이번 주 레드폴더' : '오늘 레드폴더'}</b>
-        <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{open ? withD.length + '건' : (todays.length ? todays.length + '건' : '없음 ✓')}</span>
+        <b style={{ fontSize: 12.5 }}>{open ? '이번 주 레드폴더' : '오늘·내일 레드폴더'}</b>
+        <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{open ? withD.length + '건' : (soonCount ? soonCount + '건' : '없음 ✓')}</span>
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600 }}>{open ? '접기' : '주간 보기'}</span>
         <span style={{ color: 'var(--ink-4)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>▾</span>
       </button>
 
-      {!open && todays.length > 0 && (
-        <div style={{ marginTop: 6 }}>{todays.map((e, i) => row(e, i))}</div>
+      {!open && soonCount > 0 && (
+        <div style={{ marginTop: 6 }}>
+          {soonKeys.map((k, di) => (
+            <div key={k} style={{ marginTop: di ? 8 : 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: k === today ? 'var(--violet-600)' : 'var(--ink-3)', marginBottom: 2, display: 'flex', gap: 6, alignItems: 'center' }}>
+                {dayLabel(k)}
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: k === today ? 'var(--violet)' : 'var(--ink-4)', padding: '1px 6px', borderRadius: 5 }}>{k === today ? '오늘' : '내일'}</span>
+              </div>
+              {byDay[k].map((e, i) => row(e, i))}
+            </div>
+          ))}
+        </div>
       )}
 
       {open && (
@@ -160,7 +173,7 @@ function RedFolderCard({ items }) {
 }
 
 function App() {
-  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const t = { accent: '코코아', density: 'regular', showRoutine: true };   // 고정 테마(꾸미기 패널 제거)
   const [redfolder, setRedfolder] = useState([]);
   // 실시간 USD→KRW 환율 (캐시 우선 → 마운트/주기적 갱신). {rate, at}
   const [fx, setFx] = useState(() => { try { const c = JSON.parse(localStorage.getItem('tj_fx_krw') || 'null'); if (c && c.rate > 0) return c; } catch {} return { rate: 1350, at: null }; });
@@ -180,11 +193,22 @@ function App() {
   const [filter, setFilter] = useState(() => { let m = localStorage.getItem('tj_market'); if (m === '현물') m = '스윙'; return TJ.MARKETS.includes(m) ? m : '선물'; });
   useEffect(() => { localStorage.setItem('tj_market', filter); }, [filter]);
   const [search, setSearch] = useState('');
-  const [period, setPeriod] = useState('all');
+  const [period, setPeriod] = useState('month');   // 기본=이번 달 (화면이 너무 길어지지 않게)
   const [modal, setModal] = useState(null);
   const [routineOpen, setRoutineOpen] = useState(false);
-  const [memoOpen, setMemoOpen] = useState(false);
-  const [memos, setMemos] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_memos_v2') || '[]'); } catch { return []; } });
+  const [memos, setMemos] = useState(() => {
+    try {
+      const raw = localStorage.getItem('tj_memos_v2');
+      const cur = raw ? JSON.parse(raw) : [];
+      // 회고가 비어있고 아직 한 번도 시드 안 했으면 샘플 실수 주입(1회). 지우면 다시 안 생김.
+      if ((!Array.isArray(cur) || cur.length === 0) && localStorage.getItem('tj_memos_seeded') !== '1') {
+        localStorage.setItem('tj_memos_seeded', '1');
+        return ((window.TJ && TJ.MEMOS) || []).slice();
+      }
+      return Array.isArray(cur) ? cur : [];
+    } catch { return []; }
+  });
+  const [diary, setDiary] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_diary_v1') || '[]'); } catch { return []; } });
   const [checks, setChecks] = useState(() => {
     try { const o = JSON.parse(localStorage.getItem('tj_checks_v2') || '{}'); if (o.d === todayStr()) return new Set(o.s || []); } catch {}
     return new Set();
@@ -193,26 +217,37 @@ function App() {
   const flashTimer = useRef();
   // ── 클라우드 동기화 ──
   const [syncId, setSyncId] = useState(() => localStorage.getItem('tj_sync_id') || null);
-  const [deleted, setDeleted] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_deleted_v1') || '{}'); } catch { return {}; } });
+  const [deleted, setDeleted] = useState(() => {   // 180일 지난 삭제기록(무덤)은 정리 — 무한 증식 방지
+    try {
+      const raw = JSON.parse(localStorage.getItem('tj_deleted_v1') || '{}');
+      const cutoff = new Date(Date.now() - 180 * 864e5).toISOString();
+      const n = {}; for (const k in raw) if (raw[k] >= cutoff) n[k] = raw[k]; return n;
+    } catch { return {}; }
+  });
   const [syncReady, setSyncReady] = useState(false);
   const [syncStatus, setSyncStatus] = useState(''); // '' | syncing | saved | err
   const lastSentRef = useRef('');
   const debRef = useRef();
 
-  // persist
-  useEffect(() => { localStorage.setItem('tj_entries_v3', JSON.stringify(entries)); }, [entries]);
+  // persist — 저장 실패(용량 초과 등)는 조용히 삼키지 않고 경고
+  useEffect(() => {
+    try { localStorage.setItem('tj_entries_v3', JSON.stringify(entries)); }
+    catch (e) { doFlash('⚠ 저장 공간 부족 — 사진을 줄이거나 오래된 일지를 정리하세요'); }
+  }, [entries]);
   useEffect(() => { localStorage.setItem('tj_settings_v2', JSON.stringify(settings)); }, [settings]);
   useEffect(() => { localStorage.setItem('tj_principles_v2', principles); }, [principles]);
   useEffect(() => { localStorage.setItem('tj_checks_v2', JSON.stringify({ d: todayStr(), s: [...checks] })); }, [checks]);
   useEffect(() => { localStorage.setItem('tj_memos_v2', JSON.stringify(memos)); }, [memos]);
+  useEffect(() => { localStorage.setItem('tj_diary_v1', JSON.stringify(diary)); }, [diary]);
   useEffect(() => { localStorage.setItem('tj_deleted_v1', JSON.stringify(deleted)); }, [deleted]);
 
-  const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, deleted });
+  const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, diary, deleted });
   const applyBlob = (b) => {
     if (Array.isArray(b.entries)) setEntries(TJ.migrateEntries(b.entries));
     if (b.settings) setSettings(TJ.migrateSettings(b.settings));
     if (typeof b.principles === 'string' && b.principles.trim() && localStorage.getItem('tj_principles_custom') === '1') setPrinciples(b.principles); // 직접 편집본만 동기화 반영, 기본문구는 항상 최신 유지
     if (Array.isArray(b.memos)) setMemos(b.memos);
+    if (Array.isArray(b.diary)) setDiary(b.diary);
     if (b.deleted) setDeleted(b.deleted);
   };
 
@@ -253,7 +288,7 @@ function App() {
       catch (e) { setSyncStatus('err'); }
     }, 1400);
     return () => clearTimeout(debRef.current);
-  }, [entries, settings, principles, memos, deleted, syncId, syncReady]);
+  }, [entries, settings, principles, memos, diary, deleted, syncId, syncReady]);
 
   const enableSync = () => { const c = TJSync.genCode(); localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('동기화 켜짐 ☁'); return c; };
   const joinSync = (raw) => { const c = TJSync.clean(raw); if (c.length < 12) { alert('코드가 너무 짧아요. 다시 확인해주세요.'); return false; } localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('연결 중… ☁'); return true; };
@@ -269,6 +304,16 @@ function App() {
     const id = setInterval(load, 10 * 60 * 1000);
     return () => { alive = false; clearInterval(id); };
   }, []);
+
+  // 일기 — 날짜별 한 편, upsert(있으면 수정 / 없으면 생성)
+  const upsertDiary = (date, patch) => {
+    setDiary(prev => {
+      const now = new Date().toISOString();
+      const i = prev.findIndex(x => x.date === date);
+      if (i >= 0) { const n = prev.slice(); n[i] = { ...n[i], ...patch, date, updated_at: now }; return n; }
+      return [...prev, { date, mood: null, text: '', ...patch, updated_at: now }];
+    });
+  };
 
   const addMemo = (text) => {
     const now = new Date();
@@ -313,38 +358,74 @@ function App() {
   const importEntries = (arr) => {
     if (!Array.isArray(arr) || !arr.length) { alert('가져올 일지가 없어요.'); return; }
     if (!confirm(`${arr.length}건을 가져옵니다. 같은 ID는 덮어써요. 계속할까요?`)) return;
+    const ts = new Date().toISOString();
+    const ids = [];
     setEntries(prev => {
       const map = new Map(prev.map(x => [x.id, x]));
-      for (const e of arr) { if (!e.id) e.id = 'imp-' + Math.random().toString(36).slice(2); if (!Array.isArray(e.photos)) e.photos = []; map.set(e.id, e); }
+      for (const e of arr) { if (!e.id) e.id = 'imp-' + Math.random().toString(36).slice(2); if (!Array.isArray(e.photos)) e.photos = []; e.updated_at = ts; ids.push(e.id); map.set(e.id, e); }
       return [...map.values()].sort((a, b) => (b.traded_at || '').localeCompare(a.traded_at || ''));
     });
+    setDeleted(prev => { const n = { ...prev }; ids.forEach(id => { delete n[id]; }); return n; }); // 복원 항목은 무덤에서 해제 — 동기화로 다시 사라지지 않도록
     setModal(null); doFlash('복원 완료 ✓');
   };
-  // 과거 선물 R 대략 채우기 — 1R = (선물 시드+입금, 없으면 현재 잔고) × 등급 리스크%(기본 0.5%)
-  const backfillR = () => {
-    const base = ((Number(settings.futuresSeed) || 0) + (Number(settings.futuresDeposit) || 0)) || balF.bal;
-    if (!base || base <= 0) { alert('선물 시드를 먼저 설정해주세요.\n대략적 R 계산에 기준 잔고가 필요해요.'); return; }
-    const RP = { 'A+': 1, 'B': 0.5, 'C': 0.25 };
-    const target = entries.filter(e => e.market === '선물' && typeof e.pnl === 'number' && (e.realized_r == null || e.realized_r === ''));
-    if (!target.length) { setModal(null); doFlash('채울 거래가 없어요'); return; }
-    if (!confirm(`R배수가 비어 있는 과거 선물 거래 ${target.length}건을 손익금액으로 대략 채웁니다.\n기준 1R = 선물 잔고 ${usd(base)} × 등급 리스크%.\n계속할까요?`)) return;
-    const ts = new Date().toISOString();
-    let n = 0;
-    setEntries(prev => prev.map(e => {
-      if (e.market !== '선물' || typeof e.pnl !== 'number' || (e.realized_r != null && e.realized_r !== '')) return e;
-      const oneR = base * ((RP[e.grade] || 0.5) / 100);
-      if (!oneR) return e;
-      n++;
-      return { ...e, realized_r: Math.round(e.pnl / oneR * 100) / 100, r_estimated: true, updated_at: ts };
-    }));
-    setModal(null); doFlash(`과거 ${n}건에 대략 R 채움 ✓`);
+  // 전체 백업(일지+회고+일기+설정) 복원 — 병합(최신 우선). 옛 형식(배열)은 일지만 복원.
+  const importBlob = (obj) => {
+    if (Array.isArray(obj)) { importEntries(obj); return; }
+    if (!obj || typeof obj !== 'object') { alert('가져올 데이터가 없어요.'); return; }
+    const ec = Array.isArray(obj.entries) ? obj.entries.length : 0;
+    if (!confirm(`백업을 복원합니다.\n일지 ${ec}건 + 회고·일기·설정을 현재 데이터에 병합해요 (같은 건 최신 우선). 계속할까요?`)) return;
+    const merged = mergeBlobs(gatherBlob(), { entries: obj.entries, memos: obj.memos, diary: obj.diary, settings: obj.settings, principles: obj.principles, deleted: obj.deleted });
+    applyBlob(merged);
+    setModal(null); doFlash('백업 복원됨 ✓');
   };
+  // 초기화 전 안전용 — 현재 일지를 JSON 파일로 자동 저장
+  const downloadBackup = () => {
+    if (!entries.length) return;
+    try {
+      const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), ...gatherBlob() }, null, 1)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = `거래일지_백업_${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) {}
+  };
+  // 시장 → 시드/입금 키 매핑 (계좌별 초기화용)
+  const SEED_KEYS = { '선물': ['futuresSeed', 'futuresDeposit'], '스윙': ['swingSeed', 'swingDeposit'], '장기': ['longSeed', 'longDeposit'] };
+  // ① 현재 계좌만 초기화 — 그 시장 일지·시드만 비우고 나머지 두 계좌는 유지
+  const resetMarket = (m) => {
+    const cnt = entries.filter(e => e.market === m).length;
+    if (!confirm(`${m} 계좌만 초기화합니다.\n${m} 일지 ${cnt}건과 ${m} 시드를 비웁니다. 다른 두 계좌는 그대로예요.\n안전을 위해 전체 백업 파일이 자동 저장됩니다. 계속할까요?`)) return;
+    downloadBackup();
+    const ts = new Date().toISOString();
+    setDeleted(prev => { const n = { ...prev }; entries.forEach(e => { if (e.market === m) n[e.id] = ts; }); return n; }); // 다른 기기에서도 그 계좌만 비워지도록
+    setEntries(prev => prev.filter(e => e.market !== m));
+    const [seedK, depK] = SEED_KEYS[m] || [];
+    if (seedK) setSettings(prev => ({ ...prev, [seedK]: null, [depK]: 0 }));
+    setModal(null); doFlash(`${m} 계좌 초기화됨 ✓`);
+  };
+  // ② 전체 비우기 — 3계좌 전부 빈 일지로
   const clearAll = () => {
-    if (!confirm('샘플 데이터(예시 28건)와 시드를 비우고 빈 일지로 시작할까요?\n되돌릴 수 없어요. (필요하면 먼저 더보기 → JSON 백업)')) return;
+    if (!confirm('선물·스윙·장기 3계좌 전부와 모든 시드를 비우고 빈 일지로 시작할까요?\n안전을 위해 백업 파일이 자동 저장됩니다. 계속할까요?')) return;
+    downloadBackup();
     const ts = new Date().toISOString();
     setDeleted(prev => { const n = { ...prev }; entries.forEach(e => { n[e.id] = ts; }); return n; }); // 동기화 시 다른 기기에서도 비워지도록
     setEntries([]); setSettings({ futuresSeed: null, swingSeed: null, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0 });
-    setModal(null); doFlash('초기화됨 — 새로 시작 ✓');
+    setModal(null); doFlash('전체 초기화됨 — 새로 시작 ✓');
+  };
+  // ③ 예시로 되돌리기 — 앱 첫 상태(예시 28건 + 기본 시드)로 복원
+  const restoreSamples = () => {
+    if (!confirm('지금 일지를 모두 지우고 앱 처음 상태(예시 거래 28건 + 기본 시드)로 되돌립니다.\n안전을 위해 백업 파일이 자동 저장됩니다. 계속할까요?')) return;
+    downloadBackup();
+    const ts = new Date().toISOString();
+    const sampleIds = new Set(TJ.ENTRIES.map(e => e.id));
+    setDeleted(prev => {
+      const n = { ...prev };
+      entries.forEach(e => { if (!sampleIds.has(e.id)) n[e.id] = ts; }); // 지금 실제 일지 → 무덤(다른 기기도 제거)
+      sampleIds.forEach(id => { delete n[id]; });                         // 예시 → 무덤 해제(다시 살아나도록)
+      return n;
+    });
+    setEntries(TJ.ENTRIES.map(e => ({ ...e, updated_at: ts })));          // 무덤보다 최신으로 스탬프
+    setSettings({ ...TJ.SEED });
+    setModal(null); doFlash('예시로 되돌림 ✓');
   };
 
   // filtered list
@@ -408,6 +489,9 @@ function App() {
       </header>
 
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '22px' }}>
+        {/* ── 오늘 일기 (홈) ── */}
+        <DiaryHome diary={diary} upsert={upsertDiary} />
+
         {/* ── 시장 모드 (선물 · 스윙 · 장기 완전 분리) ── */}
         <div style={{ display: 'flex', gap: 8, width: '100%', marginBottom: 16 }}>
           {[['선물', 'var(--futures)'], ['스윙', 'var(--swing)'], ['장기', 'var(--long)']].map(([m, c]) => {
@@ -427,7 +511,7 @@ function App() {
         <RedFolderCard items={redfolder} />
 
         {/* ── HERO (선택한 시장만) ── */}
-        <Hero layout={t.homeLayout} stats={heroStats} market={filter} bal={bal}
+        <Hero stats={heroStats} market={filter} bal={bal}
           onSeed={() => setModal({ type: 'settings' })} onStats={() => setModal({ type: 'stats' })}
           routine={{ items: checkItems, checks, done: doneCount, total: checkItems.length, toggle: toggleCheck, principles, open: routineOpen, setOpen: setRoutineOpen, onEdit: () => setModal({ type: 'principles' }) }}
           memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }}
@@ -458,7 +542,7 @@ function App() {
               {!(search || period !== 'all') && <div style={{ fontSize: 13.5, marginTop: 4 }}>오른쪽 아래 <b style={{ color: 'var(--violet)' }}>＋</b> 로 첫 기록을 남겨보세요.</div>}
             </div>
           ) : (
-            <div style={{ columnGap: 'var(--gap)', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (t.homeLayout === 'ledger' ? '1fr' : 'repeat(auto-fill, minmax(330px, 1fr))'), gap: 'var(--gap)', alignItems: 'start' }}>
+            <div style={{ columnGap: 'var(--gap)', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(330px, 1fr))', gap: 'var(--gap)', alignItems: 'start' }}>
               {list.map((e, idx) => <EntryCard key={e.id} e={e} index={idx + 1} onEdit={id => setModal({ type: 'editor', entry: entries.find(x => x.id === id) })} onDelete={deleteEntry} />)}
             </div>
           )}
@@ -476,23 +560,13 @@ function App() {
       </button>
 
       {/* ── 모달 ── */}
-      {modal?.type === 'editor' && <EditorModal entry={modal.entry} accts={{ '선물': balF.bal, '스윙': balW.bal, '장기': balL.bal }} defaultMarket={filter} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}
+      {modal?.type === 'editor' && <EditorModal entry={modal.entry} accts={{ '선물': balF.bal, '스윙': balW.bal, '장기': balL.bal }} defaultRisk={{ mode: settings.futuresRiskMode || '$', val: settings.futuresRiskVal ?? null }} defaultMarket={filter} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
-      {modal?.type === 'menu' && <MenuModal entries={entries} syncId={syncId} onImport={importEntries} onReset={clearAll} onSync={() => setModal({ type: 'sync' })} onBackfillR={backfillR} onClose={() => setModal(null)} />}
+      {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
+      {modal?.type === 'reset' && <ResetModal market={filter} entries={entries} onResetMarket={resetMarket} onResetAll={clearAll} onRestore={restoreSamples} onClose={() => setModal(null)} />}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}
-
-      {/* ── Tweaks ── */}
-      <TweaksPanel title="Tweaks">
-        <TweakSection label="레이아웃" />
-        <TweakRadio label="밀도" value={t.density} options={['compact', 'regular', 'comfy']} onChange={v => setTweak('density', v)} />
-        <TweakToggle label="루틴 카드 표시" value={t.showRoutine} onChange={v => setTweak('showRoutine', v)} />
-        <TweakSection label="색상" />
-        <TweakColor label="액센트" value={(ACCENTS[t.accent] || ACCENTS['코코아']).v}
-          options={Object.values(ACCENTS).map(a => a.v)}
-          onChange={v => { const name = Object.keys(ACCENTS).find(k => ACCENTS[k].v === v) || '코코아'; setTweak('accent', name); }} />
-      </TweaksPanel>
     </div>
   );
 }

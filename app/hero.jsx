@@ -55,7 +55,7 @@ function renderPrinciples(principles, checks, toggle) {
   const G = groupPrincipleLines(principles);
   const order = G.sections.find(s => s.kind === 'order');
   const grid = G.sections.filter(s => s.kind !== 'order');
-  const gcols = window.innerWidth >= 980 ? 3 : 2;   // 좁아도 항상 최소 2열(좌우로 나눔)
+  const gcols = Math.max(1, Math.min(grid.length, window.innerWidth >= 980 ? 3 : 2));   // 카드 수보다 많은 열은 만들지 않음(1장이면 꽉 채움)
   const card = (s, key) => {
     const risk = s.kind === 'risk';
     return (
@@ -224,6 +224,8 @@ function CalendarMemoCard({ memo }) {
   const [text, setText] = useStateH('');
   const [open, setOpen] = useStateH(() => { try { return localStorage.getItem('tj_memo_open') === '1'; } catch { return false; } });
   const toggleOpen = () => setOpen(v => { const nv = !v; try { localStorage.setItem('tj_memo_open', nv ? '1' : '0'); } catch {} return nv; });
+  const [mode, setMode] = useStateH(() => { try { return localStorage.getItem('tj_memo_mode') === 'cal' ? 'cal' : 'list'; } catch { return 'list'; } });
+  const setModeP = v => { setMode(v); try { localStorage.setItem('tj_memo_mode', v); } catch {} };
 
   const byDate = {};
   items.forEach(mm => { const d = (mm.at || '').slice(0, 10); if (d) (byDate[d] = byDate[d] || []).push(mm); });
@@ -293,16 +295,62 @@ function CalendarMemoCard({ memo }) {
     </div>
   );
 
+  // 모아보기 — 내가 입력한 실수(회고)를 월별로, 최신순으로
+  const allSorted = [...items].sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+  const listMonths = [...new Set(allSorted.map(m => (m.at || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+  const curYM = todayStr.slice(0, 7);
+  const [listMonth, setListMonth] = useStateH(() => listMonths[0] || curYM);
+  const monthItems = allSorted.filter(m => (m.at || '').slice(0, 7) === listMonth);
+  const ymShift = delta => { const [Y, M] = listMonth.split('-').map(Number); const nd = new Date(Y, M - 1 + delta, 1); setListMonth(`${nd.getFullYear()}-${pad(nd.getMonth() + 1)}`); };
+  const ymLabel = ym => { const [Y, M] = ym.split('-').map(Number); return `${Y}년 ${M}월`; };
+  const addToday = () => { const t = text.trim(); if (t) { addOn(todayStr, t); setText(''); setListMonth(curYM); } };
+
+  const listView = (
+    <div>
+      <textarea value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') addToday(); }}
+        placeholder="실수한 거 입력 — 계속 쌓여서 위에 떠요" style={{ minHeight: 60, fontSize: 13.5 }} />
+      <button className="btn" onClick={addToday} disabled={!text.trim()} style={{ width: '100%', marginTop: 8, padding: 10, fontSize: 14, opacity: text.trim() ? 1 : .5 }}>실수 기록</button>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '16px 0 10px' }}>
+        <button className="btn-ghost btn-sm" onClick={() => ymShift(-1)} style={{ padding: '5px 12px' }}>‹</button>
+        <div className="mono" style={{ fontSize: 14, fontWeight: 800 }}>{ymLabel(listMonth)} <span style={{ color: 'var(--ink-4)', fontWeight: 600, fontSize: 12 }}>{monthItems.length}개</span></div>
+        <button className="btn-ghost btn-sm" onClick={() => ymShift(1)} style={{ padding: '5px 12px' }}>›</button>
+      </div>
+
+      {monthItems.length === 0
+        ? <div style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: 12.5, padding: '18px 0' }}>이 달엔 기록한 실수가 없어요.</div>
+        : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {monthItems.map(m => (
+              <div key={m.id} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '11px 13px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</div>
+                <button onClick={() => remove(m.id)} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)', flexShrink: 0 }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--loss)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--ink-4)'; }}>삭제</button>
+              </div>
+            ))}
+          </div>}
+    </div>
+  );
+
   return (
     <div className="card" style={{ padding: open ? 18 : '14px 18px' }}>
       <button onClick={toggleOpen} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', marginBottom: open ? 14 : 0 }}>
-        <div style={{ flex: 1, fontSize: 14.5, fontWeight: 700 }}>회고 메모 <span style={{ color: 'var(--ink-4)', fontWeight: 500, fontSize: 12.5 }}>실수 복기 · 날짜를 눌러 기록</span></div>
+        <div style={{ flex: 1, fontSize: 14.5, fontWeight: 700 }}>회고 메모 <span style={{ color: 'var(--ink-4)', fontWeight: 500, fontSize: 12.5 }}>실수 복기 · 전체를 쭉 읽거나 날짜별로</span></div>
         {items.length > 0 && <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 700 }}>{items.length}개</span>}
         <span style={{ color: 'var(--ink-4)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>▾</span>
       </button>
-      {open && (wide
-        ? <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 20, alignItems: 'start' }}>{calendar}{panel}</div>
-        : <div>{calendar}{panel}</div>)}
+      {open && (
+        <>
+          <div className="seg" style={{ width: '100%', marginBottom: 14 }}>
+            <button className={mode === 'list' ? 'on' : ''} onClick={() => setModeP('list')}>모아보기</button>
+            <button className={mode === 'cal' ? 'on' : ''} onClick={() => setModeP('cal')}>달력</button>
+          </div>
+          {mode === 'list'
+            ? listView
+            : (wide
+              ? <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 20, alignItems: 'start' }}>{calendar}{panel}</div>
+              : <div>{calendar}{panel}</div>)}
+        </>
+      )}
     </div>
   );
 }
@@ -318,7 +366,7 @@ function RoutineMemoRow({ routine, memo, showRoutine }) {
 }
 
 /* ─────────────── HERO ─────────────── */
-function Hero({ layout, stats: s, market, bal, onSeed, onStats, routine, memo, showRoutine }) {
+function Hero({ stats: s, market, bal, onSeed, onStats, routine, memo, showRoutine }) {
   const money = s.useMoney;
 
   /* ===== 차트형(cockpit): 선택한 시장만 — 잔고 + KPI + 차트 ===== */
@@ -377,4 +425,98 @@ function Hero({ layout, stats: s, market, bal, onSeed, onStats, routine, memo, s
   );
 }
 
-Object.assign(window, { Hero, RoutineCard, CalendarMemoCard, BalanceBand });
+/* ─────────────── 매일 일기 (홈) ─────────────── */
+const DIARY_MOODS = [['좋음', '🙂'], ['보통', '😐'], ['나쁨', '😞']];
+const DIARY_MOOD_E = { '좋음': '🙂', '보통': '😐', '나쁨': '😞' };
+
+// 하루 한 편 편집기 — 기분 + 자유 서술. blur/버튼/기분선택 시 저장.
+function DiaryDayEditor({ date, entry, upsert }) {
+  const [text, setText] = useStateH(entry?.text || '');
+  const [mood, setMood] = useStateH(entry?.mood || null);
+  const [saved, setSaved] = useStateH(false);
+  const flash = () => { setSaved(true); setTimeout(() => setSaved(false), 1400); };
+  const save = () => { upsert(date, { text: text.trim(), mood }); flash(); };
+  const pickMood = v => { const nv = mood === v ? null : v; setMood(nv); upsert(date, { text: text.trim(), mood: nv }); flash(); };
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
+        {DIARY_MOODS.map(([v, e]) => (
+          <button key={v} onClick={() => pickMood(v)} style={{
+            flex: 1, padding: '8px 0', borderRadius: 9, fontSize: 13, fontWeight: 700,
+            border: '1.5px solid ' + (mood === v ? 'var(--violet)' : 'var(--border)'),
+            background: mood === v ? 'var(--violet-50)' : 'var(--surface)', color: mood === v ? 'var(--violet-600)' : 'var(--ink-3)', transition: 'all .12s',
+          }}>{e} {v}</button>
+        ))}
+      </div>
+      <textarea value={text} onChange={e => setText(e.target.value)} onBlur={save}
+        onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') save(); }}
+        placeholder="오늘 하루 어땠는지 — 시장·멘탈·컨디션 뭐든 자유롭게…" style={{ minHeight: 96, fontSize: 14, lineHeight: 1.6 }} />
+      <button className="btn" onClick={save} style={{ width: '100%', marginTop: 8, padding: 10, fontSize: 14 }}>{saved ? '저장됨 ✓' : '저장'}</button>
+    </div>
+  );
+}
+
+function DiaryHome({ diary, upsert }) {
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const WD = ['일', '월', '화', '수', '목', '금', '토'];
+  const dLabel = ds => { const [Y, M, D] = ds.split('-').map(Number); return `${M}월 ${D}일 (${WD[new Date(Y, M - 1, D).getDay()]})`; };
+  const byDate = {}; (diary || []).forEach(x => { if (x && x.date) byDate[x.date] = x; });
+  const today = byDate[todayStr] || null;
+
+  const past = (diary || []).filter(x => x && x.date && x.date !== todayStr && (x.text || x.mood)).sort((a, b) => b.date.localeCompare(a.date));
+  const months = [...new Set(past.map(x => x.date.slice(0, 7)))].sort().reverse();
+  const [pastOpen, setPastOpen] = useStateH(false);
+  const [ym, setYm] = useStateH(() => months[0] || todayStr.slice(0, 7));
+  const [editDate, setEditDate] = useStateH(null);
+  const ymShift = d => { const [Y, M] = ym.split('-').map(Number); const nd = new Date(Y, M - 1 + d, 1); setYm(`${nd.getFullYear()}-${pad(nd.getMonth() + 1)}`); };
+  const ymLabel = () => { const [Y, M] = ym.split('-').map(Number); return `${Y}년 ${M}월`; };
+  const monthPast = past.filter(x => x.date.slice(0, 7) === ym);
+
+  return (
+    <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, marginBottom: 12 }}>
+        <b style={{ fontSize: 16 }}>오늘 일기</b>
+        <span className="mono" style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{dLabel(todayStr)}</span>
+        {today?.mood && <span style={{ fontSize: 13 }}>{DIARY_MOOD_E[today.mood]}</span>}
+      </div>
+      <DiaryDayEditor key={'today-' + (today?.updated_at || 'new')} date={todayStr} entry={today} upsert={upsert} />
+
+      <button onClick={() => setPastOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 13.5, color: 'var(--ink-2)', textAlign: 'left' }}>
+        지난 일기 {past.length > 0 && <span className="mono" style={{ color: 'var(--ink-4)', fontWeight: 600 }}>{past.length}편</span>}
+        <span style={{ flex: 1 }} />
+        <span style={{ color: 'var(--ink-4)', transform: pastOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>▾</span>
+      </button>
+
+      {pastOpen && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <button className="btn-ghost btn-sm" onClick={() => ymShift(-1)} style={{ padding: '5px 12px' }}>‹</button>
+            <div className="mono" style={{ fontSize: 14, fontWeight: 800 }}>{ymLabel()} <span style={{ color: 'var(--ink-4)', fontWeight: 600, fontSize: 12 }}>{monthPast.length}편</span></div>
+            <button className="btn-ghost btn-sm" onClick={() => ymShift(1)} style={{ padding: '5px 12px' }}>›</button>
+          </div>
+          {monthPast.length === 0
+            ? <div style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: 12.5, padding: '16px 0' }}>이 달엔 일기가 없어요.</div>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {monthPast.map(x => (
+                  <div key={x.date} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '11px 13px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: editDate === x.date ? 10 : 4 }}>
+                      <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)' }}>{dLabel(x.date)}</span>
+                      {x.mood && <span style={{ fontSize: 12 }}>{DIARY_MOOD_E[x.mood]} {x.mood}</span>}
+                      <span style={{ flex: 1 }} />
+                      <button onClick={() => setEditDate(editDate === x.date ? null : x.date)} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)' }}>{editDate === x.date ? '닫기' : '수정'}</button>
+                    </div>
+                    {editDate === x.date
+                      ? <DiaryDayEditor key={x.date + (x.updated_at || '')} date={x.date} entry={x} upsert={upsert} />
+                      : <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{x.text || <span style={{ color: 'var(--ink-4)' }}>내용 없음</span>}</div>}
+                  </div>
+                ))}
+              </div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { Hero, RoutineCard, CalendarMemoCard, BalanceBand, DiaryHome });

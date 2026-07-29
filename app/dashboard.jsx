@@ -4,7 +4,9 @@ const { useState: useStateD } = React;
 function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose }) {
   // 선물·스윙·장기 완전 분리 — 통계도 한 시장만(합산 '전체' 없음)
   const [mkt, setMkt] = useStateD(TJ.MARKETS.includes(initMarket) ? initMarket : '선물');
-  const s = TJStats.computeStats(entries, mkt);
+  const [ft, setFt] = useStateD('all');   // 선물 하위 — 전체 / 외화 / 지수
+  const ftEntries = (mkt === '선물' && ft !== 'all') ? entries.filter(e => e.futType === ft) : entries;
+  const s = TJStats.computeStats(ftEntries, mkt);
   const money = s.useMoney;
   const fnum = n => (n === Infinity ? '∞' : Math.round(n * 100) / 100);
 
@@ -14,10 +16,14 @@ function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose 
       sub="입력한 결과·R·손익 기준으로 자동 집계됩니다">
       <Segmented value={mkt} onChange={setMkt} style={{ width: '100%', marginBottom: 4 }}
         options={TJ.MARKETS.map(m => ({ v: m, label: m }))} />
+      {mkt === '선물' && (
+        <Segmented value={ft} onChange={setFt} style={{ width: '100%', marginTop: 8, marginBottom: 4 }}
+          options={[{ v: 'all', label: '전체' }, { v: '외화', label: '외화' }, { v: '지수', label: '지수' }]} />
+      )}
 
       {!s.hasAny ? (
         <div style={{ color: 'var(--ink-3)', textAlign: 'center', padding: '40px 0', fontSize: 14 }}>
-          {mkt === 'all' ? '전체' : mkt}에 결과를 입력한 거래가 없어요.
+          {mkt}에 결과를 입력한 거래가 없어요.
         </div>
       ) : (
         <div>
@@ -122,7 +128,7 @@ function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose 
           {s.setupStats.length > 0 && (
             <>
               <SectionTitle>셋업별 (어떤 셋업이 잘 되나)</SectionTitle>
-              <TagTable rows={s.setupStats} money={money} />
+              <TagTable rows={s.setupStats} money={money} hidePnl />
             </>
           )}
 
@@ -130,7 +136,7 @@ function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose 
           {s.errorStats.length > 0 && (
             <>
               <SectionTitle>실수 태그별 (약점)</SectionTitle>
-              <TagTable rows={s.errorStats} money={money} warn />
+              <TagTable rows={s.errorStats} money={money} warn hidePnl />
             </>
           )}
         </div>
@@ -139,20 +145,21 @@ function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose 
   );
 }
 
-function TagTable({ rows, money, warn }) {
+function TagTable({ rows, money, warn, hidePnl }) {
+  const cols = hidePnl ? '1fr auto auto' : '1fr auto auto auto';
   return (
     <div className="card" style={{ padding: '4px 16px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 10, fontSize: 11.5, color: 'var(--ink-4)', fontWeight: 700, padding: '10px 0 8px', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '.03em' }}>
-        <span>태그</span><span style={{ textAlign: 'right', minWidth: 36 }}>건수</span><span style={{ textAlign: 'right', minWidth: 44 }}>승률</span><span style={{ textAlign: 'right', minWidth: 66 }}>손익</span>
+      <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 10, fontSize: 11.5, color: 'var(--ink-4)', fontWeight: 700, padding: '10px 0 8px', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '.03em' }}>
+        <span>태그</span><span style={{ textAlign: 'right', minWidth: 36 }}>건수</span><span style={{ textAlign: 'right', minWidth: 44 }}>승률</span>{!hidePnl && <span style={{ textAlign: 'right', minWidth: 66 }}>손익</span>}
       </div>
       {rows.map((r, i) => (
-        <div key={r.tag} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 10, alignItems: 'center', padding: '11px 0', borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none' }}>
+        <div key={r.tag} style={{ display: 'grid', gridTemplateColumns: cols, gap: 10, alignItems: 'center', padding: '11px 0', borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none' }}>
           <span style={{ fontSize: 13 }}>
             <span className={'chip static ' + (warn ? 'err' : 'setup')} style={{ padding: '3px 9px', fontSize: 12 }}>{r.tag}</span>
           </span>
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700 }}>{r.n}</span>
           <span className="mono" style={{ textAlign: 'right', fontSize: 13, color: 'var(--ink-2)' }}>{r.wr == null ? '–' : r.wr + '%'}</span>
-          <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{TJ.moneyS(r.p)}</span>
+          {!hidePnl && <span className="mono" style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{TJ.moneyS(r.p)}</span>}
         </div>
       ))}
     </div>
