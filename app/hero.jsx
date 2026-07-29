@@ -467,6 +467,8 @@ function DiaryHome({ diary, upsert }) {
 
   const past = (diary || []).filter(x => x && x.date && x.date !== todayStr && (x.text || x.mood)).sort((a, b) => b.date.localeCompare(a.date));
   const months = [...new Set(past.map(x => x.date.slice(0, 7)))].sort().reverse();
+  const [open, setOpen] = useStateH(() => { try { return localStorage.getItem('tj_diary_open') !== '0'; } catch { return true; } });
+  const toggleOpen = () => setOpen(v => { const nv = !v; try { localStorage.setItem('tj_diary_open', nv ? '1' : '0'); } catch {} return nv; });
   const [pastOpen, setPastOpen] = useStateH(false);
   const [ym, setYm] = useStateH(() => months[0] || todayStr.slice(0, 7));
   const [editDate, setEditDate] = useStateH(null);
@@ -476,11 +478,16 @@ function DiaryHome({ diary, upsert }) {
 
   return (
     <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, marginBottom: 12 }}>
+      <button onClick={toggleOpen} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, textAlign: 'left', marginBottom: open ? 12 : 0 }}>
         <b style={{ fontSize: 16 }}>오늘 일기</b>
         <span className="mono" style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{dLabel(todayStr)}</span>
         {today?.mood && <span style={{ fontSize: 13 }}>{DIARY_MOOD_E[today.mood]}</span>}
-      </div>
+        {!open && !today?.text && !today?.mood && <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>· 오늘 기록 없음</span>}
+        <span style={{ flex: 1 }} />
+        <span style={{ color: 'var(--ink-4)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>▾</span>
+      </button>
+      {open && (
+        <>
       <DiaryDayEditor key={'today-' + (today?.updated_at || 'new')} date={todayStr} entry={today} upsert={upsert} />
 
       <button onClick={() => setPastOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 13.5, color: 'var(--ink-2)', textAlign: 'left' }}>
@@ -514,6 +521,8 @@ function DiaryHome({ diary, upsert }) {
                 ))}
               </div>}
         </div>
+      )}
+        </>
       )}
     </div>
   );

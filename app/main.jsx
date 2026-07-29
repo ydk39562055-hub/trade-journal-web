@@ -98,15 +98,16 @@ function koEvent(t) {
 }
 
 function RedFolderCard({ items }) {
-  const [open, setOpen] = useState(false);   // 접힘=오늘만 / 펼침=이번 주 전체
+  const [open, setOpen] = useState(false);   // 카드 펼침 (기본 접힘 = 헤더만)
+  const [week, setWeek] = useState(false);   // 펼친 뒤: 오늘·내일 / 이번 주
   if (!items || !items.length) return null;
-  const today = todayStr();
   const pad = n => String(n).padStart(2, '0');
   const ymd = x => `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
-  const _t = new Date(); const tomorrow = ymd(new Date(_t.getFullYear(), _t.getMonth(), _t.getDate() + 1));
+  const _t = new Date();
+  const today = ymd(_t);                                              // ★ 로컬(내 기기=한국시간) 기준 — UTC 어긋남 방지
+  const tomorrow = ymd(new Date(_t.getFullYear(), _t.getMonth(), _t.getDate() + 1));
   const CCY = new Set(['USD', 'EUR', 'GBP']);   // 달러·유로·파운드만 (나스닥·S&P500=USD). 호주·일본 등 제외
   const withD = items.map(e => ({ ...e, d: new Date(e.date) })).filter(e => !isNaN(e.d) && CCY.has(e.country));
-  // 이번 주 전체 — 날짜별 그룹
   const byDay = {};
   withD.forEach(e => { const k = ymd(e.d); (byDay[k] = byDay[k] || []).push(e); });
   const days = Object.keys(byDay).sort();
@@ -127,47 +128,41 @@ function RedFolderCard({ items }) {
     </div>
   );
 
+  const dayBlock = (k, di) => (
+    <div key={k} style={{ marginTop: di ? 10 : 0 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: k === today ? 'var(--violet-600)' : 'var(--ink-3)', marginBottom: 2, display: 'flex', gap: 6, alignItems: 'center' }}>
+        {dayLabel(k)}
+        {(k === today || k === tomorrow) && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: k === today ? 'var(--violet)' : 'var(--ink-4)', padding: '1px 6px', borderRadius: 5 }}>{k === today ? '오늘' : '내일'}</span>}
+        <span style={{ color: 'var(--ink-4)', fontWeight: 500 }}>{byDay[k].length}건</span>
+      </div>
+      {byDay[k].map((e, i) => row(e, i))}
+    </div>
+  );
+  const empty = txt => <div style={{ fontSize: 12, color: 'var(--ink-4)', textAlign: 'center', padding: '10px 0' }}>{txt}</div>;
+
   return (
     <div className="card" style={{ padding: '11px 13px', marginBottom: 12, borderColor: 'var(--violet-100)' }}>
       <button onClick={() => setOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, textAlign: 'left' }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--violet)', flexShrink: 0 }} />
-        <b style={{ fontSize: 12.5 }}>{open ? '이번 주 레드폴더' : '오늘·내일 레드폴더'}</b>
-        <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{open ? withD.length + '건' : (soonCount ? soonCount + '건' : '없음 ✓')}</span>
+        <b style={{ fontSize: 12.5 }}>레드폴더</b>
+        <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{soonCount ? '오늘·내일 ' + soonCount + '건' : '오늘·내일 없음 ✓'}</span>
         <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600 }}>{open ? '접기' : '주간 보기'}</span>
+        <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600 }}>{open ? '접기' : '펼치기'}</span>
         <span style={{ color: 'var(--ink-4)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>▾</span>
       </button>
 
-      {!open && soonCount > 0 && (
-        <div style={{ marginTop: 6 }}>
-          {soonKeys.map((k, di) => (
-            <div key={k} style={{ marginTop: di ? 8 : 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: k === today ? 'var(--violet-600)' : 'var(--ink-3)', marginBottom: 2, display: 'flex', gap: 6, alignItems: 'center' }}>
-                {dayLabel(k)}
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: k === today ? 'var(--violet)' : 'var(--ink-4)', padding: '1px 6px', borderRadius: 5 }}>{k === today ? '오늘' : '내일'}</span>
-              </div>
-              {byDay[k].map((e, i) => row(e, i))}
-            </div>
-          ))}
-        </div>
-      )}
-
       {open && (
-        <div style={{ marginTop: 4 }}>
-          {days.map(k => (
-            <div key={k} style={{ marginTop: 8 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 800, color: k === today ? 'var(--violet-600)' : 'var(--ink-3)', marginBottom: 2, display: 'flex', gap: 6, alignItems: 'center' }}>
-                {dayLabel(k)}
-                {k === today && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: 'var(--violet)', padding: '1px 6px', borderRadius: 5 }}>오늘</span>}
-                <span style={{ color: 'var(--ink-4)', fontWeight: 500 }}>{byDay[k].length}건</span>
-              </div>
-              {byDay[k].map((e, i) => row(e, i))}
-            </div>
-          ))}
+        <div style={{ marginTop: 8 }}>
+          <div className="seg" style={{ width: '100%', marginBottom: 8 }}>
+            <button className={!week ? 'on' : ''} onClick={() => setWeek(false)}>오늘·내일</button>
+            <button className={week ? 'on' : ''} onClick={() => setWeek(true)}>이번 주</button>
+          </div>
+          {!week
+            ? (soonCount > 0 ? soonKeys.map((k, di) => dayBlock(k, di)) : empty('오늘·내일 고임팩트 없음 ✓'))
+            : (days.length > 0 ? days.map((k, di) => dayBlock(k, di)) : empty('이번 주 고임팩트 없음'))}
+          <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 8 }}>발표 직전 신규 진입 자제 · 시간=내 기기 기준</div>
         </div>
       )}
-
-      <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 6 }}>발표 직전 신규 진입 자제 · 시간=내 기기 기준</div>
     </div>
   );
 }
