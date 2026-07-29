@@ -627,4 +627,130 @@ function ResetModal({ market, entries, onResetMarket, onResetAll, onRestore, onC
 }
 
 
-Object.assign(window, { EditorModal, SettingsModal, PrinciplesModal, MenuModal, ResetModal, SyncModal });
+/* ───────────── 보유 현황 (스크린샷 자동입력 + 실시간 시세) ───────────── */
+function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, defaultAccount, onClose }) {
+  const [acct, setAcct] = useStateM(defaultAccount === '장기' ? '장기' : '스윙');
+  const [quotes, setQuotes] = useStateM({});
+  const [loading, setLoading] = useStateM(false);
+  const [asOf, setAsOf] = useStateM('');
+  const [err, setErr] = useStateM('');
+  const [busy, setBusy] = useStateM(false);          // 추출 중
+  const [preview, setPreview] = useStateM(null);     // 추출 결과
+  const fileRef = useRefM();
+
+  const list = holdings.filter(h => h.account === acct);
+  const symsKey = [...new Set(list.map(h => TJPortfolio.yahooSym(h)).filter(Boolean))].join(',');
+  const symOf = c => c === 'KRW' ? '₩' : '$';
+  const qOf = h => { const s = TJPortfolio.yahooSym(h); return (s && quotes[s]) || null; };   // {price,currency} — Yahoo
+  const priceOf = h => { const q = qOf(h); return q ? q.price : null; };
+  const liveSym = q => (q && q.currency === 'KRW') ? '₩' : '$';                                // 시세 통화(Yahoo가 알려줌)
+  const avgUSD1 = h => (h.avgPrice != null && h.avgPrice > 0) ? TJ.toUSD(h.avgPrice, symOf(h.currency)) : null;  // 1주 평단(달러 환산)
+
+  const refresh = async () => {
+    const syms = symsKey ? symsKey.split(',') : [];
+    if (!syms.length) { setAsOf(''); return; }
+    setLoading(true); setErr('');
+    try {
+      const j = await TJPortfolio.quotes(syms);
+      setQuotes(q => ({ ...q, ...(j.quotes || {}) }));
+      setAsOf(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
+    } catch (e) { setErr('시세 조회 실패 — 함수 배포 확인: ' + e.message); }
+    setLoading(false);
+  };
+  useEffectM(() => { refresh(); }, [symsKey]);
+
+  const valUSD = h => { const q = qOf(h); return q ? TJ.toUSD(q.price * h.qty, liveSym(q)) : null; };
+  const totalUSD = list.reduce((a, h) => a + (valUSD(h) || 0), 0);
+  const costUSD = list.reduce((a, h) => { const a1 = avgUSD1(h); return a + (a1 != null ? a1 * h.qty : 0); }, 0);
+  const anyPrice = list.some(h => priceOf(h) != null);
+
+  const onFiles = async ev => {
+    const files = [...ev.target.files]; ev.target.value = '';
+    if (!files.length) return;
+    setBusy(true); setErr(''); setPreview(null);
+    try {
+      const parts = [];
+      for (const f of files) { const durl = await compressImage(f); if (durl) parts.push({ mime: 'image/jpeg', data: durl.split(',')[1] }); }
+      if (!parts.length) throw new Error('이미지를 못 읽었어요');
+      const j = await TJPortfolio.extract(parts);
+      const hs = (Array.isArray(j.holdings) ? j.holdings : []).filter(h => h && (h.name || h.ticker) && Number(h.qty) > 0);
+      if (!hs.length) throw new Error('종목을 못 읽었어요. 보유목록이 잘 보이게 다시 찍어주세요.');
+      setPreview(hs);
+    } catch (e) { setErr('스크린샷 분석 실패: ' + e.message); }
+    setBusy(false);
+  };
+  const confirmAdd = () => { if (preview && preview.length) addHoldings(acct, preview); setPreview(null); };
+
+  return (
+    <Modal open onClose={onClose} title="보유 현황" sub="스크린샷으로 추가 · 실시간 시세로 평가" maxWidth={520} sheet={window.matchMedia('(max-width:560px)').matches}>
+      <div className="seg" style={{ width: '100%' }}>
+        {['스윙', '장기'].map(a => <button key={a} className={acct === a ? 'on' : ''} onClick={() => setAcct(a)}>{a}</button>)}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '16px 0 4px' }}>
+        <span className="mono" style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)' }}>{TJ.money(totalUSD)}</span>
+        {costUSD > 0 && anyPrice && (() => { const pl = totalUSD - costUSD; return <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: pl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{TJ.moneyS(pl)} · {(pl / costUSD * 100).toFixed(1)}%</span>; })()}
+        <span style={{ flex: 1 }} />
+        <button className="btn-ghost btn-sm" onClick={refresh} disabled={loading}>{loading ? '…' : '↻ 새로고침'}</button>
+      </div>
+      {asOf && <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 4 }}>시세 기준 {asOf} · Yahoo</div>}
+      {err && <div style={{ fontSize: 12, color: 'var(--loss)', margin: '6px 0', lineHeight: 1.5 }}>{err}</div>}
+
+      {list.length === 0
+        ? <div style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: 13, padding: '22px 0', lineHeight: 1.6 }}>아직 {acct} 보유 종목이 없어요.<br />아래 버튼으로 스크린샷을 올려보세요.</div>
+        : <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+            {list.map(h => {
+              const q = qOf(h), p = q ? q.price : null, lsym = liveSym(q);
+              const v = p != null ? p * h.qty : null;                             // 시세 통화 기준 평가액
+              const aps = avgUSD1(h), lps = p != null ? TJ.toUSD(p, lsym) : null;  // 1주 달러 환산
+              const pl = (aps != null && lps != null) ? (lps - aps) / aps * 100 : null;
+              return (
+                <div key={h.id} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.name} <span className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600 }}>{h.ticker}</span></div>
+                    <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1 }}>{h.qty}주{h.avgPrice != null ? ' · 평단 ' + TJ.fmt(h.avgPrice, symOf(h.currency)) : ''}{p != null ? ' · 현재 ' + TJ.fmt(p, lsym) : ''}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div className="mono" style={{ fontSize: 14, fontWeight: 800, color: 'var(--ink)' }}>{v != null ? TJ.fmt(v, lsym) : '—'}</div>
+                    {pl != null && <div className="mono" style={{ fontSize: 11.5, fontWeight: 700, color: pl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{pl >= 0 ? '+' : ''}{pl.toFixed(1)}%</div>}
+                  </div>
+                  <button onClick={() => removeHolding(h.id)} style={{ fontSize: 13, color: 'var(--ink-4)', flexShrink: 0 }} onMouseEnter={e => e.currentTarget.style.color = 'var(--loss)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-4)'}>✕</button>
+                </div>
+              );
+            })}
+          </div>}
+
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+        {preview
+          ? (
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 8 }}>읽은 종목 {preview.length}개 — {acct}에 추가할까요?</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                {preview.map((h, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px' }}>
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name} <span className="mono" style={{ color: 'var(--ink-4)' }}>{(h.ticker || '').toUpperCase()}</span></span>
+                    <span className="mono" style={{ color: 'var(--ink-3)', flexShrink: 0 }}>{Number(h.qty)}주{h.avgPrice != null ? ' · ' + h.avgPrice : ''} {h.currency === 'KRW' ? '₩' : '$'}</span>
+                    <button onClick={() => setPreview(preview.filter((_, j) => j !== i))} style={{ color: 'var(--ink-4)', fontSize: 12, flexShrink: 0 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn" style={{ flex: 1 }} onClick={confirmAdd} disabled={!preview.length}>추가</button>
+                <button className="btn-ghost" onClick={() => setPreview(null)}>취소</button>
+              </div>
+            </div>
+          )
+          : (
+            <>
+              <button className="btn-ghost" onClick={() => fileRef.current.click()} disabled={busy} style={{ width: '100%', justifyContent: 'center', borderStyle: 'dashed', color: 'var(--ink-3)' }}>{busy ? 'AI가 읽는 중…' : '📷 스크린샷으로 추가'}</button>
+              <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
+              <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6, lineHeight: 1.5 }}>증권사 앱 보유목록을 찍어 올리면 종목·수량을 읽어 {acct}에 넣어요. (토스=스윙, 메리츠·나무=장기)</div>
+              {list.length > 0 && <button onClick={() => { if (confirm(acct + ' 보유 종목을 모두 비울까요?')) clearHoldings(acct); }} style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 10 }}>이 계좌 보유 비우기</button>}
+            </>
+          )}
+      </div>
+    </Modal>
+  );
+}
+
+Object.assign(window, { EditorModal, SettingsModal, PrinciplesModal, MenuModal, ResetModal, SyncModal, HoldingsModal });

@@ -58,9 +58,17 @@ function mergeBlobs(a, b) {
     if (!prev || (x.updated_at || '') >= (prev.updated_at || '')) dd.set(x.date, x);
   }
   const diary = [...dd.values()];
+  // 보유종목: id 합집합, 같은 id면 updated_at 최신, 삭제된 건 제외
+  const hm = new Map();
+  for (const h of [...(a.holdings || []), ...(b.holdings || [])]) {
+    if (!h || !h.id) continue;
+    const prev = hm.get(h.id);
+    if (!prev || (h.updated_at || '') >= (prev.updated_at || '')) hm.set(h.id, h);
+  }
+  const holdings = [...hm.values()].filter(h => !deleted[h.id]);
   const settings = { ...(a.settings || {}), ...(b.settings || {}) };
   const principles = (b.principles && b.principles.trim()) ? b.principles : (a.principles || '');
-  return { v: 1, entries, settings, principles, memos, diary, deleted };
+  return { v: 1, entries, settings, principles, memos, diary, holdings, deleted };
 }
 
 /* 레드폴더(ForexFactory 경제지표) 한글 표기 */
@@ -204,6 +212,7 @@ function App() {
     } catch { return []; }
   });
   const [diary, setDiary] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_diary_v1') || '[]'); } catch { return []; } });
+  const [holdings, setHoldings] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_holdings_v1') || '[]'); } catch { return []; } });
   const [checks, setChecks] = useState(() => {
     try { const o = JSON.parse(localStorage.getItem('tj_checks_v2') || '{}'); if (o.d === todayStr()) return new Set(o.s || []); } catch {}
     return new Set();
@@ -234,15 +243,17 @@ function App() {
   useEffect(() => { localStorage.setItem('tj_checks_v2', JSON.stringify({ d: todayStr(), s: [...checks] })); }, [checks]);
   useEffect(() => { localStorage.setItem('tj_memos_v2', JSON.stringify(memos)); }, [memos]);
   useEffect(() => { localStorage.setItem('tj_diary_v1', JSON.stringify(diary)); }, [diary]);
+  useEffect(() => { localStorage.setItem('tj_holdings_v1', JSON.stringify(holdings)); }, [holdings]);
   useEffect(() => { localStorage.setItem('tj_deleted_v1', JSON.stringify(deleted)); }, [deleted]);
 
-  const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, diary, deleted });
+  const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, diary, holdings, deleted });
   const applyBlob = (b) => {
     if (Array.isArray(b.entries)) setEntries(TJ.migrateEntries(b.entries));
     if (b.settings) setSettings(TJ.migrateSettings(b.settings));
     if (typeof b.principles === 'string' && b.principles.trim() && localStorage.getItem('tj_principles_custom') === '1') setPrinciples(b.principles); // 직접 편집본만 동기화 반영, 기본문구는 항상 최신 유지
     if (Array.isArray(b.memos)) setMemos(b.memos);
     if (Array.isArray(b.diary)) setDiary(b.diary);
+    if (Array.isArray(b.holdings)) setHoldings(b.holdings);
     if (b.deleted) setDeleted(b.deleted);
   };
 
@@ -283,7 +294,7 @@ function App() {
       catch (e) { setSyncStatus('err'); }
     }, 1400);
     return () => clearTimeout(debRef.current);
-  }, [entries, settings, principles, memos, diary, deleted, syncId, syncReady]);
+  }, [entries, settings, principles, memos, diary, holdings, deleted, syncId, syncReady]);
 
   const enableSync = () => { const c = TJSync.genCode(); localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('동기화 켜짐 ☁'); return c; };
   const joinSync = (raw) => { const c = TJSync.clean(raw); if (c.length < 12) { alert('코드가 너무 짧아요. 다시 확인해주세요.'); return false; } localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('연결 중… ☁'); return true; };
@@ -308,6 +319,26 @@ function App() {
       if (i >= 0) { const n = prev.slice(); n[i] = { ...n[i], ...patch, date, updated_at: now }; return n; }
       return [...prev, { date, mood: null, text: '', ...patch, updated_at: now }];
     });
+  };
+
+  // 보유종목 — 스크린샷 추출 결과를 계좌(스윙/장기)에 추가 / 개별 삭제 / 계좌 비우기
+  const addHoldings = (account, list) => {
+    const now = new Date().toISOString();
+    const add = (list || []).map(h => ({
+      id: 'h-' + Math.random().toString(36).slice(2, 10),
+      account, name: h.name || h.ticker || '종목', ticker: (h.ticker || '').toUpperCase(),
+      qty: Number(h.qty) || 0, avgPrice: (h.avgPrice != null && h.avgPrice !== '') ? Number(h.avgPrice) : null,
+      currency: h.currency === 'KRW' ? 'KRW' : 'USD', market: h.market || 'US', updated_at: now,
+    }));
+    setHoldings(prev => [...prev, ...add]);
+  };
+  const removeHolding = (id) => { setHoldings(prev => prev.filter(h => h.id !== id)); setDeleted(p => ({ ...p, [id]: new Date().toISOString() })); };
+  const clearHoldings = (account) => {
+    const rm = holdings.filter(h => h.account === account).map(h => h.id);
+    if (!rm.length) return;
+    const now = new Date().toISOString();
+    setHoldings(prev => prev.filter(h => h.account !== account));
+    setDeleted(p => { const n = { ...p }; rm.forEach(id => n[id] = now); return n; });
   };
 
   const addMemo = (text) => {
@@ -369,7 +400,7 @@ function App() {
     if (!obj || typeof obj !== 'object') { alert('가져올 데이터가 없어요.'); return; }
     const ec = Array.isArray(obj.entries) ? obj.entries.length : 0;
     if (!confirm(`백업을 복원합니다.\n일지 ${ec}건 + 회고·일기·설정을 현재 데이터에 병합해요 (같은 건 최신 우선). 계속할까요?`)) return;
-    const merged = mergeBlobs(gatherBlob(), { entries: obj.entries, memos: obj.memos, diary: obj.diary, settings: obj.settings, principles: obj.principles, deleted: obj.deleted });
+    const merged = mergeBlobs(gatherBlob(), { entries: obj.entries, memos: obj.memos, diary: obj.diary, holdings: obj.holdings, settings: obj.settings, principles: obj.principles, deleted: obj.deleted });
     applyBlob(merged);
     setModal(null); doFlash('백업 복원됨 ✓');
   };
@@ -522,6 +553,7 @@ function App() {
             <option value="month">이번 달</option>
             <option value="30d">최근 30일</option>
           </select>
+          <button className="btn-ghost" onClick={() => setModal({ type: 'holdings' })}>보유</button>
           <button className="btn-ghost" onClick={() => setModal({ type: 'stats' })}>통계</button>
           <button className="btn-ghost" onClick={() => setModal({ type: 'menu' })}>더보기</button>
         </div>
@@ -559,6 +591,7 @@ function App() {
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
+      {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
       {modal?.type === 'reset' && <ResetModal market={filter} entries={entries} onResetMarket={resetMarket} onResetAll={clearAll} onRestore={restoreSamples} onClose={() => setModal(null)} />}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}
