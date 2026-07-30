@@ -330,14 +330,27 @@ function App() {
     if (!holdTickers || !window.TJPortfolio) return;
     let alive = true;
     const syms = holdTickers.split(',').map(t => TJPortfolio.yahooSym({ ticker: t, market: /^\d{6}$/.test(t) ? 'KR' : 'US' })).filter(Boolean);
-    TJPortfolio.quotes(syms).then(j => { if (alive && j && j.quotes) setQuotes(q => ({ ...q, ...j.quotes })); }).catch(() => {});
-    return () => { alive = false; };
+    const load = () => {
+      if (document.hidden) return;                                  // 탭 안 보면 굳이 조회 안 함
+      TJPortfolio.quotes(syms).then(j => { if (alive && j && j.quotes) setQuotes(q => ({ ...q, ...j.quotes })); }).catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 60 * 1000);                        // 장중이면 1분마다 갱신
+    document.addEventListener('visibilitychange', load);
+    return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', load); };
   }, [holdTickers]);
   // 티커 → {price, currency} (카드가 쓰기 쉬운 형태)
   const quoteOf = (ticker) => {
     const t = (ticker || '').toUpperCase(); if (!t) return null;
     return quotes[t] || quotes[t + '.KS'] || null;
   };
+  // "이 시세가 언제 값인지" 한 줄 — 장중인지 마감가인지 사용자에게 알려줌
+  const quoteAgeLabel = useMemo(() => {
+    const qs = Object.values(quotes).filter(Boolean);
+    if (!qs.length || !window.TJPortfolio || !TJPortfolio.quoteAge) return '';
+    const live = qs.find(q => q.state === 'REGULAR');
+    return TJPortfolio.quoteAge(live || qs[0]);
+  }, [quotes]);
 
   // 원화로 들어간 미국주식 '보유중' 기록을 달러로 정리 — 실시간 환율 잡히면 1회만
   useEffect(() => {
@@ -663,7 +676,10 @@ function App() {
         <>
           {held.length > 0 && (
             <>
-              <div className="seclabel" style={{ paddingLeft: 2 }}>보유중 {heldPnl !== 0 && <span className="mono">· 평가손익 {TJ.moneyS(heldPnl)}</span>}</div>
+              <div className="seclabel" style={{ paddingLeft: 2 }}>
+                보유중 {heldPnl !== 0 && <span className="mono">· 평가손익 {TJ.moneyS(heldPnl)}</span>}
+                {quoteAgeLabel && <span style={{ fontWeight: 600, color: 'var(--ink-4)' }}> · 시세 {quoteAgeLabel}</span>}
+              </div>
               {cardsOf(held)}
             </>
           )}

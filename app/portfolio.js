@@ -27,5 +27,15 @@
   // symbols: ['GOOGL','005930.KS'] → { quotes:{sym:{price,currency,prevClose}}, at }
   async function quotes(symbols) { return await call({ action: 'quotes', tickers: symbols }); }
 
-  window.TJPortfolio = { extract, quotes, yahooSym };
+  // 시세가 언제 값인지 사람 말로 — "실시간"인지 "마감가"인지 구분해서 보여주기 위함
+  function quoteAge(q) {
+    if (!q) return '';
+    const live = q.state === 'REGULAR';
+    if (!q.at) return live ? '장중' : '';                       // 옛 함수(시각 없음) 호환
+    const d = new Date(q.at);
+    const hhmm = d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return (live ? '장중 ' : '마감 ') + hhmm;
+  }
+
+  window.TJPortfolio = { extract, quotes, yahooSym, quoteAge };
 })();

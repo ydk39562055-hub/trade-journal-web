@@ -83,7 +83,15 @@ async function oneQuote(sym: string) {
     const j = await r.json();
     const m = j?.chart?.result?.[0]?.meta;
     if (!m || typeof m.regularMarketPrice !== "number") return null;
-    return { price: m.regularMarketPrice, currency: m.currency ?? null, prevClose: m.chartPreviousClose ?? m.previousClose ?? null };
+    return {
+      price: m.regularMarketPrice,
+      currency: m.currency ?? null,
+      prevClose: m.chartPreviousClose ?? m.previousClose ?? null,
+      // 이 시세가 "언제 만들어진 값"인지 + 장이 열려있는지 (앱이 마감가/실시간을 구분해 표시)
+      at: typeof m.regularMarketTime === "number" ? new Date(m.regularMarketTime * 1000).toISOString() : null,
+      state: m.marketState ?? null,
+      exch: m.exchangeName ?? null,
+    };
   } catch { return null; }
 }
 

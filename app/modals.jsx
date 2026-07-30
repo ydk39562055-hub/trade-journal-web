@@ -725,7 +725,15 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
         <span style={{ flex: 1 }} />
         <button className="btn-ghost btn-sm" onClick={refresh} disabled={loading}>{loading ? '…' : '↻ 새로고침'}</button>
       </div>
-      {asOf && <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 4 }}>시세 기준 {asOf} · Yahoo</div>}
+      {asOf && (() => {
+        // "불러온 시각"이 아니라 그 시세가 실제로 만들어진 시각(장중/마감)을 보여줌
+        const qs = list.map(qOf).filter(Boolean);
+        const live = qs.find(q => q.state === 'REGULAR');
+        const age = (window.TJPortfolio && TJPortfolio.quoteAge) ? TJPortfolio.quoteAge(live || qs[0]) : '';
+        return <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 4 }}>
+          {age ? `시세 ${age} 기준` : `시세 기준 ${asOf}`} · Yahoo <span style={{ opacity: .8 }}>· {asOf} 갱신</span>
+        </div>;
+      })()}
       {err && <div style={{ fontSize: 12, color: 'var(--loss)', margin: '6px 0', lineHeight: 1.5 }}>{err}</div>}
 
       {list.length === 0
