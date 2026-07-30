@@ -311,6 +311,21 @@ function App() {
     return () => { alive = false; clearInterval(id); };
   }, []);
 
+  // 원화로 들어간 미국주식 '보유중' 기록을 달러로 정리 — 실시간 환율 잡히면 1회만
+  useEffect(() => {
+    if (!fx.at || localStorage.getItem('tj_usd_fix_v1') === '1') return;
+    const rate = fx.rate; let n = 0;
+    setEntries(prev => prev.map(e => {
+      const t = (e.ticker || '').toUpperCase();
+      const isUS = /^[A-Z][A-Z.\-]*$/.test(t);                     // 영문 티커 = 미국주식 (숫자 6자리는 국내)
+      if (e.result !== 'holding' || e.currency !== '₩' || !isUS) return e;
+      n++;
+      return { ...e, currency: '$', entry_price: e.entry_price != null ? e.entry_price / rate : null, updated_at: new Date().toISOString() };
+    }));
+    localStorage.setItem('tj_usd_fix_v1', '1');
+    if (n) doFlash(n + '개 종목을 달러로 바꿨어요 ✓');
+  }, [fx.at]);
+
   // 일기 — 날짜별 한 편, upsert(있으면 수정 / 없으면 생성)
   const upsertDiary = (date, patch) => {
     setDiary(prev => {
@@ -321,13 +336,22 @@ function App() {
     });
   };
 
+  // 평단 = 화면의 평단, 없으면 "매수금액 ÷ 수량"으로 역산 (스크린샷이 준 금액을 버리지 않음)
+  const avgFrom = (h) => {
+    if (h.avgPrice != null && h.avgPrice !== '') return Number(h.avgPrice);
+    const amt = Number(h.amount), q = Number(h.qty);
+    if (h.amountKind === 'buy' && amt > 0 && q > 0) return amt / q;
+    return null;
+  };
   // 보유종목 — 스크린샷 추출 결과를 계좌(스윙/장기)에 추가 / 개별 삭제 / 계좌 비우기
   const addHoldings = (account, list) => {
     const now = new Date().toISOString();
     const add = (list || []).map(h => ({
       id: 'h-' + Math.random().toString(36).slice(2, 10),
       account, name: h.name || h.ticker || '종목', ticker: (h.ticker || '').toUpperCase(),
-      qty: Number(h.qty) || 0, avgPrice: (h.avgPrice != null && h.avgPrice !== '') ? Number(h.avgPrice) : null,
+      qty: Number(h.qty) || 0, avgPrice: avgFrom(h),
+      amount: (h.amount != null && h.amount !== '') ? Number(h.amount) : null,      // 화면에 보인 총 금액(1주당 아님)
+      amountKind: h.amountKind === 'buy' ? 'buy' : (h.amount != null ? 'eval' : null),
       currency: h.currency === 'KRW' ? 'KRW' : 'USD', market: h.market || 'US', updated_at: now,
     }));
     setHoldings(prev => [...prev, ...add]);
@@ -338,13 +362,18 @@ function App() {
     const now = new Date().toISOString(); const today = todayStr();
     const rows = (list || []).map(h => {
       const sym = (h.ticker || '').toUpperCase(); const nm = (h.name || '').trim();
+      // 미국주식인데 계좌가 원화로 보여준 경우(나무 등) → 달러로 환산해 저장. 진짜 국내주식만 ₩ 유지.
+      const isKR = h.market === 'KR' || /^\d{6}$/.test(sym);
+      const wonShown = h.currency === 'KRW';
+      const px0 = (h.avgPrice != null && h.avgPrice !== '') ? Number(h.avgPrice) : null;
+      const px = (px0 != null && wonShown && !isKR) ? px0 / TJ.rateKRW() : px0;
       return {
         id: 'pos-' + Math.random().toString(36).slice(2, 10),
         market: account, traded_at: today, direction: 'long', result: 'holding',
         ticker: sym || nm || '종목',
         shares: Number(h.qty) || 0,
-        entry_price: (h.avgPrice != null && h.avgPrice !== '') ? Number(h.avgPrice) : null,
-        currency: h.currency === 'KRW' ? '₩' : '$',
+        entry_price: px,
+        currency: isKR && wonShown ? '₩' : '$',
         setups: [], errors: [], photos: [],
         body: (nm && nm.toUpperCase() !== sym) ? nm : '',      // 티커는 카드 머리에 이미 나옴 — 이름만(같으면 비움)
         created_at: now, updated_at: now,

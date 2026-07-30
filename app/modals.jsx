@@ -686,17 +686,31 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
   const postedSet = new Set((entries || []).filter(e => e.result === 'holding' && e.market === acct).map(e => (e.ticker || '').toUpperCase()));
   const isPosted = h => postedSet.has((h.ticker || '').toUpperCase());
   const notPosted = list.filter(h => !isPosted(h));
+  // 산 가격 추정값 — 화면에 있던 금액 ÷ 수량, 없으면 현재 시세 (행 통화 기준). 사용자가 고칠 수 있음
+  const guessPx = (h) => {
+    const dsym = h.market === 'KR' ? '₩' : '$';
+    let p = null;
+    if (h.amount > 0 && h.qty > 0) { p = h.amount / h.qty; if (h.currency === 'KRW' && dsym === '$') p = p / TJ.rateKRW(); }
+    if (p == null) { const q = qOf(h); if (q) p = q.price; }
+    if (p == null) return '';
+    return String(p >= 1000 ? Math.round(p) : Math.round(p * 100) / 100);
+  };
   const toJournal = (h, price, queue) => {
-    const p = price != null ? price : h.avgPrice;
-    addPositions(acct, [{ ...h, avgPrice: (p != null && p !== '' && !isNaN(Number(p))) ? Number(p) : null }]);
+    const typed = price != null && price !== '' && !isNaN(Number(price));
+    const p = typed ? Number(price) : h.avgPrice;
+    const dsym = h.market === 'KR' ? '₩' : '$';
+    // 직접 적은 값은 화면에 보이는 통화(행 통화) 기준 — 그대로 쓰도록 통화를 맞춰 넘김
+    const cur = typed ? (dsym === '₩' ? 'KRW' : 'USD') : h.currency;
+    addPositions(acct, [{ ...h, currency: cur, avgPrice: (p != null && p !== '' && !isNaN(Number(p))) ? Number(p) : null }]);
     const rest = (queue || []).filter(id => id !== h.id);                 // 여러 개 넣는 중이면 다음 종목 이어서
-    setAsk(rest.length ? { id: rest[0], val: '', queue: rest } : null);
+    const nx = rest.length ? list.find(x => x.id === rest[0]) : null;
+    setAsk(nx ? { id: nx.id, val: guessPx(nx), queue: rest } : null);
   };
   // 전부 넣기 — 평단 있는 건 바로, 없는 건 산 가격을 하나씩 물어봄
   const postAll = () => {
     notPosted.filter(h => h.avgPrice != null).forEach(h => addPositions(acct, [h]));
-    const need = notPosted.filter(h => h.avgPrice == null).map(h => h.id);
-    setAsk(need.length ? { id: need[0], val: '', queue: need } : null);
+    const need = notPosted.filter(h => h.avgPrice == null);
+    setAsk(need.length ? { id: need[0].id, val: guessPx(need[0]), queue: need.map(h => h.id) } : null);
   };
 
   return (
@@ -740,7 +754,8 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
                   </div>
                   {/* 일지 보내기 */}
                   {asking ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                    <div style={{ marginTop: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 700, flexShrink: 0 }}>산 가격</span>
                       <input type="number" inputMode="decimal" autoFocus value={ask.val} onChange={ev => setAsk({ ...ask, val: ev.target.value })}
                         onKeyDown={ev => { if (ev.key === 'Enter') toJournal(h, ask.val, ask.queue); }}
@@ -748,11 +763,13 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
                       <button className="btn btn-sm" onClick={() => toJournal(h, ask.val, ask.queue)} style={{ flexShrink: 0 }}>넣기</button>
                       <button className="btn-ghost btn-sm" onClick={() => setAsk(null)} style={{ flexShrink: 0 }}>취소</button>
                     </div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 5, lineHeight: 1.45 }}>{h.amount > 0 ? '화면에 있던 금액 ÷ 수량으로 채웠어요.' : '지금 시세로 채웠어요.'} 실제로 산 가격이 다르면 고치세요.</div>
+                    </div>
                   ) : (
                     <div style={{ marginTop: 6, textAlign: 'right' }}>
                       {done
                         ? <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontWeight: 600 }}>일지에 있음 ✓</span>
-                        : <button onClick={() => (h.avgPrice != null ? toJournal(h) : setAsk({ id: h.id, val: '' }))}
+                        : <button onClick={() => (h.avgPrice != null ? toJournal(h) : setAsk({ id: h.id, val: guessPx(h) }))}
                           style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--violet)' }}>＋ 일지에 넣기</button>}
                     </div>
                   )}

@@ -19,19 +19,21 @@ const EXTRACT_PROMPT = `너는 증권사 앱의 "보유 종목(잔고)" 스크�
 - name: 화면에 보이는 종목명(한글이면 한글 그대로)
 - ticker: 영문 심볼(대문자). 화면에 티커가 보이면 그대로 옮겨라(예: CRCL·BAR·SIVR·MAGS·BITO·SOXX·NASA·GOOGL). 한글명만 있고 잘 아는 종목이면 미국 상장 티커를 추론(예: "알파벳 A"→GOOGL, "라운드힐 매그니피센트 7 ETF"→MAGS, "프로셰어즈 비트코인 ETF"→BITO). 모르면 null.
 - qty: 보유수량(주). 콤마 빼고 정수/실수.
-- avgPrice: 평단가(평균단가·매입가). 보이면 숫자, 안 보이면 null. (토스 "평가금" 화면은 평단이 없다 → null)
+- avgPrice: 평단가(평균단가·매입가, 1주당). 보이면 숫자, 안 보이면 null.
 - curPrice: 현재가(1주당). 보이면 숫자, 안 보이면 null.
+- amount: 그 종목의 **총 금액**(1주당이 아니라 합계). 화면에 보이면 반드시 숫자로 담아라. 예: 토스 "평가금" 모드의 종목별 금액, "매수금액"·"매입금액"·"평가금액" 칸.
+- amountKind: amount가 무슨 금액인지 — 매수·매입 금액이면 "buy", 평가·현재 금액이면 "eval", 애매하면 "eval".
 - currency: "USD" 또는 "KRW" (그 종목 값이 어떤 통화로 표시됐는지)
 - market: "US"(미국주식/ETF) · "KR"(한국주식, 6자리 코드) · "CRYPTO"(코인)
 
 규칙:
 - 한국 종목(예: 삼성전자)은 ticker에 6자리 코드(예: 005930), market="KR", currency="KRW".
-- 토스 "평가금" 모드는 종목당 총 평가금액만 보인다 → avgPrice=null, curPrice도 1주당 값이 안 보이면 null(평가금액을 그대로 curPrice에 넣지 마라).
+- **총 금액은 절대 버리지 마라.** 1주당 가격이 안 보여도 종목 옆 금액이 보이면 amount에 담고 amountKind를 표시하라. 단 총 금액을 1주당 값(avgPrice·curPrice)에 그대로 넣지는 마라 — 나눗셈은 앱이 한다.
 - 예수금·현금·총자산·합계 줄은 종목이 아니다 → 제외.
 - 숫자는 콤마·통화기호 빼고 순수 숫자. 확신 없으면 null. 화면에 없는 값을 지어내지 마라(환각 금지).
 
 아래 JSON만 출력하라(다른 텍스트 금지):
-{ "holdings": [ { "name": "...", "ticker": "...", "qty": 0, "avgPrice": null, "curPrice": null, "currency": "USD", "market": "US" } ] }`;
+{ "holdings": [ { "name": "...", "ticker": "...", "qty": 0, "avgPrice": null, "curPrice": null, "amount": null, "amountKind": null, "currency": "USD", "market": "US" } ] }`;
 
 function corsHeaders(origin: string | null): Record<string, string> {
   const ok = !!origin && ALLOW.some((re) => re.test(origin));
