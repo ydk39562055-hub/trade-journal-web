@@ -108,6 +108,7 @@ function koEvent(t) {
 function RedFolderCard({ items }) {
   const [open, setOpen] = useState(false);   // 카드 펼침 (기본 접힘 = 헤더만)
   const [week, setWeek] = useState(false);   // 펼친 뒤: 오늘·내일 / 이번 주
+  const [pastOpen, setPastOpen] = useState(false);  // 오늘 이미 지난 지표 펼침
   if (!items || !items.length) return null;
   const pad = n => String(n).padStart(2, '0');
   const ymd = x => `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
@@ -120,8 +121,16 @@ function RedFolderCard({ items }) {
   withD.forEach(e => { const k = ymd(e.d); (byDay[k] = byDay[k] || []).push(e); });
   const days = Object.keys(byDay).sort();
   days.forEach(k => byDay[k].sort((a, b) => a.d - b.d));
-  const soonKeys = [today, tomorrow].filter(k => byDay[k]);            // 오늘+내일(있는 날만)
-  const soonCount = soonKeys.reduce((n, k) => n + byDay[k].length, 0);
+  // ★ 이미 발표된 지표는 세지도 보여주지도 않음 — 이 카드는 "앞으로 조심할 것" 용도
+  const isPast = e => e.d < _t;
+  const upcoming = withD.filter(e => !isPast(e));
+  const byDayUp = {};
+  upcoming.forEach(e => { const k = ymd(e.d); (byDayUp[k] = byDayUp[k] || []).push(e); });
+  Object.keys(byDayUp).forEach(k => byDayUp[k].sort((a, b) => a.d - b.d));
+  const soonKeys = [today, tomorrow].filter(k => byDayUp[k]);          // 오늘 남은 것 + 내일
+  const soonCount = soonKeys.reduce((n, k) => n + byDayUp[k].length, 0);
+  const nextEv = upcoming.slice().sort((a, b) => a.d - b.d)[0] || null; // 가장 가까운 지표
+  const todayPast = (byDay[today] || []).filter(isPast);                // 오늘 이미 지난 것(접어서 따로)
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const dayLabel = k => { const [Y, M, D] = k.split('-').map(Number); return `${M}/${D} (${WD[new Date(Y, M - 1, D).getDay()]})`; };
 
@@ -136,16 +145,20 @@ function RedFolderCard({ items }) {
     </div>
   );
 
-  const dayBlock = (k, di) => (
-    <div key={k} style={{ marginTop: di ? 10 : 0 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: k === today ? 'var(--violet-600)' : 'var(--ink-3)', marginBottom: 2, display: 'flex', gap: 6, alignItems: 'center' }}>
-        {dayLabel(k)}
-        {(k === today || k === tomorrow) && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: k === today ? 'var(--violet)' : 'var(--ink-4)', padding: '1px 6px', borderRadius: 5 }}>{k === today ? '오늘' : '내일'}</span>}
-        <span style={{ color: 'var(--ink-4)', fontWeight: 500 }}>{byDay[k].length}건</span>
+  const dayBlock = (k, di, src) => {
+    const rows = (src || byDayUp)[k] || [];
+    if (!rows.length) return null;
+    return (
+      <div key={k} style={{ marginTop: di ? 10 : 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: k === today ? 'var(--violet-600)' : 'var(--ink-3)', marginBottom: 2, display: 'flex', gap: 6, alignItems: 'center' }}>
+          {dayLabel(k)}
+          {(k === today || k === tomorrow) && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: k === today ? 'var(--violet)' : 'var(--ink-4)', padding: '1px 6px', borderRadius: 5 }}>{k === today ? '오늘' : '내일'}</span>}
+          <span style={{ color: 'var(--ink-4)', fontWeight: 500 }}>{rows.length}건</span>
+        </div>
+        {rows.map((e, i) => row(e, i))}
       </div>
-      {byDay[k].map((e, i) => row(e, i))}
-    </div>
-  );
+    );
+  };
   const empty = txt => <div style={{ fontSize: 12, color: 'var(--ink-4)', textAlign: 'center', padding: '10px 0' }}>{txt}</div>;
 
   return (
@@ -153,7 +166,11 @@ function RedFolderCard({ items }) {
       <button onClick={() => setOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, textAlign: 'left' }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--violet)', flexShrink: 0 }} />
         <b style={{ fontSize: 12.5 }}>레드폴더</b>
-        <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{soonCount ? '오늘·내일 ' + soonCount + '건' : '오늘·내일 없음 ✓'}</span>
+        <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
+          {nextEv
+            ? <>다음 <b style={{ color: 'var(--ink-2)' }}>{nextEv.d.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</b> {koEvent(nextEv.title) || nextEv.title}</>
+            : '남은 고임팩트 없음 ✓'}
+        </span>
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600 }}>{open ? '접기' : '펼치기'}</span>
         <span style={{ color: 'var(--ink-4)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>▾</span>
@@ -163,11 +180,21 @@ function RedFolderCard({ items }) {
         <div style={{ marginTop: 8 }}>
           <div className="seg" style={{ width: '100%', marginBottom: 8 }}>
             <button className={!week ? 'on' : ''} onClick={() => setWeek(false)}>오늘·내일</button>
-            <button className={week ? 'on' : ''} onClick={() => setWeek(true)}>이번 주</button>
+            <button className={week ? 'on' : ''} onClick={() => setWeek(true)}>이번 주 남은 것</button>
           </div>
           {!week
-            ? (soonCount > 0 ? soonKeys.map((k, di) => dayBlock(k, di)) : empty('오늘·내일 고임팩트 없음 ✓'))
-            : (days.length > 0 ? days.map((k, di) => dayBlock(k, di)) : empty('이번 주 고임팩트 없음'))}
+            ? (soonCount > 0 ? soonKeys.map((k, di) => dayBlock(k, di)) : empty('오늘·내일 남은 고임팩트 없음 ✓'))
+            : (upcoming.length > 0 ? Object.keys(byDayUp).sort().map((k, di) => dayBlock(k, di)) : empty('이번 주 남은 고임팩트 없음'))}
+
+          {/* 오늘 이미 발표된 것 — 기본은 접어둠 */}
+          {todayPast.length > 0 && (
+            <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <button onClick={() => setPastOpen(o => !o)} style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-4)' }}>
+                오늘 지난 지표 {todayPast.length}건 {pastOpen ? '▴' : '▾'}
+              </button>
+              {pastOpen && <div style={{ opacity: .55, marginTop: 4 }}>{todayPast.map((e, i) => row(e, i))}</div>}
+            </div>
+          )}
           <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 8 }}>발표 직전 신규 진입 자제 · 시간=내 기기 기준</div>
         </div>
       )}
