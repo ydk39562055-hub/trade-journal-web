@@ -149,6 +149,16 @@ function EntryCard({ e, onEdit, onDelete, index }) {
         </div>
       </div>
 
+      {/* 수량 · 산 가격 — 스윙·장기(현물) 거래에만 (몇 주 얼마에 샀는지) */}
+      {e.market !== '선물' && (e.shares != null || e.entry_price != null) && (() => {
+        const sh = TJStats.num(e.shares), px = TJStats.num(e.entry_price);
+        const bits = [];
+        if (sh != null) bits.push(sh + '주');
+        if (px != null) bits.push('@ ' + TJ.fmt(px, e.currency));
+        if (sh != null && px != null) bits.push('= ' + TJ.fmt(sh * px, e.currency));
+        return <div className="mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', marginTop: -3 }}>{bits.join(' ')}</div>;
+      })()}
+
       {/* body — 2줄 말줄임 (카드 높이 균일) */}
       {e.body && <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.62, whiteSpace: 'pre-wrap', wordBreak: 'break-word', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{e.body}</div>}
 

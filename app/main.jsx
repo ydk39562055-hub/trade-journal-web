@@ -346,7 +346,7 @@ function App() {
         entry_price: (h.avgPrice != null && h.avgPrice !== '') ? Number(h.avgPrice) : null,
         currency: h.currency === 'KRW' ? '₩' : '$',
         setups: [], errors: [], photos: [],
-        body: (nm && sym && nm !== sym) ? (nm + ' (' + sym + ')') : (nm || sym),
+        body: (nm && nm.toUpperCase() !== sym) ? nm : '',      // 티커는 카드 머리에 이미 나옴 — 이름만(같으면 비움)
         created_at: now, updated_at: now,
       };
     });
@@ -610,7 +610,7 @@ function App() {
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
-      {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
+      {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
       {modal?.type === 'reset' && <ResetModal market={filter} entries={entries} onResetMarket={resetMarket} onResetAll={clearAll} onRestore={restoreSamples} onClose={() => setModal(null)} />}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}
