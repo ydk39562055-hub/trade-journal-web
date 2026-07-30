@@ -627,7 +627,8 @@ function ResetModal({ market, entries, onResetMarket, onResetAll, onRestore, onC
 }
 
 
-/* ───────────── 보유 현황 (스크린샷 자동입력 + 실시간 시세) ───────────── */
+/* ───────────── 보유 현황 (스크린샷 자동입력 · 직접 입력 + 실시간 시세) ───────────── */
+const mlab = { display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 5 };
 function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, addPositions, defaultAccount, onClose }) {
   const [acct, setAcct] = useStateM(defaultAccount === '장기' ? '장기' : '스윙');
   const [quotes, setQuotes] = useStateM({});
@@ -636,6 +637,7 @@ function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, ad
   const [err, setErr] = useStateM('');
   const [busy, setBusy] = useStateM(false);          // 추출 중
   const [preview, setPreview] = useStateM(null);     // 추출 결과
+  const [manual, setManual] = useStateM(null);       // 직접 입력 폼 {name,ticker,qty,avgPrice,cur}
   const fileRef = useRefM();
 
   const list = holdings.filter(h => h.account === acct);
@@ -681,8 +683,27 @@ function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, ad
   };
   const confirmAdd = () => { if (preview && preview.length) { addHoldings(acct, preview); if (addPositions) addPositions(acct, preview); } setPreview(null); };
 
+  // ── 직접 입력(수동) — 스크린샷이 안 될 때 한 종목씩 손으로 ──
+  const BLANK = { name: '', ticker: '', qty: '', avgPrice: '', cur: 'USD' };
+  const mset = (k, v) => setManual(m => ({ ...m, [k]: v }));
+  const manualOk = manual && (manual.ticker || '').trim() && Number(manual.qty) > 0;
+  const submitManual = () => {
+    if (!manualOk) return;
+    const t = manual.ticker.trim().toUpperCase();
+    const isKR = manual.cur === 'KRW' || /^\d{6}$/.test(t);          // 6자리 숫자 = 국내주식
+    const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+    const row = {
+      name: (manual.name || '').trim() || t, ticker: t,
+      qty: Number(manual.qty), avgPrice: num(manual.avgPrice),
+      currency: isKR ? 'KRW' : 'USD', market: isKR ? 'KR' : 'US',
+    };
+    addHoldings(acct, [row]);
+    if (addPositions) addPositions(acct, [row]);
+    setManual({ ...BLANK, cur: manual.cur });                        // 통화는 유지 — 연속 입력 편하게
+  };
+
   return (
-    <Modal open onClose={onClose} title="보유 현황" sub="스크린샷으로 추가 · 실시간 시세로 평가" maxWidth={520} sheet={window.matchMedia('(max-width:560px)').matches}>
+    <Modal open onClose={onClose} title="보유 현황" sub="스크린샷 · 직접 입력 · 실시간 시세로 평가" maxWidth={520} sheet={window.matchMedia('(max-width:560px)').matches}>
       <div className="seg" style={{ width: '100%' }}>
         {['스윙', '장기'].map(a => <button key={a} className={acct === a ? 'on' : ''} onClick={() => setAcct(a)}>{a}</button>)}
       </div>
@@ -697,7 +718,7 @@ function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, ad
       {err && <div style={{ fontSize: 12, color: 'var(--loss)', margin: '6px 0', lineHeight: 1.5 }}>{err}</div>}
 
       {list.length === 0
-        ? <div style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: 13, padding: '22px 0', lineHeight: 1.6 }}>아직 {acct} 보유 종목이 없어요.<br />아래 버튼으로 스크린샷을 올려보세요.</div>
+        ? <div style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: 13, padding: '22px 0', lineHeight: 1.6 }}>아직 {acct} 보유 종목이 없어요.<br />아래에서 스크린샷을 올리거나 직접 입력하세요.</div>
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
             {list.map(h => {
               const q = qOf(h), p = q ? q.price : null;
@@ -742,11 +763,51 @@ function HoldingsModal({ holdings, addHoldings, removeHolding, clearHoldings, ad
               </div>
             </div>
           )
-          : (
+          : manual
+            ? (
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 8 }}>{acct}에 직접 추가</div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <div style={{ flex: 1.2 }}>
+                    <label style={mlab}>티커 · 종목코드</label>
+                    <input value={manual.ticker} onChange={e => mset('ticker', e.target.value)} placeholder="NVDA, 005930" autoFocus />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={mlab}>수량 (주)</label>
+                    <input type="number" inputMode="decimal" value={manual.qty} onChange={e => mset('qty', e.target.value)} placeholder="10" />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <div style={{ flex: 1.2 }}>
+                    <label style={mlab}>평단가 <span style={{ fontWeight: 500, color: 'var(--ink-4)' }}>(선택)</span></label>
+                    <input type="number" inputMode="decimal" value={manual.avgPrice} onChange={e => mset('avgPrice', e.target.value)} placeholder="비우면 수익률 계산 안 함" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={mlab}>통화</label>
+                    <div className="seg" style={{ width: '100%' }}>
+                      {[['USD', '$'], ['KRW', '₩']].map(([v, s]) => <button key={v} className={manual.cur === v ? 'on' : ''} onClick={() => mset('cur', v)}>{s}</button>)}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={mlab}>종목명 <span style={{ fontWeight: 500, color: 'var(--ink-4)' }}>(선택 — 비우면 티커로)</span></label>
+                  <input value={manual.name} onChange={e => mset('name', e.target.value)} placeholder="엔비디아" />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn" style={{ flex: 1 }} onClick={submitManual} disabled={!manualOk}>추가</button>
+                  <button className="btn-ghost" onClick={() => setManual(null)}>닫기</button>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 8, lineHeight: 1.5 }}>추가하면 <b>보유현황 + 일지(보유중)</b> 둘 다 들어가고, 시세는 티커로 자동 조회됩니다. 계속 넣으려면 그대로 다음 종목을 적으세요.</div>
+              </div>
+            )
+            : (
             <>
-              <button className="btn-ghost" onClick={() => fileRef.current.click()} disabled={busy} style={{ width: '100%', justifyContent: 'center', borderStyle: 'dashed', color: 'var(--ink-3)' }}>{busy ? 'AI가 읽는 중…' : '📷 스크린샷으로 추가'}</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn-ghost" onClick={() => fileRef.current.click()} disabled={busy} style={{ flex: 1.4, justifyContent: 'center', borderStyle: 'dashed', color: 'var(--ink-3)' }}>{busy ? 'AI가 읽는 중…' : '📷 스크린샷으로 추가'}</button>
+                <button className="btn-ghost" onClick={() => setManual({ ...BLANK })} style={{ flex: 1, justifyContent: 'center', borderStyle: 'dashed', color: 'var(--ink-3)' }}>✏️ 직접 입력</button>
+              </div>
               <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
-              <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6, lineHeight: 1.5 }}>증권사 보유목록을 찍어 올리면 종목·수량·진입가를 읽어 <b>{acct} 보유현황 + 일지(보유중)</b>에 넣어요. 나중에 그 일지를 손절/익절로 바꾸면 과거 거래처럼 기록됩니다. (토스=스윙, 메리츠·나무=장기)</div>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6, lineHeight: 1.5 }}>증권사 보유목록을 찍어 올리면 종목·수량·진입가를 읽어 <b>{acct} 보유현황 + 일지(보유중)</b>에 넣어요. 잘 안 읽히면 <b>직접 입력</b>으로 한 종목씩 넣으면 됩니다. (토스=스윙, 메리츠·나무=장기)</div>
               {list.length > 0 && <button onClick={() => { if (confirm(acct + ' 보유 종목을 모두 비울까요?')) clearHoldings(acct); }} style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 10 }}>이 계좌 보유 비우기</button>}
             </>
           )}
