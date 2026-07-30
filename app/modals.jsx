@@ -341,7 +341,7 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
 }
 
 /* ───────────── 시드 설정 ───────────── */
-function SettingsModal({ settings, onSave, onClose }) {
+function SettingsModal({ settings, onSave, seedSuggest, onClose }) {
   // 선물 · 스윙 · 장기 3계좌 각각 시드/입금 분리
   const MK = [
     { key: '선물', seedK: 'futuresSeed', depK: 'futuresDeposit', c: 'var(--futures)', seedPh: '10000', depPh: '예: 1000' },
@@ -390,6 +390,22 @@ function SettingsModal({ settings, onSave, onClose }) {
           </div>
           <label style={fld}>{m.key} 시드 ($)</label>
           <input type="number" inputMode="decimal" value={seeds[m.key]} onChange={e => setSeed(m.key, e.target.value)} placeholder={m.seedPh} />
+          {/* 보유 종목으로 투자원금 자동 계산 — 나머지(현금 등)는 사용자가 손으로 보탬 */}
+          {seedSuggest && seedSuggest[m.key] && seedSuggest[m.key].total > 0 && (() => {
+            const s = seedSuggest[m.key];
+            return (
+              <div style={{ marginTop: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 11px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>보유 {s.n}종목 투자금 {s.est ? '(현재가 기준 추정)' : '(수량 × 평단)'}</div>
+                    <div className="mono" style={{ fontSize: 15, fontWeight: 800 }}>{usd(Math.round(s.total))}</div>
+                  </div>
+                  <button className="btn-ghost btn-sm" onClick={() => setSeed(m.key, String(Math.round(s.total)))} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>시드에 넣기</button>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 5, lineHeight: 1.45 }}>넣은 뒤 남은 현금·다른 계좌 금액은 직접 더하면 됩니다.</div>
+              </div>
+            );
+          })()}
           <label style={fld}>{m.key} 추가 입금 — 금액 넣고 ＋입금</label>
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="number" inputMode="decimal" value={addv[m.key]} onChange={e => setAdd(m.key, e.target.value)} placeholder={m.depPh}

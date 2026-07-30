@@ -30,9 +30,10 @@
   // 시세가 언제 값인지 사람 말로 — "실시간"인지 "마감가"인지 구분해서 보여주기 위함
   function quoteAge(q) {
     if (!q) return '';
-    const live = q.state === 'REGULAR';
-    if (!q.at) return live ? '장중' : '';                       // 옛 함수(시각 없음) 호환
+    if (!q.at) return q.state === 'REGULAR' ? '장중' : '';       // 옛 함수(시각 없음) 호환
     const d = new Date(q.at);
+    // 야후가 marketState를 안 줄 때가 있어 시각으로 판단 — 20분 이내 값이면 장중으로 봄
+    const live = q.state === 'REGULAR' || (Date.now() - d.getTime()) < 20 * 60 * 1000;
     const hhmm = d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     return (live ? '장중 ' : '마감 ') + hhmm;
   }

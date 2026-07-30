@@ -371,6 +371,31 @@ function App() {
     const t = (ticker || '').toUpperCase(); if (!t) return null;
     return quotes[t] || quotes[t + '.KS'] || null;
   };
+  // 계좌별 투자원금 추정 — ①일지의 '보유중' 항목(수량×평단)을 먼저, ②일지에 없는 보유 종목만 보탬. 전부 달러 기준.
+  const seedSuggest = useMemo(() => {
+    const out = {};
+    ['스윙', '장기'].forEach(acct => {
+      let total = 0, est = false, n = 0;
+      const seen = new Set();
+      entries.filter(e => e.result === 'holding' && e.market === acct && Number(e.shares) > 0).forEach(e => {
+        const t = (e.ticker || '').toUpperCase(); if (t) seen.add(t);
+        if (e.entry_price == null) return;
+        total += TJ.toUSD(e.entry_price, e.currency) * Number(e.shares); n++;
+      });
+      holdings.filter(h => h.account === acct && Number(h.qty) > 0 && !seen.has((h.ticker || '').toUpperCase())).forEach(h => {
+        const sym = h.currency === 'KRW' ? '₩' : '$';
+        let one = (h.avgPrice != null && h.avgPrice > 0) ? TJ.toUSD(h.avgPrice, sym) : null;
+        if (one == null) {                                        // 평단 모르면 현재 시세로 근사
+          const q = quoteOf(h.ticker);
+          if (q) { one = TJ.toUSD(q.price, q.currency === 'KRW' ? '₩' : '$'); est = true; }
+        }
+        if (one != null) { total += one * Number(h.qty); n++; }
+      });
+      out[acct] = { total, est, n };
+    });
+    return out;
+  }, [entries, holdings, quotes, fx.rate]);
+
   // "이 시세가 언제 값인지" 한 줄 — 장중인지 마감가인지 사용자에게 알려줌
   const quoteAgeLabel = useMemo(() => {
     const qs = Object.values(quotes).filter(Boolean);
@@ -412,17 +437,30 @@ function App() {
     return null;
   };
   // 보유종목 — 스크린샷 추출 결과를 계좌(스윙/장기)에 추가 / 개별 삭제 / 계좌 비우기
+  // 스크린샷을 다시 올려도 중복이 안 생기게 — 같은 계좌·같은 티커면 갱신(추가매수·수량변경), 없으면 추가
   const addHoldings = (account, list) => {
     const now = new Date().toISOString();
-    const add = (list || []).map(h => ({
-      id: 'h-' + Math.random().toString(36).slice(2, 10),
+    const rows = (list || []).map(h => ({
       account, name: h.name || h.ticker || '종목', ticker: (h.ticker || '').toUpperCase(),
       qty: Number(h.qty) || 0, avgPrice: avgFrom(h),
       amount: (h.amount != null && h.amount !== '') ? Number(h.amount) : null,      // 화면에 보인 총 금액(1주당 아님)
       amountKind: h.amountKind === 'buy' ? 'buy' : (h.amount != null ? 'eval' : null),
       currency: h.currency === 'KRW' ? 'KRW' : 'USD', market: h.market || 'US', updated_at: now,
     }));
-    setHoldings(prev => [...prev, ...add]);
+    let upd = 0, add = 0;
+    setHoldings(prev => {
+      const next = prev.slice();
+      rows.forEach(r => {
+        const i = next.findIndex(h => h.account === account && (h.ticker || '').toUpperCase() === r.ticker);
+        if (i >= 0) {
+          // 새 스크린샷에 평단이 없으면(토스 평가금 화면 등) 기존 평단을 지우지 않고 살림
+          next[i] = { ...next[i], ...r, id: next[i].id, avgPrice: r.avgPrice != null ? r.avgPrice : next[i].avgPrice };
+          upd++;
+        } else { next.push({ ...r, id: 'h-' + Math.random().toString(36).slice(2, 10) }); add++; }
+      });
+      return next;
+    });
+    if (upd || add) doFlash(`보유 ${add ? add + '개 추가' : ''}${upd && add ? ' · ' : ''}${upd ? upd + '개 갱신' : ''} ✓`);
   };
   const removeHolding = (id) => { setHoldings(prev => prev.filter(h => h.id !== id)); setDeleted(p => ({ ...p, [id]: new Date().toISOString() })); };
   // 스크린샷 보유종목 → 일지에도 '보유중' 항목으로 추가 (수동 새 일지처럼: 종목·수량·진입가만)
@@ -447,7 +485,17 @@ function App() {
         created_at: now, updated_at: now,
       };
     });
-    if (rows.length) setEntries(prev => [...rows, ...prev]);
+    // 같은 계좌에 그 종목의 '보유중' 일지가 이미 있으면 새로 만들지 않고 수량·평단만 갱신
+    if (!rows.length) return;
+    setEntries(prev => {
+      const next = prev.slice(); const fresh = [];
+      rows.forEach(r => {
+        const i = next.findIndex(e => e.result === 'holding' && e.market === r.market && (e.ticker || '').toUpperCase() === r.ticker);
+        if (i >= 0) next[i] = { ...next[i], shares: r.shares, entry_price: r.entry_price != null ? r.entry_price : next[i].entry_price, currency: r.currency, updated_at: now };
+        else fresh.push(r);
+      });
+      return [...fresh, ...next];
+    });
   };
   const clearHoldings = (account) => {
     const rm = holdings.filter(h => h.account === account).map(h => h.id);
@@ -834,7 +882,7 @@ function App() {
       {/* ── 모달 ── */}
       {modal?.type === 'editor' && <EditorModal entry={modal.entry} accts={{ '선물': balF.bal, '스윙': balW.bal, '장기': balL.bal }} defaultRisk={{ mode: settings.futuresRiskMode || '$', val: settings.futuresRiskVal ?? null }} defaultMarket={filter} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
-      {modal?.type === 'settings' && <SettingsModal settings={settings} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
+      {modal?.type === 'settings' && <SettingsModal settings={settings} seedSuggest={seedSuggest} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
