@@ -62,7 +62,9 @@
 
   --font: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
           'Segoe UI', Roboto, system-ui, sans-serif;
-  --mono: 'Spline Sans Mono', 'SF Mono', ui-monospace, 'Roboto Mono', monospace;
+  /* 숫자 전용 — 등폭 대신 깔끔한 산세리프 + 자릿수 정렬(tabular) */
+  --mono: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue',
+          system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -85,7 +87,38 @@ body {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
 }
-.mono { font-family: var(--mono); letter-spacing: -.01em; }
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1, "ss01" 1;
+  letter-spacing: -.012em;
+}
+
+/* ---------- 하단 탭바 (모바일) ---------- */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  background: rgba(255,255,255,.94); backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  padding: 7px 0 calc(9px + env(safe-area-inset-bottom));
+}
+.tabbar button {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  color: var(--ink-4); font-size: 10.5px; font-weight: 600; transition: color .14s;
+}
+.tabbar button .ic { font-size: 15px; line-height: 1; }
+.tabbar button.on { color: var(--violet); font-weight: 700; }
+
+/* ---------- 좌측 내비 (넓은 화면) ---------- */
+.navitem {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 11px; border-radius: 10px;
+  font-size: 13px; font-weight: 600; color: var(--ink-2);
+  width: 100%; text-align: left; transition: background .14s, color .14s;
+}
+.navitem:hover { background: var(--surface-2); }
+.navitem.on { background: var(--violet-50); color: var(--violet-600); font-weight: 700; }
+.seclabel { font-size: 11px; font-weight: 700; color: var(--ink-3); letter-spacing: .04em; }
 
 h1, h2, h3, h4 { margin: 0; font-weight: 700; letter-spacing: -.018em; }
 

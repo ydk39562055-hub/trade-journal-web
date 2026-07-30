@@ -92,7 +92,7 @@ function IconBtn({ onClick, title, danger, children }) {
 }
 
 /* ─── 일지 카드 ─── */
-function EntryCard({ e, onEdit, onDelete, index }) {
+function EntryCard({ e, onEdit, onDelete, index, quote }) {
   const [hov, setHov] = useStateCo(false);
   const rv = TJStats.num(e.realized_r);
   const rpv = TJStats.num(e.return_pct);   // 현물 수익률%
@@ -149,8 +149,32 @@ function EntryCard({ e, onEdit, onDelete, index }) {
         </div>
       </div>
 
-      {/* 수량 · 산 가격 — 스윙·장기(현물) 거래에만 (몇 주 얼마에 샀는지) */}
-      {e.market !== '선물' && (e.shares != null || e.entry_price != null) && (() => {
+      {/* 보유중 — 숫자 자리를 채운 고정 격자 (수량 · 평단 · 현재가 · 평가손익) */}
+      {e.result === 'holding' && (() => {
+        const sh = TJStats.num(e.shares), px = TJStats.num(e.entry_price);
+        const live = quote ? TJStats.num(quote.price) : null;
+        const lsym = quote && quote.currency === 'KRW' ? '₩' : '$';
+        // 평단과 시세 통화가 다르면 평단을 시세 통화로 맞춰 비교
+        const pxL = px == null ? null : (e.currency === lsym ? px : (lsym === '₩' ? TJ.toUSD(px, e.currency) * TJ.rateKRW() : TJ.toUSD(px, e.currency)));
+        const pl = (sh != null && pxL != null && live != null) ? (live - pxL) * sh : null;
+        const cell = (label, val, right) => (
+          <div style={{ textAlign: right ? 'right' : 'left', minWidth: 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-3)' }}>{label}</div>
+            <div className="mono" style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{val}</div>
+          </div>
+        );
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 11, padding: '9px 11px' }}>
+            {cell('수량', sh != null ? sh : '—')}
+            {cell('평단', px != null ? TJ.fmt(px, e.currency) : '—')}
+            {cell('현재가', live != null ? TJ.fmt(live, lsym) : '—')}
+            {cell('평가손익', pl != null ? TJ.fmt(pl, lsym, true) : '—', true)}
+          </div>
+        );
+      })()}
+
+      {/* 청산한 현물 거래 — 몇 주 얼마에 샀는지 */}
+      {e.result !== 'holding' && e.market !== '선물' && (e.shares != null || e.entry_price != null) && (() => {
         const sh = TJStats.num(e.shares), px = TJStats.num(e.entry_price);
         const bits = [];
         if (sh != null) bits.push(sh + '주');

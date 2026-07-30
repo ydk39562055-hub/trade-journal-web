@@ -1,21 +1,32 @@
 /* 거래일지 — 통계 대시보드 모달 */
 const { useState: useStateD } = React;
 
-function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose }) {
+function DashboardModal({ entries, market: initMarket, useMoneyDefault, asPage, onClose }) {
   // 선물·스윙·장기 완전 분리 — 통계도 한 시장만(합산 '전체' 없음)
-  const [mkt, setMkt] = useStateD(TJ.MARKETS.includes(initMarket) ? initMarket : '선물');
+  const [mktS, setMkt] = useStateD(TJ.MARKETS.includes(initMarket) ? initMarket : '선물');
+  // 통계 탭(asPage)에서는 상단 계좌 탭을 그대로 따라감 — 세그먼트 두 줄 중복 방지
+  const mkt = asPage ? (TJ.MARKETS.includes(initMarket) ? initMarket : '선물') : mktS;
   const [ft, setFt] = useStateD('all');   // 선물 하위 — 전체 / 외화 / 지수
   const ftEntries = (mkt === '선물' && ft !== 'all') ? entries.filter(e => e.futType === ft) : entries;
   const s = TJStats.computeStats(ftEntries, mkt);
   const money = s.useMoney;
   const fnum = n => (n === Infinity ? '∞' : Math.round(n * 100) / 100);
 
+  // 통계 탭(asPage)일 땐 모달 껍데기 없이 본문만 — 모달로 열 때는 그대로
+  const Shell = asPage
+    ? ({ children }) => <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>{children}</div>
+    : ({ children }) => (
+      <Modal open onClose={onClose} maxWidth={620}
+        title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>통계 대시보드</span>}
+        sub="입력한 결과·R·손익 기준으로 자동 집계됩니다">{children}</Modal>
+    );
+
   return (
-    <Modal open onClose={onClose} maxWidth={620}
-      title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>통계 대시보드</span>}
-      sub="입력한 결과·R·손익 기준으로 자동 집계됩니다">
-      <Segmented value={mkt} onChange={setMkt} style={{ width: '100%', marginBottom: 4 }}
-        options={TJ.MARKETS.map(m => ({ v: m, label: m }))} />
+    <Shell>
+      {!asPage && (
+        <Segmented value={mkt} onChange={setMkt} style={{ width: '100%', marginBottom: 4 }}
+          options={TJ.MARKETS.map(m => ({ v: m, label: m }))} />
+      )}
       {mkt === '선물' && (
         <Segmented value={ft} onChange={setFt} style={{ width: '100%', marginTop: 8, marginBottom: 4 }}
           options={[{ v: 'all', label: '전체' }, { v: '외화', label: '외화' }, { v: '지수', label: '지수' }]} />
@@ -141,7 +152,7 @@ function DashboardModal({ entries, market: initMarket, useMoneyDefault, onClose 
           )}
         </div>
       )}
-    </Modal>
+    </Shell>
   );
 }
 

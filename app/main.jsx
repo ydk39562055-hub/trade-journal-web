@@ -195,7 +195,14 @@ function App() {
   // 시장 모드 — 선물/스윙/장기 완전 분리(합산 '전체' 없음). 마지막 선택 기억.
   const [filter, setFilter] = useState(() => { let m = localStorage.getItem('tj_market'); if (m === '현물') m = '스윙'; return TJ.MARKETS.includes(m) ? m : '선물'; });
   useEffect(() => { localStorage.setItem('tj_market', filter); }, [filter]);
+  // 화면 탭 — 홈 / 일지 / 일기 / 통계 (모바일 하단 탭바 · 넓은 화면 좌측 내비)
+  const [tab, setTab] = useState(() => {
+    const t = localStorage.getItem('tj_tab');
+    return ['home', 'journal', 'diary', 'stats'].includes(t) ? t : 'home';
+  });
+  useEffect(() => { localStorage.setItem('tj_tab', tab); window.scrollTo(0, 0); }, [tab]);
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');     // 일지 탭 구획 — 전체 / 보유중 / 청산
   const [period, setPeriod] = useState('month');   // 기본=이번 달 (화면이 너무 길어지지 않게)
   const [modal, setModal] = useState(null);
   const [routineOpen, setRoutineOpen] = useState(false);
@@ -310,6 +317,27 @@ function App() {
     const id = setInterval(load, 10 * 60 * 1000);
     return () => { alive = false; clearInterval(id); };
   }, []);
+
+  // 보유중 일지에 현재가·평가손익을 보여주려면 시세가 필요 — 앱 차원에서 한 번 받아 카드에 전달
+  const [quotes, setQuotes] = useState({});
+  const holdTickers = useMemo(() => {
+    const s = new Set();
+    entries.forEach(e => { if (e.result === 'holding' && e.ticker) s.add(e.ticker.toUpperCase()); });
+    holdings.forEach(h => { if (h.ticker) s.add(h.ticker.toUpperCase()); });
+    return [...s].sort().join(',');
+  }, [entries, holdings]);
+  useEffect(() => {
+    if (!holdTickers || !window.TJPortfolio) return;
+    let alive = true;
+    const syms = holdTickers.split(',').map(t => TJPortfolio.yahooSym({ ticker: t, market: /^\d{6}$/.test(t) ? 'KR' : 'US' })).filter(Boolean);
+    TJPortfolio.quotes(syms).then(j => { if (alive && j && j.quotes) setQuotes(q => ({ ...q, ...j.quotes })); }).catch(() => {});
+    return () => { alive = false; };
+  }, [holdTickers]);
+  // 티커 → {price, currency} (카드가 쓰기 쉬운 형태)
+  const quoteOf = (ticker) => {
+    const t = (ticker || '').toUpperCase(); if (!t) return null;
+    return quotes[t] || quotes[t + '.KS'] || null;
+  };
 
   // 원화로 들어간 미국주식 '보유중' 기록을 달러로 정리 — 실시간 환율 잡히면 1회만
   useEffect(() => {
@@ -508,11 +536,21 @@ function App() {
     const ym = todayStr().slice(0, 7);
     const d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
     let l = entries.filter(e => e.market === filter);
-    if (q) l = l.filter(e => ((e.body || '') + ' ' + (e.setups || []).join(' ') + ' ' + (e.errors || []).join(' ')).toLowerCase().includes(q));
+    if (q) l = l.filter(e => ((e.body || '') + ' ' + (e.ticker || '') + ' ' + (e.setups || []).join(' ') + ' ' + (e.errors || []).join(' ')).toLowerCase().includes(q));
     if (period === 'month') l = l.filter(e => (e.traded_at || '').startsWith(ym));
     else if (period === '30d') l = l.filter(e => (e.traded_at || '') >= d30);
     return l;
   }, [entries, filter, search, period]);
+  // 보유중 / 청산 구획 (일지 탭)
+  const held = list.filter(e => e.result === 'holding');
+  const closed = list.filter(e => e.result !== 'holding');
+  const shownList = status === 'held' ? held : status === 'closed' ? closed : list;
+  // 보유중 평가손익 합계 — 시세 있는 것만
+  const heldPnl = held.reduce((a, e) => {
+    const q = quoteOf(e.ticker); if (!q || e.entry_price == null || !e.shares) return a;
+    const cur = TJ.toUSD(q.price, q.currency === 'KRW' ? '₩' : '$');
+    return a + (cur - TJ.toUSD(e.entry_price, e.currency)) * e.shares;
+  }, 0);
 
   TJ.setCurrency(settings.currency); TJ.setRate(fx.rate);   // 전역 통화($/₩)+실시간환율 — 렌더 전 동기 반영(자식 포매터가 읽음)
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
@@ -530,109 +568,225 @@ function App() {
   const doneCount = checkItems.filter(x => checks.has(x.i)).length;
 
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width:680px)').matches;
+  const wide = typeof window !== 'undefined' && window.matchMedia('(min-width:1000px)').matches;
+  const routineProps = { items: checkItems, checks, done: doneCount, total: checkItems.length, toggle: toggleCheck, principles, onEdit: () => setModal({ type: 'principles' }) };
+
+  const TABS = [['home', '◧', '홈'], ['journal', '☰', '일지'], ['diary', '✎', '일기'], ['stats', '◍', '통계']];
+  const MKT_C = { '선물': 'var(--futures)', '스윙': 'var(--swing)', '장기': 'var(--long)' };
+  const balOf = m => (m === '스윙' ? balW : m === '장기' ? balL : balF);
+
+  /* 계좌 세그먼트 — 모든 숫자의 전제라 항상 맨 위 */
+  const acctSeg = (
+    <div style={{ display: 'flex', background: 'var(--bg-tint)', borderRadius: 12, padding: 3, gap: 2, width: '100%' }}>
+      {TJ.MARKETS.map(m => {
+        const on = filter === m;
+        return (
+          <button key={m} onClick={() => setFilter(m)} style={{
+            flex: 1, textAlign: 'center', padding: '8px 0', borderRadius: 9,
+            background: on ? MKT_C[m] : 'transparent', color: on ? '#fff' : 'var(--ink-3)',
+            fontSize: 13.5, fontWeight: on ? 700 : 600, transition: 'all .14s',
+          }}>{m}</button>
+        );
+      })}
+    </div>
+  );
+
+  const editorFor = id => setModal({ type: 'editor', entry: entries.find(x => x.id === id) });
+  const cardsOf = (arr) => (
+    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(330px, 1fr))', gap: 'var(--gap)', alignItems: 'start' }}>
+      {arr.map((e, idx) => <EntryCard key={e.id} e={e} index={idx + 1} quote={quoteOf(e.ticker)} onEdit={editorFor} onDelete={deleteEntry} />)}
+    </div>
+  );
+
+  /* ── 탭별 본문 ── */
+  const recentBlock = list.length > 0 && (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 2px 0' }}>
+        <span style={{ fontWeight: 700, fontSize: 13 }}>최근 일지</span>
+        <span className="mono" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-4)' }}>{list.length}건</span>
+        <span style={{ flex: 1 }} />
+        <button onClick={() => setTab('journal')} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--violet-600)' }}>전체 보기 ›</button>
+      </div>
+      {cardsOf(list.slice(0, wide ? 4 : 3))}
+    </>
+  );
+
+  const homeView = wide ? (
+    /* 넓은 화면 — 중앙: 성과·일지 / 우: 일기·루틴·회고 (팝업 없이 한 화면) */
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: 'var(--gap)', alignItems: 'start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
+        <BalanceBand market={filter} bal={bal} onSeed={() => setModal({ type: 'settings' })} />
+        <RedFolderCard items={redfolder} />
+        <PerfCard stats={heroStats} onStats={() => setTab('stats')} height={150} />
+        {recentBlock}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', position: 'sticky', top: 76 }}>
+        <DiaryHome diary={diary} upsert={upsertDiary} />
+        <RoutineCard routine={{ ...routineProps, open: routineOpen, setOpen: setRoutineOpen }} />
+        <CalendarMemoCard memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} />
+      </div>
+    </div>
+  ) : (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <DiaryHome diary={diary} upsert={upsertDiary} />
+      <BalanceBand market={filter} bal={bal} onSeed={() => setModal({ type: 'settings' })} />
+      <RedFolderCard items={redfolder} />
+      <PerfCard stats={heroStats} onStats={() => setTab('stats')} height={96} />
+      <RoutineCard routine={{ ...routineProps, open: routineOpen, setOpen: setRoutineOpen }} />
+      {recentBlock}
+    </div>
+  );
+
+  const journalView = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="메모 · 종목 · 셋업 · 태그 검색" style={{ flex: 1 }} />
+        <select value={period} onChange={e => setPeriod(e.target.value)} style={{ width: 'auto', minWidth: 110 }}>
+          <option value="all">전체 기간</option>
+          <option value="month">이번 달</option>
+          <option value="30d">최근 30일</option>
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {[['all', '전체', list.length], ['held', '보유중', held.length], ['closed', '청산', closed.length]].map(([v, l, n]) => (
+          <button key={v} onClick={() => setStatus(v)} className={status === v ? '' : 'chip'} style={status === v
+            ? { fontSize: 11.5, fontWeight: 700, color: '#fff', background: 'var(--violet)', borderRadius: 99, padding: '6px 12px' }
+            : { fontSize: 11.5, fontWeight: 600, padding: '6px 12px' }}>{l} {n}</button>
+        ))}
+      </div>
+      {shownList.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '52px 20px', color: 'var(--ink-3)' }}>
+          <div style={{ fontSize: 15 }}>{(search || period !== 'all' || status !== 'all') ? '조건에 맞는 일지가 없어요.' : '아직 일지가 없어요.'}</div>
+          {!(search || period !== 'all' || status !== 'all') && <div style={{ fontSize: 13.5, marginTop: 4 }}>오른쪽 아래 <b style={{ color: 'var(--violet)' }}>＋</b> 로 첫 기록을 남겨보세요.</div>}
+        </div>
+      ) : status !== 'all' ? cardsOf(shownList) : (
+        <>
+          {held.length > 0 && (
+            <>
+              <div className="seclabel" style={{ paddingLeft: 2 }}>보유중 {heldPnl !== 0 && <span className="mono">· 평가손익 {TJ.moneyS(heldPnl)}</span>}</div>
+              {cardsOf(held)}
+            </>
+          )}
+          {closed.length > 0 && (
+            <>
+              <div className="seclabel" style={{ paddingLeft: 2, marginTop: held.length ? 6 : 0 }}>청산</div>
+              {cardsOf(closed)}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  const body = tab === 'home' ? homeView
+    : tab === 'journal' ? journalView
+      : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
+        : <DashboardModal entries={entries} market={filter} asPage onClose={() => setTab('home')} />;
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: 96 }}>
+    <div style={{ minHeight: '100vh', paddingBottom: wide ? 24 : 96, display: wide ? 'flex' : 'block' }}>
+      {/* ── 좌측 내비 (넓은 화면) ── */}
+      {wide && (
+        <aside style={{ width: 208, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', padding: '16px 13px', display: 'flex', flexDirection: 'column', gap: 18, height: '100vh', position: 'sticky', top: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 24, height: 24, borderRadius: 7, background: 'var(--violet)', display: 'grid', placeItems: 'center' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l5-5 4 4 8-9" /><path d="M21 7v5" /><path d="M16 7h5" /></svg>
+            </span>
+            <b style={{ fontSize: 16, letterSpacing: '-.02em' }}>거래일지</b>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="seclabel" style={{ paddingLeft: 2 }}>계좌</div>
+            {TJ.MARKETS.map(m => {
+              const on = filter === m, b = balOf(m);
+              return (
+                <button key={m} onClick={() => setFilter(m)} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', borderRadius: 11,
+                  background: on ? MKT_C[m] : 'var(--surface)', color: on ? '#fff' : 'var(--ink-2)',
+                  border: on ? 'none' : '1px solid var(--border)', width: '100%', textAlign: 'left',
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: on ? '#fff' : MKT_C[m] }} />
+                  <span style={{ fontSize: 13, fontWeight: on ? 700 : 600 }}>{m}</span><span style={{ flex: 1 }} />
+                  <span className="mono" style={{ fontSize: 11.5, fontWeight: 700 }}>{TJ.moneyS(b.pnl)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div className="seclabel" style={{ paddingLeft: 2, marginBottom: 6 }}>화면</div>
+            {TABS.map(([v, ic, l]) => (
+              <button key={v} className={'navitem' + (tab === v ? ' on' : '')} onClick={() => setTab(v)}><span>{ic}</span>{l}</button>
+            ))}
+            <button className="navitem" onClick={() => setModal({ type: 'holdings' })}><span>◈</span>보유 현황</button>
+          </div>
+          <span style={{ flex: 1 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <button className="navitem" onClick={() => setModal({ type: 'sync' })} style={{ fontSize: 12.5, color: 'var(--ink-3)' }}><span>◷</span>{syncId ? (syncStatus === 'err' ? '동기화 오프라인' : '동기화됨') : '동기화'}</button>
+            <button className="navitem" onClick={() => setModal({ type: 'principles' })} style={{ fontSize: 12.5, color: 'var(--ink-3)' }}><span>◎</span>원칙</button>
+            <button className="navitem" onClick={() => setModal({ type: 'menu' })} style={{ fontSize: 12.5, color: 'var(--ink-3)' }}><span>⚙</span>설정 · 백업</button>
+          </div>
+        </aside>
+      )}
+
+      <div style={{ flex: 1, minWidth: 0 }}>
       {/* ── 헤더 ── */}
       <header style={{
-        position: 'sticky', top: 0, zIndex: 30, background: 'rgba(244,243,246,.82)',
+        position: 'sticky', top: 0, zIndex: 30, background: 'rgba(250,246,240,.92)',
         backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)',
       }}>
-        <div style={{ maxWidth: 1080, margin: '0 auto', padding: '13px 22px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--violet)', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l5-5 4 4 8-9" /><path d="M21 7v5" /><path d="M16 7h5" /></svg>
-            </div>
-            <h1 style={{ fontSize: 18, letterSpacing: '-.02em' }}>거래일지</h1>
+        <div style={{ maxWidth: 1080, margin: '0 auto', padding: wide ? '11px 20px' : '10px 14px 9px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {!wide && (
+              <div style={{ width: 22, height: 22, borderRadius: 7, background: 'var(--violet)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l5-5 4 4 8-9" /><path d="M21 7v5" /><path d="M16 7h5" /></svg>
+              </div>
+            )}
+            <b style={{ fontSize: 15.5, letterSpacing: '-.02em' }}>{wide ? filter : (tab === 'home' ? '거래일지' : TABS.find(t => t[0] === tab)[2])}</b>
+            {tab === 'journal' && <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)' }}>{list.length}건</span>}
+            {tab === 'diary' && <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)' }}>{(diary || []).filter(d => d.text || d.mood).length}편</span>}
             {flash && <span style={{ fontSize: 12.5, color: 'var(--win)', fontWeight: 600, animation: 'fade-in .2s' }}>{flash}</span>}
-            {!flash && syncId && (
-              <span title="클라우드 동기화 켜짐" style={{ fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4, color: syncStatus === 'err' ? 'var(--loss)' : 'var(--ink-3)' }}>
-                ☁ {syncStatus === 'syncing' ? '동기화 중…' : syncStatus === 'err' ? '오프라인' : '동기화됨'}
+            <span style={{ flex: 1 }} />
+            {settings.currency === '₩' && (
+              <span title={fx.at ? '실시간 환율 · ' + new Date(fx.at).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준' : '기본 환율(실시간 로딩 전)'}
+                style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--bg-tint)', padding: '4px 9px', borderRadius: 8, whiteSpace: 'nowrap' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: fx.at ? 'var(--win)' : 'var(--ink-4)' }} />
+                $1=₩{Math.round(fx.rate).toLocaleString('en-US')}
               </span>
             )}
+            {!wide && <button className="btn-ghost btn-sm" onClick={() => setModal({ type: 'holdings' })} style={{ padding: '6px 10px', fontSize: 12 }}>보유</button>}
+            {!wide && <button className="btn-ghost btn-sm" onClick={() => setModal({ type: 'menu' })} style={{ padding: '6px 10px', fontSize: 12 }}>더보기</button>}
+            {wide && <button className="btn" onClick={() => setModal({ type: 'editor', entry: null })} style={{ padding: '8px 14px', fontSize: 12.5 }}>＋ 새 일지</button>}
           </div>
-          {settings.currency === '₩' && (
-            <span title={fx.at ? '실시간 환율 · ' + new Date(fx.at).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준' : '기본 환율(실시간 로딩 전)'}
-              style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)', display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--bg-tint)', padding: '4px 9px', borderRadius: 8, whiteSpace: 'nowrap' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: fx.at ? 'var(--win)' : 'var(--ink-4)' }} />
-              $1=₩{Math.round(fx.rate).toLocaleString('en-US')}
-            </span>
-          )}
-          <button className="btn-ghost btn-sm" onClick={() => setModal({ type: 'principles' })}>원칙</button>
+          {/* 계좌 탭 — 모든 숫자의 전제라 최상단 고정 (일기는 계좌와 무관 · 넓은 화면은 좌측 내비가 대신함) */}
+          {!wide && tab !== 'diary' && acctSeg}
         </div>
       </header>
 
-      <main style={{ maxWidth: 1080, margin: '0 auto', padding: '22px' }}>
-        {/* ── 오늘 일기 (홈) ── */}
-        <DiaryHome diary={diary} upsert={upsertDiary} />
-
-        {/* ── 시장 모드 (선물 · 스윙 · 장기 완전 분리) ── */}
-        <div style={{ display: 'flex', gap: 8, width: '100%', marginBottom: 16 }}>
-          {[['선물', 'var(--futures)'], ['스윙', 'var(--swing)'], ['장기', 'var(--long)']].map(([m, c]) => {
-            const on = filter === m;
-            return (
-              <button key={m} onClick={() => setFilter(m)} style={{
-                flex: 1, padding: '13px 0', borderRadius: 12, fontSize: 15.5, fontWeight: 800,
-                border: '1.5px solid ' + (on ? c : 'var(--border)'),
-                background: on ? c : 'var(--surface)', color: on ? '#fff' : 'var(--ink-3)',
-                boxShadow: on ? 'var(--shadow-sm)' : 'none', transition: 'all .15s',
-              }}>{m}</button>
-            );
-          })}
-        </div>
-
-        {/* ── 레드폴더 (오늘 고임팩트 뉴스) ── */}
-        <RedFolderCard items={redfolder} />
-
-        {/* ── HERO (선택한 시장만) ── */}
-        <Hero stats={heroStats} market={filter} bal={bal}
-          onSeed={() => setModal({ type: 'settings' })} onStats={() => setModal({ type: 'stats' })}
-          routine={{ items: checkItems, checks, done: doneCount, total: checkItems.length, toggle: toggleCheck, principles, open: routineOpen, setOpen: setRoutineOpen, onEdit: () => setModal({ type: 'principles' }) }}
-          memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }}
-          showRoutine={t.showRoutine} />
-
-        {/* ── 툴바 ── */}
-        <div style={{ display: 'flex', gap: 10, marginTop: 22, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="메모 · 셋업 · 태그 검색" />
-          </div>
-          <select value={period} onChange={e => setPeriod(e.target.value)} style={{ width: 'auto', minWidth: 120 }}>
-            <option value="all">전체 기간</option>
-            <option value="month">이번 달</option>
-            <option value="30d">최근 30일</option>
-          </select>
-          <button className="btn-ghost" onClick={() => setModal({ type: 'holdings' })}>보유</button>
-          <button className="btn-ghost" onClick={() => setModal({ type: 'stats' })}>통계</button>
-          <button className="btn-ghost" onClick={() => setModal({ type: 'menu' })}>더보기</button>
-        </div>
-
-        {/* ── 일지 리스트 ── */}
-        <div style={{ marginTop: 18 }}>
-          {list.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '56px 20px', color: 'var(--ink-3)' }}>
-              <div style={{ color: 'var(--ink-4)', marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 13h6M9 17h4" /></svg>
-              </div>
-              <div style={{ fontSize: 15 }}>{(search || period !== 'all') ? '조건에 맞는 일지가 없어요.' : '아직 일지가 없어요.'}</div>
-              {!(search || period !== 'all') && <div style={{ fontSize: 13.5, marginTop: 4 }}>오른쪽 아래 <b style={{ color: 'var(--violet)' }}>＋</b> 로 첫 기록을 남겨보세요.</div>}
-            </div>
-          ) : (
-            <div style={{ columnGap: 'var(--gap)', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(330px, 1fr))', gap: 'var(--gap)', alignItems: 'start' }}>
-              {list.map((e, idx) => <EntryCard key={e.id} e={e} index={idx + 1} onEdit={id => setModal({ type: 'editor', entry: entries.find(x => x.id === id) })} onDelete={deleteEntry} />)}
-            </div>
-          )}
-        </div>
+      <main style={{ maxWidth: 1080, margin: '0 auto', padding: wide ? '18px 20px' : '14px 14px 10px' }}>
+        {body}
       </main>
+      </div>
 
-      {/* ── FAB ── */}
-      <button onClick={() => setModal({ type: 'editor', entry: null })} aria-label="새 일지" title="새 일지" style={{
-        position: 'fixed', right: 24, bottom: 24, width: 58, height: 58, borderRadius: '50%',
-        background: 'var(--violet)', color: '#fff',
-        boxShadow: '0 8px 24px rgba(74,52,30,.32)', zIndex: 40, display: 'grid', placeItems: 'center',
-        transition: 'transform .15s var(--ease), box-shadow .15s',
-      }} onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.06)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-      </button>
+      {/* ── FAB (모바일: 탭바 위 · 넓은 화면: 헤더 버튼으로 대체) ── */}
+      {!wide && (tab === 'home' || tab === 'journal') && (
+        <button onClick={() => setModal({ type: 'editor', entry: null })} aria-label="새 일지" title="새 일지" style={{
+          position: 'fixed', right: 16, bottom: 78, width: 54, height: 54, borderRadius: '50%',
+          background: 'var(--violet)', color: '#fff',
+          boxShadow: '0 8px 20px rgba(42,36,30,.28)', zIndex: 45, display: 'grid', placeItems: 'center',
+        }}>
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        </button>
+      )}
+
+      {/* ── 하단 탭바 (모바일) ── */}
+      {!wide && (
+        <nav className="tabbar">
+          {TABS.map(([v, ic, l]) => (
+            <button key={v} className={tab === v ? 'on' : ''} onClick={() => setTab(v)}>
+              <span className="ic">{ic}</span>{l}
+            </button>
+          ))}
+        </nav>
+      )}
 
       {/* ── 모달 ── */}
       {modal?.type === 'editor' && <EditorModal entry={modal.entry} accts={{ '선물': balF.bal, '스윙': balW.bal, '장기': balL.bal }} defaultRisk={{ mode: settings.futuresRiskMode || '$', val: settings.futuresRiskVal ?? null }} defaultMarket={filter} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}

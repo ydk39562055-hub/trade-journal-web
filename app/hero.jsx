@@ -365,6 +365,123 @@ function RoutineMemoRow({ routine, memo, showRoutine }) {
   );
 }
 
+/* ─────────────── 성과 카드 1장 (곡선 · 승률 · R분포를 세그먼트로) ─────────────── */
+function PerfCard({ stats: s, onStats, height = 96 }) {
+  const [view, setView] = useStateH('curve');
+  const money = s.useMoney;
+  const split = TJStats.curveSplit(s.pool);
+  const multi = split.series.length > 1;
+  const seg = { padding: '5px 11px', fontSize: 11.5, borderRadius: 7 };
+  return (
+    <div className="card" style={{ padding: '13px 16px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9 }}>
+        <div className="seg" style={{ padding: 2, borderRadius: 9 }}>
+          {[['curve', '곡선'], ['win', '승률'], ['r', 'R 분포']].map(([v, l]) => (
+            <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)} style={seg}>{l}</button>
+          ))}
+        </div>
+        <span style={{ flex: 1 }} />
+        <button onClick={onStats} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--violet-600)' }}>통계 ›</button>
+      </div>
+
+      {view === 'curve' && (
+        <>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--ink-3)' }}>누적 손익 ({money ? '금액' : 'R'})</div>
+          <div className="mono" style={{ fontSize: 23, fontWeight: 800, lineHeight: 1.3 }}>{money ? TJ.moneyS(s.sumP) : ((s.sumR > 0 ? '+' : '') + fnumH(s.sumR) + 'R')}</div>
+          {split.series.length
+            ? <EquityCurve series={multi ? split.series : null} points={!multi ? split.series[0].points : null} money={split.useMoney} height={height} />
+            : <div style={{ color: 'var(--ink-3)', fontSize: 12.5, padding: '26px 0', textAlign: 'center' }}>거래를 기록하면 곡선이 그려져요</div>}
+        </>
+      )}
+
+      {view === 'win' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '6px 0' }}>
+          <WinDonut win={s.wins} loss={s.losses} be={s.bes} size={96} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7, fontSize: 12.5 }}>
+            {[['익절', s.wins, 'var(--win)'], ['손절', s.losses, 'var(--loss)'], ['본전', s.bes, 'var(--be)']].map(([l, n, c]) => (
+              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: c }} />
+                <span style={{ color: 'var(--ink-2)', flex: 1 }}>{l}</span>
+                <span className="mono" style={{ fontWeight: 700 }}>{n}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'r' && (s.rs.length
+        ? <div style={{ paddingTop: 4 }}><RDistribution rs={s.rs} height={height + 8} /></div>
+        : <div style={{ color: 'var(--ink-4)', fontSize: 12.5, padding: '30px 0', textAlign: 'center' }}>R 입력 시 표시</div>)}
+
+      {s.closed && s.closed.length > 0 && (
+        <div style={{ display: 'flex', gap: 14, marginTop: 8, paddingTop: 9, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+          <span className="mono" style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-2)' }}>승률 {Math.round(s.winRate)}%</span>
+          <span className="mono" style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-2)' }}>PF {s.pf === Infinity ? '∞' : Math.round(s.pf * 100) / 100}</span>
+          <span className="mono" style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-2)' }}>기댓값 {money ? TJ.moneyS(s.avgP) : ((s.avgR > 0 ? '+' : '') + fnumH(s.avgR) + 'R')}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* 이번 달 기분 흐름 — 일기 탭 상단 스트립 */
+function MoodStrip({ diary }) {
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+  const todayS = `${ym}-${pad(now.getDate())}`;
+  const days = now.getDate();
+  const by = {}; (diary || []).forEach(x => { if (x && x.date) by[x.date] = x; });
+  const C = { '좋음': 'var(--ink)', '보통': 'var(--ink-3)', '나쁨': 'var(--long)' };
+  const cnt = { '좋음': 0, '보통': 0, '나쁨': 0 };
+  const cells = [];
+  for (let d = 1; d <= days; d++) {
+    const ds = `${ym}-${pad(d)}`, m = by[ds] && by[ds].mood;
+    if (m && cnt[m] != null) cnt[m]++;
+    cells.push({ ds, m });
+  }
+  const show = cells.slice(-15);
+  return (
+    <div className="card" style={{ padding: '13px 15px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+        <span className="seclabel">이번 달 기분 흐름</span>
+        <span style={{ flex: 1 }} />
+        <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)' }}>좋음 {cnt['좋음']} · 보통 {cnt['보통']} · 나쁨 {cnt['나쁨']}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${show.length}, 1fr)`, gap: 4 }}>
+        {show.map(c => (
+          <span key={c.ds} title={c.ds + (c.m ? ' · ' + c.m : '')} style={{
+            height: 26, borderRadius: 5,
+            background: c.m ? C[c.m] : (c.ds === todayS ? 'var(--violet-50)' : '#efe8df'),
+            border: c.ds === todayS ? '1.5px solid var(--violet)' : 'none',
+          }} />
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)' }}>{show[0] ? show[0].ds.slice(5).replace('-', '/') : ''}</span>
+        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)' }}>오늘</span>
+      </div>
+    </div>
+  );
+}
+
+/* 일기 탭 — 기분 흐름 + 하루 일기 / 회고 메모 / 루틴·원칙 */
+function DiaryTab({ diary, upsert, memo, routine }) {
+  const [sub, setSub] = useStateH('diary');
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="seg" style={{ width: '100%' }}>
+        {[['diary', '하루 일기'], ['memo', '회고 메모'], ['rule', '루틴·원칙']].map(([v, l]) => (
+          <button key={v} className={sub === v ? 'on' : ''} onClick={() => setSub(v)} style={{ fontSize: 13 }}>{l}</button>
+        ))}
+      </div>
+      {sub === 'diary' && <><MoodStrip diary={diary} /><DiaryHome diary={diary} upsert={upsert} alwaysOpen /></>}
+      {sub === 'memo' && <CalendarMemoCard memo={memo} />}
+      {sub === 'rule' && <RoutineCard routine={routine} defaultOpen />}
+    </div>
+  );
+}
+
 /* ─────────────── HERO ─────────────── */
 function Hero({ stats: s, market, bal, onSeed, onStats, routine, memo, showRoutine }) {
   const money = s.useMoney;
@@ -456,7 +573,7 @@ function DiaryDayEditor({ date, entry, upsert }) {
   );
 }
 
-function DiaryHome({ diary, upsert }) {
+function DiaryHome({ diary, upsert, alwaysOpen }) {
   const pad = n => String(n).padStart(2, '0');
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
@@ -467,9 +584,10 @@ function DiaryHome({ diary, upsert }) {
 
   const past = (diary || []).filter(x => x && x.date && x.date !== todayStr && (x.text || x.mood)).sort((a, b) => b.date.localeCompare(a.date));
   const months = [...new Set(past.map(x => x.date.slice(0, 7)))].sort().reverse();
-  const [open, setOpen] = useStateH(() => { try { return localStorage.getItem('tj_diary_open') !== '0'; } catch { return true; } });
-  const toggleOpen = () => setOpen(v => { const nv = !v; try { localStorage.setItem('tj_diary_open', nv ? '1' : '0'); } catch {} return nv; });
-  const [pastOpen, setPastOpen] = useStateH(false);
+  const [open_, setOpen] = useStateH(() => { try { return localStorage.getItem('tj_diary_open') !== '0'; } catch { return true; } });
+  const open = alwaysOpen ? true : open_;
+  const toggleOpen = () => { if (alwaysOpen) return; setOpen(v => { const nv = !v; try { localStorage.setItem('tj_diary_open', nv ? '1' : '0'); } catch {} return nv; }); };
+  const [pastOpen, setPastOpen] = useStateH(!!alwaysOpen);
   const [ym, setYm] = useStateH(() => months[0] || todayStr.slice(0, 7));
   const [editDate, setEditDate] = useStateH(null);
   const ymShift = d => { const [Y, M] = ym.split('-').map(Number); const nd = new Date(Y, M - 1 + d, 1); setYm(`${nd.getFullYear()}-${pad(nd.getMonth() + 1)}`); };
@@ -528,4 +646,4 @@ function DiaryHome({ diary, upsert }) {
   );
 }
 
-Object.assign(window, { Hero, RoutineCard, CalendarMemoCard, BalanceBand, DiaryHome });
+Object.assign(window, { Hero, RoutineCard, CalendarMemoCard, BalanceBand, DiaryHome, PerfCard, DiaryTab, MoodStrip });
