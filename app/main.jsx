@@ -57,7 +57,8 @@ function mergeBlobs(a, b) {
     const prev = dd.get(x.date);
     if (!prev || (x.updated_at || '') >= (prev.updated_at || '')) dd.set(x.date, x);
   }
-  const diary = [...dd.values()];
+  // 빈 일기(글도 기분도 없음)는 버림 — 예전 버전이 만들어 둔 껍데기가 동기화로 되살아나지 않게
+  const diary = [...dd.values()].filter(x => (x.text && x.text.trim()) || x.mood);
   // 보유종목: id 합집합, 같은 id면 updated_at 최신, 삭제된 건 제외
   const hm = new Map();
   for (const h of [...(a.holdings || []), ...(b.holdings || [])]) {
@@ -245,7 +246,10 @@ function App() {
       return Array.isArray(cur) ? cur : [];
     } catch { return []; }
   });
-  const [diary, setDiary] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_diary_v1') || '[]'); } catch { return []; } });
+  const [diary, setDiary] = useState(() => {
+    // 예전 버전이 만든 빈 일기(칸만 눌러도 생기던 것) 한 번 청소
+    try { const a = JSON.parse(localStorage.getItem('tj_diary_v1') || '[]'); return Array.isArray(a) ? a.filter(x => x && ((x.text && x.text.trim()) || x.mood)) : []; } catch { return []; }
+  });
   const [holdings, setHoldings] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_holdings_v1') || '[]'); } catch { return []; } });
   const [checks, setChecks] = useState(() => {
     try { const o = JSON.parse(localStorage.getItem('tj_checks_v2') || '{}'); if (o.d === todayStr()) return new Set(o.s || []); } catch {}
@@ -419,6 +423,7 @@ function App() {
   const upsertDiary = (date, patch) => {
     setDiary(prev => {
       const now = new Date().toISOString();
+      if (patch === null) return prev.filter(x => x.date !== date);   // 빈 일기는 남기지 않음(지웠을 때도 정리)
       const i = prev.findIndex(x => x.date === date);
       if (i >= 0) { const n = prev.slice(); n[i] = { ...n[i], ...patch, date, updated_at: now }; return n; }
       return [...prev, { date, mood: null, text: '', ...patch, updated_at: now }];

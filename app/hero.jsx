@@ -579,8 +579,10 @@ function DiaryDayEditor({ date, entry, upsert }) {
   const [mood, setMood] = useStateH(entry?.mood || null);
   const [saved, setSaved] = useStateH(false);
   const flash = () => { setSaved(true); setTimeout(() => setSaved(false), 1400); };
-  const save = () => { upsert(date, { text: text.trim(), mood }); flash(); };
-  const pickMood = v => { const nv = mood === v ? null : v; setMood(nv); upsert(date, { text: text.trim(), mood: nv }); flash(); };
+  // 빈 일기(글도 기분도 없음)는 저장하지 않음 — 칸만 눌렀다 떼도 기록이 생기던 문제
+  const put = (t, m) => { if (!t && !m) { upsert(date, null); return false; } upsert(date, { text: t, mood: m }); return true; };
+  const save = () => { if (put(text.trim(), mood)) flash(); };
+  const pickMood = v => { const nv = mood === v ? null : v; setMood(nv); if (put(text.trim(), nv)) flash(); };
   return (
     <div>
       <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
