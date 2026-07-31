@@ -187,6 +187,10 @@ function BalanceBand({ market, bal, onSeed, big, holdVal }) {
     );
   }
   const pos = bal.pnl >= 0;
+  // 시드를 아직 안 넣었으면 큰 숫자는 '잔고'가 아니라 지금 보유한 평가금액 — 손익만 띄우면 의미 없는 숫자가 됨
+  const noSeed = bal.seed == null;
+  const hv = (holdVal && holdVal.total > 0) ? holdVal : null;
+  const headMode = noSeed && hv ? 'value' : 'bal';
   return (
     <button onClick={onSeed} className="card" style={{
       width: '100%', textAlign: 'left', padding: big ? '24px 26px' : '20px 22px',
@@ -199,23 +203,31 @@ function BalanceBand({ market, bal, onSeed, big, holdVal }) {
           <div style={{ fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: 3, background: c }} />
             <span style={{ color: c }}>{market}</span>
-            <span style={{ color: 'var(--ink-3)', fontWeight: 600 }}>잔고</span>
+            <span style={{ color: 'var(--ink-3)', fontWeight: 600 }}>{headMode === 'value' ? '평가금액' : '잔고'}</span>
             <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 500 }}>시드 설정</span>
           </div>
-          <div className="mono" style={{ fontSize: big ? 44 : 32, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-.02em', marginTop: 4 }}>{usdH(bal.bal)}</div>
+          <div className="mono" style={{ fontSize: big ? 44 : 32, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-.02em', marginTop: 4 }}>
+            {headMode === 'value' ? usdH(hv.total) : usdH(bal.bal)}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="mono" style={{ fontSize: big ? 19 : 16, fontWeight: 800, color: 'var(--ink)' }}>{TJ.moneyS(bal.pnl)}</span>
           {bal.ret != null && <span className="pill mono" style={{ background: 'var(--bg-tint)', color: 'var(--ink-2)', fontSize: 12.5 }}>{pos ? '+' : '−'}{Math.abs(bal.ret).toFixed(1)}%</span>}
         </div>
       </div>
-      {/* 보유 총 평가금액 + 실현/미실현 분리 — 증권사 앱 금액과 바로 비교할 수 있게 */}
-      {(bal.hasOpen || (holdVal && holdVal.total > 0)) && (
+
+      {headMode === 'value' ? (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap', marginTop: -4 }}>
+          <span style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>{hv.n}종목 · 실시간 시세</span>
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 11.5, color: 'var(--violet-600)', fontWeight: 700 }}>시드를 넣으면 수익률까지 계산 ›</span>
+        </div>
+      ) : (bal.hasOpen || hv) && (
         <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap', marginTop: -4 }}>
-          {holdVal && holdVal.total > 0 && (
+          {hv && (
             <span style={{ fontSize: 12, color: 'var(--ink-2)', fontWeight: 700 }}>
-              보유 <span className="mono" style={{ fontSize: 14, fontWeight: 800 }}>{TJ.money(holdVal.total)}</span>
-              <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600 }}> · {holdVal.n}종목</span>
+              보유 <span className="mono" style={{ fontSize: 14, fontWeight: 800 }}>{TJ.money(hv.total)}</span>
+              <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600 }}> · {hv.n}종목</span>
             </span>
           )}
           {bal.hasOpen && <>
