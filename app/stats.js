@@ -134,13 +134,33 @@
   }
 
   // 잔고 계산 (시드=달러 기준, ₩ 거래 손익은 달러로 환산해 합산)
-  function balanceOf(entries, market, seed, deposit) {
-    const pnl = entries.filter(e => e.market === market)
-      .reduce((a, e) => { const v = pnlUSD(e); return a + (v || 0); }, 0);
-    const s = num(seed);
+  // opts.quoteOf(ticker) 를 주면 보유중(미실현) 평가손익까지 잔고에 반영 — 스윙·장기는 돈이 보유중에 묶여 있어서 이게 없으면 잔고가 안 맞음
+  // opts.autoSeed = 시드를 안 넣었을 때 대신 쓸 투자원금(보유중 매수금액 합계)
+  function balanceOf(entries, market, seed, deposit, opts) {
+    const mine = entries.filter(e => e.market === market);
+    const pnl = mine.reduce((a, e) => { const v = pnlUSD(e); return a + (v || 0); }, 0);   // 실현손익
+    let open = 0, openable = false;                                                        // 미실현 평가손익
+    const qf = opts && opts.quoteOf;
+    if (qf) {
+      mine.forEach(e => {
+        if (e.result !== 'holding' || !num(e.shares) || e.entry_price == null) return;
+        const q = qf(e.ticker); if (!q || !num(q.price)) return;
+        const live = TJ.toUSD(q.price, q.currency === 'KRW' ? '₩' : '$');
+        open += (live - TJ.toUSD(e.entry_price, e.currency)) * num(e.shares);
+        openable = true;
+      });
+    }
+    let s = num(seed);
+    const auto = (s == null && opts && num(opts.autoSeed) > 0) ? Math.round(num(opts.autoSeed)) : null;
+    if (auto != null) s = auto;                                                            // 시드 미설정 → 보유 투자원금으로 자동
     const dep = num(deposit) || 0;            // 추가 입금 누계
     const base = (s || 0) + dep;              // 투입 원금 = 시드 + 입금
-    return { seed: s, deposit: dep, base, pnl, bal: base + pnl, ret: base ? pnl / base * 100 : null };
+    const total = pnl + open;                 // 실현 + 미실현
+    return {
+      seed: s, autoSeed: auto, deposit: dep, base,
+      pnl: total, realized: pnl, open, hasOpen: openable,
+      bal: base + total, ret: base ? total / base * 100 : null,
+    };
   }
 
   // 누적 곡선을 마켓별(선물/현물)로 분리

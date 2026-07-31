@@ -402,7 +402,11 @@ function SettingsModal({ settings, onSave, seedSuggest, onClose }) {
                   </div>
                   <button className="btn-ghost btn-sm" onClick={() => setSeed(m.key, String(Math.round(s.total)))} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>시드에 넣기</button>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 5, lineHeight: 1.45 }}>넣은 뒤 남은 현금·다른 계좌 금액은 직접 더하면 됩니다.</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 5, lineHeight: 1.45 }}>
+                  {seeds[m.key] === '' || seeds[m.key] == null
+                    ? '비워두면 이 금액이 자동으로 원금이 됩니다. 예수금까지 넣고 싶으면 직접 적으세요.'
+                    : '넣은 뒤 남은 현금·다른 계좌 금액은 직접 더하면 됩니다. 비우면 다시 자동.'}
+                </div>
               </div>
             );
           })()}

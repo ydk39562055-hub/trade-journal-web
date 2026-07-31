@@ -200,7 +200,9 @@ function BalanceBand({ market, bal, onSeed, big }) {
             <span style={{ width: 8, height: 8, borderRadius: 3, background: c }} />
             <span style={{ color: c }}>{market}</span>
             <span style={{ color: 'var(--ink-3)', fontWeight: 600 }}>잔고</span>
-            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 500 }}>시드 설정</span>
+            {bal.autoSeed != null
+              ? <span title="시드를 안 넣어서 보유 종목 매수금액을 원금으로 잡았습니다. 시드를 직접 넣으면 그 값이 우선합니다." style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--violet-600)', background: 'var(--violet-50)', padding: '2px 6px', borderRadius: 5 }}>보유 기준 자동</span>
+              : <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 500 }}>시드 설정</span>}
           </div>
           <div className="mono" style={{ fontSize: big ? 44 : 32, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-.02em', marginTop: 4 }}>{usdH(bal.bal)}</div>
         </div>
@@ -209,6 +211,13 @@ function BalanceBand({ market, bal, onSeed, big }) {
           {bal.ret != null && <span className="pill mono" style={{ background: 'var(--bg-tint)', color: 'var(--ink-2)', fontSize: 12.5 }}>{pos ? '+' : '−'}{Math.abs(bal.ret).toFixed(1)}%</span>}
         </div>
       </div>
+      {/* 보유중이 있으면 실현 / 평가(미실현)를 나눠 보여줌 — 어디서 온 손익인지 헷갈리지 않게 */}
+      {bal.hasOpen && (
+        <div style={{ display: 'flex', gap: 12, fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600, marginTop: -4 }}>
+          <span className="mono">실현 {TJ.moneyS(bal.realized)}</span>
+          <span className="mono">평가 {TJ.moneyS(bal.open)}</span>
+        </div>
+      )}
     </button>
   );
 }

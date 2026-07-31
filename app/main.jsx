@@ -642,8 +642,9 @@ function App() {
 
   TJ.setCurrency(settings.currency); TJ.setRate(fx.rate);   // 전역 통화($/₩)+실시간환율 — 렌더 전 동기 반영(자식 포매터가 읽음)
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
-  const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit);
-  const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit);
+  // 스윙·장기는 자금이 보유중에 묶여 있어 미실현 평가손익까지 반영 + 시드 미설정 시 보유 투자원금으로 자동
+  const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit, { quoteOf, autoSeed: seedSuggest['스윙'] && seedSuggest['스윙'].total });
+  const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit, { quoteOf, autoSeed: seedSuggest['장기'] && seedSuggest['장기'].total });
   // 선물/스윙/장기 완전 분리 — 활성 시장만 표시(합산 없음)
   const bal = filter === '스윙' ? balW : filter === '장기' ? balL : balF;
 

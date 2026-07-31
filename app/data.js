@@ -21,7 +21,8 @@
     holding: { ko: '보유중', cls: 'be' },
   };
 
-  const SEED = { futuresSeed: 10000, swingSeed: 5000, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0, currency: '$' };
+  // 스윙·장기 시드는 비워둠 — 안 넣으면 보유 종목 매수금액을 원금으로 자동 사용(직접 넣으면 그 값 우선)
+  const SEED = { futuresSeed: 10000, swingSeed: null, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0, currency: '$' };
 
   // ── 통화 (전역 토글: $ 달러 / ₩ 원화) ──
   // 저장값은 항상 달러(기준). ₩ 모드는 실시간 환율(USD→KRW)로 표시만 환산(비파괴).
