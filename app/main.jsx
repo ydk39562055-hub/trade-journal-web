@@ -475,6 +475,7 @@ function App() {
         ticker: sym || nm || '종목',
         shares: Number(h.qty) || 0,
         entry_price: px,
+        avg_est: h.avgEst === true ? true : undefined,   // 평단을 시세로 자동채움 = 추정치(카드에 ? 표시)
         currency: isKR && wonShown ? '₩' : '$',
         setups: [], errors: [], photos: [],
         body: (nm && nm.toUpperCase() !== sym) ? nm : '',      // 티커는 카드 머리에 이미 나옴 — 이름만(같으면 비움)
@@ -493,6 +494,50 @@ function App() {
       return [...fresh, ...next];
     });
   };
+  // ── 매도(청산) — 수량과 판 가격만 넣으면 손익·수익률 자동. 일부만 팔면 나머지는 보유중으로 남음 ──
+  const sellPosition = (id, { qty, price, date, note }) => {
+    const now = new Date().toISOString();
+    let soldTicker = null, soldMarket = null, soldQty = 0;
+    setEntries(prev => {
+      const i = prev.findIndex(e => e.id === id); if (i < 0) return prev;
+      const e = prev[i];
+      const total = Number(e.shares) || 0;
+      const sold = Math.min(Number(qty) || 0, total || Number(qty) || 0);
+      const px = Number(price);
+      if (!(sold > 0) || isNaN(px)) return prev;
+      soldTicker = (e.ticker || '').toUpperCase(); soldMarket = e.market; soldQty = sold;
+      const buy = e.entry_price != null ? Number(e.entry_price) : null;
+      const cost = buy != null ? buy * sold : null;
+      const pnl = buy != null ? (px - buy) * sold * (e.direction === 'short' ? -1 : 1) : null;
+      const retPct = (cost && cost !== 0 && pnl != null) ? Math.round((pnl / Math.abs(cost)) * 1000) / 10 : null;
+      const result = pnl == null ? 'be' : (pnl > 0 ? 'win' : pnl < 0 ? 'loss' : 'be');
+      const closed = {
+        ...e, id: 'sell-' + Math.random().toString(36).slice(2, 10),
+        shares: sold, exit_price: px, traded_at: date || todayStr(),
+        result, pnl, return_pct: retPct,
+        body: (note && note.trim()) ? note.trim() : (e.body || ''),
+        created_at: now, updated_at: now,
+      };
+      const next = prev.slice();
+      if (sold >= total) next[i] = closed;                                   // 전량 → 그 기록을 청산으로 전환
+      else { next[i] = { ...e, shares: total - sold, updated_at: now }; next.unshift(closed); }  // 일부 → 남은 건 보유중
+      return next;
+    });
+    // 보유현황 수량도 같이 줄임 (0이 되면 제거)
+    if (soldTicker) {
+      const cur = holdings.find(h => h.account === soldMarket && (h.ticker || '').toUpperCase() === soldTicker);
+      if (cur) {
+        const left = (Number(cur.qty) || 0) - soldQty;
+        if (left > 0) setHoldings(prev => prev.map(h => (h.id === cur.id ? { ...h, qty: left, updated_at: now } : h)));
+        else {
+          setHoldings(prev => prev.filter(h => h.id !== cur.id));
+          setDeleted(p => ({ ...p, [cur.id]: now }));          // 다 팔았으면 보유목록에서 제거(동기화에도 반영)
+        }
+      }
+    }
+    setModal(null); doFlash('청산 기록됨 ✓');
+  };
+
   const clearHoldings = (account) => {
     const rm = holdings.filter(h => h.account === account).map(h => h.id);
     if (!rm.length) return;
@@ -656,6 +701,43 @@ function App() {
   const wide = typeof window !== 'undefined' && window.matchMedia('(min-width:1000px)').matches;
   const routineProps = { items: checkItems, checks, done: doneCount, total: checkItems.length, toggle: toggleCheck, principles, onEdit: () => setModal({ type: 'principles' }) };
 
+  // ── 리스크 규칙 감시 — 원칙에 적힌 "일일 −2R 종료 / 3연패 종료"를 앱이 실제로 지켜봄 ──
+  const riskAlert = useMemo(() => {
+    const stopR = settings.dailyStopR != null ? Number(settings.dailyStopR) : -2;
+    const streakN = settings.lossStreakStop != null ? Number(settings.lossStreakStop) : 3;
+    const mine = entries.filter(e => e.market === filter && e.result && e.result !== 'holding');
+    const today = todayStr();
+    const todayList = mine.filter(e => e.traded_at === today);
+    const dayR = todayList.reduce((a, e) => a + (TJStats.num(e.realized_r) || 0), 0);
+    const dayPnl = todayList.reduce((a, e) => a + (TJStats.num(e.pnl) || 0), 0);
+    // 연패 — 최근 거래부터 거슬러 손절이 몇 번 연속인지
+    const recent = mine.slice().sort((a, b) => (b.traded_at || '').localeCompare(a.traded_at || '') || (b.created_at || '').localeCompare(a.created_at || ''));
+    let streak = 0;
+    for (const e of recent) { if (e.result === 'loss') streak++; else break; }
+    const hitR = todayList.some(e => TJStats.num(e.realized_r) != null) && dayR <= stopR;
+    const hitStreak = streak >= streakN;
+    if (!hitR && !hitStreak) return null;
+    return {
+      hitR, hitStreak, dayR: Math.round(dayR * 100) / 100, dayPnl, streak, stopR, streakN,
+      msg: hitR && hitStreak ? `오늘 ${Math.round(dayR * 100) / 100}R · ${streak}연패` : hitR ? `오늘 ${Math.round(dayR * 100) / 100}R (한도 ${stopR}R)` : `${streak}연패`,
+    };
+  }, [entries, filter, settings.dailyStopR, settings.lossStreakStop]);
+  const [riskHid, setRiskHid] = useState(() => localStorage.getItem('tj_risk_hidden') === todayStr());
+  const hideRisk = () => { localStorage.setItem('tj_risk_hidden', todayStr()); setRiskHid(true); };
+
+  const riskBanner = riskAlert && !riskHid && (
+    <div style={{ background: 'var(--ink)', color: '#fff', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 16, flexShrink: 0 }}>⛔</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800 }}>오늘은 여기까지 — {riskAlert.msg}</div>
+        <div style={{ fontSize: 11.5, opacity: .75, marginTop: 2 }}>
+          {riskAlert.hitR ? `일일 ${riskAlert.stopR}R 한도에 닿았습니다. ` : ''}{riskAlert.hitStreak ? `${riskAlert.streakN}연패 규칙. ` : ''}화면을 끄는 것도 매매입니다.
+        </div>
+      </div>
+      <button onClick={hideRisk} style={{ fontSize: 11.5, fontWeight: 700, color: '#fff', opacity: .7, flexShrink: 0 }}>닫기</button>
+    </div>
+  );
+
   const TABS = [['home', '◧', '홈'], ['journal', '☰', '일지'], ['diary', '✎', '일기'], ['stats', '◍', '통계']];
   const MKT_C = { '선물': 'var(--futures)', '스윙': 'var(--swing)', '장기': 'var(--long)' };
   const balOf = m => (m === '스윙' ? balW : m === '장기' ? balL : balF);
@@ -679,7 +761,7 @@ function App() {
   const editorFor = id => setModal({ type: 'editor', entry: entries.find(x => x.id === id) });
   const cardsOf = (arr) => (
     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(330px, 1fr))', gap: 'var(--gap)', alignItems: 'start' }}>
-      {arr.map((e, idx) => <EntryCard key={e.id} e={e} index={idx + 1} quote={quoteOf(e.ticker)} onEdit={editorFor} onDelete={deleteEntry} />)}
+      {arr.map((e, idx) => <EntryCard key={e.id} e={e} index={idx + 1} quote={quoteOf(e.ticker)} onEdit={editorFor} onDelete={deleteEntry} onSell={id => setModal({ type: 'sell', entry: entries.find(x => x.id === id) })} />)}
     </div>
   );
 
@@ -700,6 +782,7 @@ function App() {
     /* 넓은 화면 — 중앙: 성과·일지 / 우: 일기·루틴·회고 (팝업 없이 한 화면) */
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: 'var(--gap)', alignItems: 'start' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
+        {riskBanner}
         <BalanceBand market={filter} bal={bal} holdVal={holdValue[filter]} onSeed={() => setModal({ type: 'settings' })} />
         <RedFolderCard items={redfolder} />
         <PerfCard stats={heroStats} onStats={() => setTab('stats')} height={150} />
@@ -713,6 +796,7 @@ function App() {
     </div>
   ) : (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      {riskBanner}
       <DiaryHome diary={diary} upsert={upsertDiary} />
       <BalanceBand market={filter} bal={bal} holdVal={holdValue[filter]} onSeed={() => setModal({ type: 'settings' })} />
       <RedFolderCard items={redfolder} />
@@ -884,6 +968,7 @@ function App() {
       {modal?.type === 'settings' && <SettingsModal settings={settings} seedSuggest={holdValue} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
+      {modal?.type === 'sell' && modal.entry && <SellModal entry={modal.entry} quote={quoteOf(modal.entry.ticker)} onSell={sellPosition} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
       {modal?.type === 'reset' && <ResetModal market={filter} entries={entries} onResetMarket={resetMarket} onResetAll={clearAll} onRestore={restoreSamples} onClose={() => setModal(null)} />}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}

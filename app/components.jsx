@@ -92,7 +92,7 @@ function IconBtn({ onClick, title, danger, children }) {
 }
 
 /* ─── 일지 카드 ─── */
-function EntryCard({ e, onEdit, onDelete, index, quote }) {
+function EntryCard({ e, onEdit, onDelete, onSell, index, quote }) {
   const [hov, setHov] = useStateCo(false);
   const rv = TJStats.num(e.realized_r);
   const rpv = TJStats.num(e.return_pct);   // 현물 수익률%
@@ -166,12 +166,31 @@ function EntryCard({ e, onEdit, onDelete, index, quote }) {
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 11, padding: '9px 11px' }}>
             {cell('수량', sh != null ? sh : '—')}
-            {cell('평단', px != null ? TJ.fmt(px, e.currency) : '—')}
+            {cell('평단', px != null ? (e.avg_est ? TJ.fmt(px, e.currency) + '?' : TJ.fmt(px, e.currency)) : '—')}
             {cell('현재가', live != null ? TJ.fmt(live, lsym) : '—')}
             {cell('평가손익', pl != null ? TJ.fmt(pl, lsym, true) : '—', true)}
           </div>
         );
       })()}
+
+      {/* 평단이 추정치면 알려줌 — 수정에서 실제 산 가격으로 고치면 수익률이 정확해짐 */}
+      {e.result === 'holding' && e.avg_est && (
+        <button onClick={() => onEdit(e.id)} style={{ fontSize: 11.5, color: 'var(--violet-600)', fontWeight: 600, textAlign: 'left', marginTop: -4 }}>
+          평단이 시세로 채워진 추정값이에요 — 실제 산 가격으로 고치기 ›
+        </button>
+      )}
+
+      {/* 팔았을 때 — 수량·가격만 넣으면 손익 자동 (분할 매도 지원) */}
+      {e.result === 'holding' && onSell && (
+        <button onClick={() => onSell(e.id)} className="btn-ghost btn-sm" style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: 12.5, marginTop: -3 }}>매도 기록</button>
+      )}
+
+      {/* 청산가 — 팔고 나면 얼마에 팔았는지 */}
+      {e.result !== 'holding' && e.exit_price != null && e.entry_price != null && (
+        <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)', marginTop: -3 }}>
+          {TJ.fmt(e.entry_price, e.currency)} → {TJ.fmt(e.exit_price, e.currency)}
+        </div>
+      )}
 
       {/* 청산한 현물 거래 — 몇 주 얼마에 샀는지 */}
       {e.result !== 'holding' && e.market !== '선물' && (e.shares != null || e.entry_price != null) && (() => {

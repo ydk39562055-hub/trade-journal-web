@@ -135,12 +135,22 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
     ? (useMode === '%' ? (futAcct > 0 ? futAcct * (useVal / 100) : null) : useVal)
     : null;
   const oneRFromDefault = oneR != null && !usePerTrade;          // 기본값으로 잡혔는지
-  const autoFR = oneR != null && oneR !== 0 && d.pnl != null;
+  // 가격으로 R 계산 — 진입·손절·청산을 다 적었을 때만. (청산−진입) ÷ (진입−손절), 숏이면 부호 뒤집힘
+  const priceR = (() => {
+    if (isSpot) return null;
+    const en = numOrNull(d.entry_price), st = numOrNull(d.stop_price), ex = numOrNull(d.exit_price);
+    if (en == null || st == null || ex == null) return null;
+    const risk = Math.abs(en - st); if (!risk) return null;
+    const dir = (d.direction === 'short') ? -1 : 1;
+    return Math.round(((ex - en) * dir / risk) * 100) / 100;
+  })();
+  const autoFR = priceR == null && oneR != null && oneR !== 0 && d.pnl != null;   // 가격이 있으면 가격 우선
   useEffectM(() => {
+    if (priceR != null) { setD(p => (p.realized_r === priceR ? p : { ...p, realized_r: priceR })); return; }
     if (!autoFR) return;
     const r = Math.round(d.pnl / oneR * 100) / 100;
     setD(p => (p.realized_r === r ? p : { ...p, realized_r: r }));
-  }, [autoFR, d.pnl, oneR]);
+  }, [priceR, autoFR, d.pnl, oneR]);
 
   const onFiles = async ev => {
     const room = MAX_PHOTOS - d.photos.length;
@@ -294,6 +304,23 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
                 ))}
               </div>
 
+              {/* 가격 3칸 — 전부 선택. 적으면 R이 자동으로 나오고, 안 적어도 지금까지처럼 그대로 동작 */}
+              <label style={fld}>진입 · 손절 · 청산 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>안 적어도 됨 · 적으면 R 자동</span></label>
+              <div style={{ display: 'flex', gap: 7 }}>
+                <input type="number" inputMode="decimal" placeholder="진입가" value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} style={{ flex: 1, minWidth: 0 }} />
+                <input type="number" inputMode="decimal" placeholder="손절가" value={d.stop_price ?? ''} onChange={e => set('stop_price', numOrNull(e.target.value))} style={{ flex: 1, minWidth: 0 }} />
+                <input type="number" inputMode="decimal" placeholder="청산가" value={d.exit_price ?? ''} onChange={e => set('exit_price', numOrNull(e.target.value))} style={{ flex: 1, minWidth: 0 }} />
+              </div>
+              {priceR != null && (
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>
+                  가격으로 계산한 R = <b className="mono" style={{ color: 'var(--ink)' }}>{priceR > 0 ? '+' : ''}{priceR}R</b>
+                  <span style={{ color: 'var(--ink-4)' }}> · (청산−진입) ÷ (진입−손절)</span>
+                </div>
+              )}
+              {d.entry_price != null && d.stop_price != null && d.exit_price == null && (
+                <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>청산가까지 넣으면 R이 자동으로 채워져요.</div>
+              )}
+
               <label style={fld}>손익금액 ($ · +이익 / −손실)</label>
               <input type="number" inputMode="decimal" value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
 
@@ -309,7 +336,7 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
               </div>
               {oneR != null && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>1R = {curFmt(oneR)}{useMode === '%' ? ` (선물 잔고 × ${useVal}%)` : ''}{oneRFromDefault ? ' · 기본값 사용' : ''}</div>}
 
-              <label style={fld}>R배수 {autoFR && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
+              <label style={fld}>R배수 {(autoFR || priceR != null) && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
               <input type="number" inputMode="decimal" placeholder="2 / -1" value={d.realized_r ?? ''} onChange={e => set('realized_r', numOrNull(e.target.value))} />
               {autoFR && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>손익 {curFmt(d.pnl)} ÷ 1R {curFmt(oneR)} = {d.realized_r}R</div>}
               {!isSpot && d.pnl != null && oneR == null && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>리스크(1R)를 적거나, 시드 설정에서 선물 기본 리스크를 넣으면 손익만으로 R이 자동 계산돼요</div>}
@@ -588,6 +615,15 @@ function MenuModal({ entries, syncId, onImport, onReset, onSync, onClose, blob }
     dl(new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), ...(blob || { entries }) }, null, 1)], { type: 'application/json' }), `거래일지_백업_${today}.json`); onClose();
   };
   const row = { width: '100%', justifyContent: 'flex-start', gap: 12, padding: '15px 16px', marginBottom: 9, fontSize: 14.5, fontWeight: 600 };
+  // 브라우저 저장공간(약 5MB) 사용량 — 사진이 쌓이면 저장이 실패할 수 있어 미리 알려줌
+  const used = (() => {
+    let n = 0;
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); n += (k.length + (localStorage.getItem(k) || '').length) * 2; } } catch { }
+    return n;
+  })();
+  const LIMIT = 5 * 1024 * 1024;
+  const pct = Math.min(100, Math.round(used / LIMIT * 100));
+  const photoN = entries.reduce((a, e) => a + ((e.photos || []).length), 0);
   return (
     <Modal open onClose={onClose} title="더보기" maxWidth={440}>
       <button className="btn-ghost" style={{ ...row, color: syncId ? 'var(--win)' : 'var(--violet)' }} onClick={onSync}>
@@ -600,6 +636,23 @@ function MenuModal({ entries, syncId, onImport, onReset, onSync, onClose, blob }
       <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: 'none' }}
         onChange={async ev => { const f = ev.target.files[0]; if (!f) return; try { const obj = JSON.parse(await f.text()); onImport(obj); } catch (err) { alert('복원 실패: ' + err.message); } }} />
       <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 6, lineHeight: 1.5 }}>백업은 일지·회고·일기·설정을 파일 하나로 저장합니다. 복원 시 최신 것으로 병합돼요.</div>
+      {/* 저장 공간 — 사진이 쌓이면 브라우저 한도(약 5MB)에 걸려 저장이 실패할 수 있음 */}
+      <div style={{ borderTop: '1px solid var(--border)', margin: '14px 0 10px' }} />
+      <div style={{ background: pct >= 70 ? 'var(--violet-50)' : 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 11, padding: '11px 13px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 7 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)' }}>저장 공간</span>
+          <span className="mono" style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 700 }}>{(used / 1048576).toFixed(1)}MB / 5MB · {pct}%</span>
+          <span style={{ flex: 1 }} />
+          <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-4)' }}>사진 {photoN}장</span>
+        </div>
+        <div style={{ height: 5, borderRadius: 99, background: 'var(--bg-tint)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: pct + '%', background: pct >= 70 ? 'var(--violet)' : 'var(--ink-4)' }} />
+        </div>
+        {pct >= 70 && <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 7, lineHeight: 1.5 }}>
+          거의 찼습니다. JSON 백업을 먼저 받아두고, 오래된 일지의 사진을 지우면 여유가 생깁니다. (거의 다 사진 용량입니다)
+        </div>}
+      </div>
+
       <div style={{ borderTop: '1px solid var(--border)', margin: '14px 0 10px' }} />
       <button className="btn-ghost" style={{ ...row, color: 'var(--loss)', marginBottom: 4 }} onClick={onReset}>초기화 — 계좌별 · 전체 · 예시 복원</button>
       <div style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>현재 계좌만 비우기 / 3계좌 전부 비우기 / 앱 처음 상태(예시 28건)로 되돌리기 중에서 고릅니다. (되돌릴 수 없음 — 필요하면 먼저 JSON 백업)</div>
@@ -633,6 +686,75 @@ function ResetModal({ market, entries, onResetMarket, onResetAll, onRestore, onC
   );
 }
 
+
+/* ───────────── 매도(청산) — 수량 + 판 가격만. 일부만 팔면 나머지는 보유중으로 남음 ───────────── */
+function SellModal({ entry: e, quote, onSell, onClose }) {
+  const total = Number(e.shares) || 0;
+  const dsym = e.currency === '₩' ? '₩' : '$';
+  const livePx = quote ? (quote.currency === 'KRW' ? '₩' : '$') === dsym ? quote.price : null : null;
+  const [qty, setQty] = useStateM(String(total || ''));
+  const [price, setPrice] = useStateM(livePx != null ? String(Math.round(livePx * 100) / 100) : '');
+  const [date, setDate] = useStateM(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useStateM('');
+  const fld = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
+
+  const q = Number(qty), p = Number(price);
+  const ok = q > 0 && q <= (total || Infinity) && !isNaN(p) && price !== '';
+  const buy = e.entry_price != null ? Number(e.entry_price) : null;
+  const pnl = (ok && buy != null) ? (p - buy) * q * (e.direction === 'short' ? -1 : 1) : null;
+  const ret = (pnl != null && buy) ? pnl / Math.abs(buy * q) * 100 : null;
+  const left = total ? total - q : null;
+
+  return (
+    <Modal open onClose={onClose} title="매도 기록" sub={`${e.ticker || '종목'} · ${e.market}`} maxWidth={420} sheet={window.matchMedia('(max-width:560px)').matches}>
+      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', fontSize: 12.5, color: 'var(--ink-2)' }}>
+        보유 <b className="mono">{total}주</b>{buy != null && <> · 평단 <b className="mono">{TJ.fmt(buy, dsym)}</b></>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <label style={fld}>판 수량</label>
+          <input type="number" inputMode="decimal" value={qty} onChange={ev => setQty(ev.target.value)} autoFocus />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={fld}>판 가격 ({dsym} · 1주)</label>
+          <input type="number" inputMode="decimal" value={price} onChange={ev => setPrice(ev.target.value)} placeholder={livePx != null ? String(Math.round(livePx * 100) / 100) : '0'} />
+        </div>
+      </div>
+      {total > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
+          {[['전량', total], ['절반', Math.round(total / 2 * 100) / 100], ['1/3', Math.round(total / 3 * 100) / 100]].map(([l, v]) => (
+            v > 0 ? <button key={l} className="chip" onClick={() => setQty(String(v))} style={{ fontSize: 12, padding: '5px 11px' }}>{l} {v}주</button> : null
+          ))}
+        </div>
+      )}
+      {livePx != null && <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6 }}>현재 시세 {TJ.fmt(livePx, dsym)} 로 채워뒀어요 — 실제 체결가로 고치세요.</div>}
+
+      <label style={fld}>날짜</label>
+      <input type="date" value={date} onChange={ev => setDate(ev.target.value)} />
+      <label style={fld}>메모 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>(선택 — 왜 팔았는지)</span></label>
+      <textarea value={note} onChange={ev => setNote(ev.target.value)} placeholder="목표가 도달 / 지지 이탈 / 분할 익절…" style={{ minHeight: 54, fontSize: 13.5 }} />
+
+      {/* 계산 미리보기 */}
+      <div style={{ marginTop: 14, background: 'var(--violet-50)', borderRadius: 11, padding: '11px 13px' }}>
+        {pnl != null ? (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>실현 손익</span>
+            <span className="mono" style={{ fontSize: 19, fontWeight: 800 }}>{TJ.fmt(pnl, dsym, true)}</span>
+            {ret != null && <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)' }}>{ret > 0 ? '+' : ''}{ret.toFixed(1)}%</span>}
+          </div>
+        ) : <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>평단이 없어 손익은 계산되지 않습니다. 나중에 일지에서 손익금액을 적어주세요.</div>}
+        {left != null && left > 0 && <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 5 }}>남는 {left}주는 <b>보유중</b>으로 계속 남습니다.</div>}
+        {left === 0 && <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 5 }}>전량 청산 — 이 기록이 청산 일지가 됩니다.</div>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+        <button className="btn" style={{ flex: 1 }} disabled={!ok} onClick={() => onSell(e.id, { qty: q, price: p, date, note })}>매도 기록</button>
+        <button className="btn-ghost" onClick={onClose}>취소</button>
+      </div>
+    </Modal>
+  );
+}
 
 /* ───────────── 보유 현황 (스크린샷 자동입력 + 실시간 시세 + 일지로 보내기) ───────────── */
 function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHoldings, addPositions, defaultAccount, onClose }) {
@@ -702,22 +824,23 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
     if (p == null) return '';
     return String(p >= 1000 ? Math.round(p) : Math.round(p * 100) / 100);
   };
-  const toJournal = (h, price, queue) => {
+  const toJournal = (h, price, queue, guess) => {
     const typed = price != null && price !== '' && !isNaN(Number(price));
+    const est = typed && guess != null && String(price) === String(guess);   // 자동채움을 그대로 확정 = 추정 평단
     const p = typed ? Number(price) : h.avgPrice;
     const dsym = h.market === 'KR' ? '₩' : '$';
     // 직접 적은 값은 화면에 보이는 통화(행 통화) 기준 — 그대로 쓰도록 통화를 맞춰 넘김
     const cur = typed ? (dsym === '₩' ? 'KRW' : 'USD') : h.currency;
-    addPositions(acct, [{ ...h, currency: cur, avgPrice: (p != null && p !== '' && !isNaN(Number(p))) ? Number(p) : null }]);
+    addPositions(acct, [{ ...h, avgEst: est, currency: cur, avgPrice: (p != null && p !== '' && !isNaN(Number(p))) ? Number(p) : null }]);
     const rest = (queue || []).filter(id => id !== h.id);                 // 여러 개 넣는 중이면 다음 종목 이어서
     const nx = rest.length ? list.find(x => x.id === rest[0]) : null;
-    setAsk(nx ? { id: nx.id, val: guessPx(nx), queue: rest } : null);
+    setAsk(nx ? { id: nx.id, val: guessPx(nx), guess: guessPx(nx), queue: rest } : null);
   };
   // 전부 넣기 — 평단 있는 건 바로, 없는 건 산 가격을 하나씩 물어봄
   const postAll = () => {
     notPosted.filter(h => h.avgPrice != null).forEach(h => addPositions(acct, [h]));
     const need = notPosted.filter(h => h.avgPrice == null);
-    setAsk(need.length ? { id: need[0].id, val: guessPx(need[0]), queue: need.map(h => h.id) } : null);
+    setAsk(need.length ? { id: need[0].id, val: guessPx(need[0]), guess: guessPx(need[0]), queue: need.map(h => h.id) } : null);
   };
 
   return (
@@ -773,9 +896,9 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 700, flexShrink: 0 }}>산 가격</span>
                       <input type="number" inputMode="decimal" autoFocus value={ask.val} onChange={ev => setAsk({ ...ask, val: ev.target.value })}
-                        onKeyDown={ev => { if (ev.key === 'Enter') toJournal(h, ask.val, ask.queue); }}
+                        onKeyDown={ev => { if (ev.key === 'Enter') toJournal(h, ask.val, ask.queue, ask.guess); }}
                         placeholder={'1주 ' + dsym} style={{ flex: 1, minWidth: 0, padding: '6px 9px', fontSize: 12.5 }} />
-                      <button className="btn btn-sm" onClick={() => toJournal(h, ask.val, ask.queue)} style={{ flexShrink: 0 }}>넣기</button>
+                      <button className="btn btn-sm" onClick={() => toJournal(h, ask.val, ask.queue, ask.guess)} style={{ flexShrink: 0 }}>넣기</button>
                       <button className="btn-ghost btn-sm" onClick={() => setAsk(null)} style={{ flexShrink: 0 }}>취소</button>
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 5, lineHeight: 1.45 }}>{h.amount > 0 ? '화면에 있던 금액 ÷ 수량으로 채웠어요.' : '지금 시세로 채웠어요.'} 실제로 산 가격이 다르면 고치세요.</div>
@@ -784,7 +907,7 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
                     <div style={{ marginTop: 6, textAlign: 'right' }}>
                       {done
                         ? <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontWeight: 600 }}>일지에 있음 ✓</span>
-                        : <button onClick={() => (h.avgPrice != null ? toJournal(h) : setAsk({ id: h.id, val: guessPx(h) }))}
+                        : <button onClick={() => (h.avgPrice != null ? toJournal(h) : setAsk({ id: h.id, val: guessPx(h), guess: guessPx(h) }))}
                           style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--violet)' }}>＋ 일지에 넣기</button>}
                     </div>
                   )}
@@ -831,4 +954,4 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
   );
 }
 
-Object.assign(window, { EditorModal, SettingsModal, PrinciplesModal, MenuModal, ResetModal, SyncModal, HoldingsModal });
+Object.assign(window, { EditorModal, SettingsModal, PrinciplesModal, MenuModal, ResetModal, SyncModal, HoldingsModal, SellModal });
