@@ -135,7 +135,7 @@
 
   // 잔고 계산 (시드=달러 기준, ₩ 거래 손익은 달러로 환산해 합산)
   // opts.quoteOf(ticker) 를 주면 보유중(미실현) 평가손익까지 잔고에 반영 — 스윙·장기는 돈이 보유중에 묶여 있어서 이게 없으면 잔고가 안 맞음
-  // opts.autoSeed = 시드를 안 넣었을 때 대신 쓸 투자원금(보유중 매수금액 합계)
+  // 시드는 사용자가 직접 입력 (자동 추정 안 함 — 예수금을 알 수 없어 값이 안 맞음)
   function balanceOf(entries, market, seed, deposit, opts) {
     const mine = entries.filter(e => e.market === market);
     const pnl = mine.reduce((a, e) => { const v = pnlUSD(e); return a + (v || 0); }, 0);   // 실현손익
@@ -150,14 +150,12 @@
         openable = true;
       });
     }
-    let s = num(seed);
-    const auto = (s == null && opts && num(opts.autoSeed) > 0) ? Math.round(num(opts.autoSeed)) : null;
-    if (auto != null) s = auto;                                                            // 시드 미설정 → 보유 투자원금으로 자동
+    const s = num(seed);
     const dep = num(deposit) || 0;            // 추가 입금 누계
     const base = (s || 0) + dep;              // 투입 원금 = 시드 + 입금
     const total = pnl + open;                 // 실현 + 미실현
     return {
-      seed: s, autoSeed: auto, deposit: dep, base,
+      seed: s, deposit: dep, base,
       pnl: total, realized: pnl, open, hasOpen: openable,
       bal: base + total, ret: base ? total / base * 100 : null,
     };

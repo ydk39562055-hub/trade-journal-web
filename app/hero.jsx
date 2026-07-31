@@ -172,7 +172,7 @@ function RoutineCard({ routine, defaultOpen }) {
 }
 
 /* 잔고 밴드 — 선택한 시장(선물/스윙/장기)만 표시 (완전 분리) */
-function BalanceBand({ market, bal, onSeed, big }) {
+function BalanceBand({ market, bal, onSeed, big, holdVal }) {
   const c = market === '선물' ? 'var(--futures)' : market === '장기' ? 'var(--long)' : 'var(--swing)';
   const empty = bal.seed == null && bal.pnl === 0;
   if (empty) {
@@ -200,9 +200,7 @@ function BalanceBand({ market, bal, onSeed, big }) {
             <span style={{ width: 8, height: 8, borderRadius: 3, background: c }} />
             <span style={{ color: c }}>{market}</span>
             <span style={{ color: 'var(--ink-3)', fontWeight: 600 }}>잔고</span>
-            {bal.autoSeed != null
-              ? <span title="시드를 안 넣어서 보유 종목 매수금액을 원금으로 잡았습니다. 시드를 직접 넣으면 그 값이 우선합니다." style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--violet-600)', background: 'var(--violet-50)', padding: '2px 6px', borderRadius: 5 }}>보유 기준 자동</span>
-              : <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 500 }}>시드 설정</span>}
+            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 500 }}>시드 설정</span>
           </div>
           <div className="mono" style={{ fontSize: big ? 44 : 32, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-.02em', marginTop: 4 }}>{usdH(bal.bal)}</div>
         </div>
@@ -211,11 +209,19 @@ function BalanceBand({ market, bal, onSeed, big }) {
           {bal.ret != null && <span className="pill mono" style={{ background: 'var(--bg-tint)', color: 'var(--ink-2)', fontSize: 12.5 }}>{pos ? '+' : '−'}{Math.abs(bal.ret).toFixed(1)}%</span>}
         </div>
       </div>
-      {/* 보유중이 있으면 실현 / 평가(미실현)를 나눠 보여줌 — 어디서 온 손익인지 헷갈리지 않게 */}
-      {bal.hasOpen && (
-        <div style={{ display: 'flex', gap: 12, fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600, marginTop: -4 }}>
-          <span className="mono">실현 {TJ.moneyS(bal.realized)}</span>
-          <span className="mono">평가 {TJ.moneyS(bal.open)}</span>
+      {/* 보유 총 평가금액 + 실현/미실현 분리 — 증권사 앱 금액과 바로 비교할 수 있게 */}
+      {(bal.hasOpen || (holdVal && holdVal.total > 0)) && (
+        <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap', marginTop: -4 }}>
+          {holdVal && holdVal.total > 0 && (
+            <span style={{ fontSize: 12, color: 'var(--ink-2)', fontWeight: 700 }}>
+              보유 <span className="mono" style={{ fontSize: 14, fontWeight: 800 }}>{TJ.money(holdVal.total)}</span>
+              <span style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600 }}> · {holdVal.n}종목</span>
+            </span>
+          )}
+          {bal.hasOpen && <>
+            <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>실현 {TJ.moneyS(bal.realized)}</span>
+            <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>평가 {TJ.moneyS(bal.open)}</span>
+          </>}
         </div>
       )}
     </button>

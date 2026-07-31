@@ -371,27 +371,23 @@ function App() {
     const t = (ticker || '').toUpperCase(); if (!t) return null;
     return quotes[t] || quotes[t + '.KS'] || null;
   };
-  // 계좌별 투자원금 추정 — ①일지의 '보유중' 항목(수량×평단)을 먼저, ②일지에 없는 보유 종목만 보탬. 전부 달러 기준.
-  const seedSuggest = useMemo(() => {
+  // 계좌별 보유 평가금액(현재가 × 수량) — 참고용 표시. 시드는 사용자가 직접 적음.
+  const holdValue = useMemo(() => {
     const out = {};
     ['스윙', '장기'].forEach(acct => {
-      let total = 0, est = false, n = 0;
+      let total = 0, n = 0, missing = 0;
       const seen = new Set();
-      entries.filter(e => e.result === 'holding' && e.market === acct && Number(e.shares) > 0).forEach(e => {
+      const add = (ticker, qty) => {
+        const q = quoteOf(ticker);
+        if (!q || !(Number(qty) > 0)) { missing++; return; }
+        total += TJ.toUSD(q.price, q.currency === 'KRW' ? '₩' : '$') * Number(qty); n++;
+      };
+      entries.filter(e => e.result === 'holding' && e.market === acct).forEach(e => {
         const t = (e.ticker || '').toUpperCase(); if (t) seen.add(t);
-        if (e.entry_price == null) return;
-        total += TJ.toUSD(e.entry_price, e.currency) * Number(e.shares); n++;
+        add(e.ticker, e.shares);
       });
-      holdings.filter(h => h.account === acct && Number(h.qty) > 0 && !seen.has((h.ticker || '').toUpperCase())).forEach(h => {
-        const sym = h.currency === 'KRW' ? '₩' : '$';
-        let one = (h.avgPrice != null && h.avgPrice > 0) ? TJ.toUSD(h.avgPrice, sym) : null;
-        if (one == null) {                                        // 평단 모르면 현재 시세로 근사
-          const q = quoteOf(h.ticker);
-          if (q) { one = TJ.toUSD(q.price, q.currency === 'KRW' ? '₩' : '$'); est = true; }
-        }
-        if (one != null) { total += one * Number(h.qty); n++; }
-      });
-      out[acct] = { total, est, n };
+      holdings.filter(h => h.account === acct && !seen.has((h.ticker || '').toUpperCase())).forEach(h => add(h.ticker, h.qty));
+      out[acct] = { total, n, missing };
     });
     return out;
   }, [entries, holdings, quotes, fx.rate]);
@@ -642,9 +638,9 @@ function App() {
 
   TJ.setCurrency(settings.currency); TJ.setRate(fx.rate);   // 전역 통화($/₩)+실시간환율 — 렌더 전 동기 반영(자식 포매터가 읽음)
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
-  // 스윙·장기는 자금이 보유중에 묶여 있어 미실현 평가손익까지 반영 + 시드 미설정 시 보유 투자원금으로 자동
-  const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit, { quoteOf, autoSeed: seedSuggest['스윙'] && seedSuggest['스윙'].total });
-  const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit, { quoteOf, autoSeed: seedSuggest['장기'] && seedSuggest['장기'].total });
+  // 스윙·장기는 자금이 보유중에 묶여 있어 미실현 평가손익까지 잔고에 반영 (시드는 사용자가 직접 입력)
+  const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit, { quoteOf });
+  const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit, { quoteOf });
   // 선물/스윙/장기 완전 분리 — 활성 시장만 표시(합산 없음)
   const bal = filter === '스윙' ? balW : filter === '장기' ? balL : balF;
 
@@ -704,7 +700,7 @@ function App() {
     /* 넓은 화면 — 중앙: 성과·일지 / 우: 일기·루틴·회고 (팝업 없이 한 화면) */
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: 'var(--gap)', alignItems: 'start' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
-        <BalanceBand market={filter} bal={bal} onSeed={() => setModal({ type: 'settings' })} />
+        <BalanceBand market={filter} bal={bal} holdVal={holdValue[filter]} onSeed={() => setModal({ type: 'settings' })} />
         <RedFolderCard items={redfolder} />
         <PerfCard stats={heroStats} onStats={() => setTab('stats')} height={150} />
         {recentBlock}
@@ -718,7 +714,7 @@ function App() {
   ) : (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <DiaryHome diary={diary} upsert={upsertDiary} />
-      <BalanceBand market={filter} bal={bal} onSeed={() => setModal({ type: 'settings' })} />
+      <BalanceBand market={filter} bal={bal} holdVal={holdValue[filter]} onSeed={() => setModal({ type: 'settings' })} />
       <RedFolderCard items={redfolder} />
       <PerfCard stats={heroStats} onStats={() => setTab('stats')} height={96} />
       <RoutineCard routine={{ ...routineProps, open: routineOpen, setOpen: setRoutineOpen }} />
@@ -753,7 +749,9 @@ function App() {
           {held.length > 0 && (
             <>
               <div className="seclabel" style={{ paddingLeft: 2 }}>
-                보유중 {heldPnl !== 0 && <span className="mono">· 평가손익 {TJ.moneyS(heldPnl)}</span>}
+                보유중
+                {holdValue[filter] && holdValue[filter].total > 0 && <span className="mono"> · 평가금액 {TJ.money(holdValue[filter].total)}</span>}
+                {heldPnl !== 0 && <span className="mono"> · 평가손익 {TJ.moneyS(heldPnl)}</span>}
                 {quoteAgeLabel && <span style={{ fontWeight: 600, color: 'var(--ink-4)' }}> · 시세 {quoteAgeLabel}</span>}
               </div>
               {cardsOf(held)}
@@ -883,7 +881,7 @@ function App() {
       {/* ── 모달 ── */}
       {modal?.type === 'editor' && <EditorModal entry={modal.entry} accts={{ '선물': balF.bal, '스윙': balW.bal, '장기': balL.bal }} defaultRisk={{ mode: settings.futuresRiskMode || '$', val: settings.futuresRiskVal ?? null }} defaultMarket={filter} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
-      {modal?.type === 'settings' && <SettingsModal settings={settings} seedSuggest={seedSuggest} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
+      {modal?.type === 'settings' && <SettingsModal settings={settings} seedSuggest={holdValue} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}

@@ -390,26 +390,13 @@ function SettingsModal({ settings, onSave, seedSuggest, onClose }) {
           </div>
           <label style={fld}>{m.key} 시드 ($)</label>
           <input type="number" inputMode="decimal" value={seeds[m.key]} onChange={e => setSeed(m.key, e.target.value)} placeholder={m.seedPh} />
-          {/* 보유 종목으로 투자원금 자동 계산 — 나머지(현금 등)는 사용자가 손으로 보탬 */}
-          {seedSuggest && seedSuggest[m.key] && seedSuggest[m.key].total > 0 && (() => {
-            const s = seedSuggest[m.key];
-            return (
-              <div style={{ marginTop: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 11px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>보유 {s.n}종목 투자금 {s.est ? '(현재가 기준 추정)' : '(수량 × 평단)'}</div>
-                    <div className="mono" style={{ fontSize: 15, fontWeight: 800 }}>{usd(Math.round(s.total))}</div>
-                  </div>
-                  <button className="btn-ghost btn-sm" onClick={() => setSeed(m.key, String(Math.round(s.total)))} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>시드에 넣기</button>
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 5, lineHeight: 1.45 }}>
-                  {seeds[m.key] === '' || seeds[m.key] == null
-                    ? '비워두면 이 금액이 자동으로 원금이 됩니다. 예수금까지 넣고 싶으면 직접 적으세요.'
-                    : '넣은 뒤 남은 현금·다른 계좌 금액은 직접 더하면 됩니다. 비우면 다시 자동.'}
-                </div>
-              </div>
-            );
-          })()}
+          {/* 참고용 — 지금 보유 종목의 평가금액. 시드는 사용자가 직접 적음(예수금은 앱이 알 수 없음) */}
+          {seedSuggest && seedSuggest[m.key] && seedSuggest[m.key].total > 0 && (
+            <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6 }}>
+              참고 · 현재 {m.key} 보유 평가금액 <b className="mono" style={{ color: 'var(--ink-2)' }}>{usd(Math.round(seedSuggest[m.key].total))}</b>
+              <span style={{ color: 'var(--ink-4)' }}> ({seedSuggest[m.key].n}종목)</span>
+            </div>
+          )}
           <label style={fld}>{m.key} 추가 입금 — 금액 넣고 ＋입금</label>
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="number" inputMode="decimal" value={addv[m.key]} onChange={e => setAdd(m.key, e.target.value)} placeholder={m.depPh}
