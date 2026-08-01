@@ -493,7 +493,7 @@ function MoodStrip({ diary }) {
 }
 
 /* 일기 탭 — 기분 흐름 + 하루 일기 / 회고 메모 / 루틴·원칙 */
-function DiaryTab({ diary, upsert, memo, routine }) {
+function DiaryTab({ diary, upsert, remove, memo, routine }) {
   const [sub, setSub] = useStateH('diary');
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -502,7 +502,7 @@ function DiaryTab({ diary, upsert, memo, routine }) {
           <button key={v} className={sub === v ? 'on' : ''} onClick={() => setSub(v)} style={{ fontSize: 13 }}>{l}</button>
         ))}
       </div>
-      {sub === 'diary' && <><MoodStrip diary={diary} /><DiaryHome diary={diary} upsert={upsert} alwaysOpen /></>}
+      {sub === 'diary' && <><MoodStrip diary={diary} /><DiaryHome diary={diary} upsert={upsert} remove={remove} alwaysOpen /></>}
       {sub === 'memo' && <CalendarMemoCard memo={memo} />}
       {sub === 'rule' && <RoutineCard routine={routine} defaultOpen />}
     </div>
@@ -602,7 +602,7 @@ function DiaryDayEditor({ date, entry, upsert }) {
   );
 }
 
-function DiaryHome({ diary, upsert, alwaysOpen }) {
+function DiaryHome({ diary, upsert, remove, alwaysOpen }) {
   const pad = n => String(n).padStart(2, '0');
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
@@ -631,6 +631,10 @@ function DiaryHome({ diary, upsert, alwaysOpen }) {
         {today?.mood && <span style={{ fontSize: 13 }}>{DIARY_MOOD_E[today.mood]}</span>}
         {!open && !today?.text && !today?.mood && <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>· 오늘 기록 없음</span>}
         <span style={{ flex: 1 }} />
+        {remove && (today?.text || today?.mood) && (
+          <span role="button" onClick={ev => { ev.stopPropagation(); if (confirm('오늘 일기를 삭제할까요?')) remove(todayStr); }}
+            style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)', marginRight: 4, cursor: 'pointer' }}>삭제</span>
+        )}
         <span style={{ color: 'var(--ink-4)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>▾</span>
       </button>
       {open && (
@@ -660,6 +664,8 @@ function DiaryHome({ diary, upsert, alwaysOpen }) {
                       {x.mood && <span style={{ fontSize: 12 }}>{DIARY_MOOD_E[x.mood]} {x.mood}</span>}
                       <span style={{ flex: 1 }} />
                       <button onClick={() => setEditDate(editDate === x.date ? null : x.date)} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)' }}>{editDate === x.date ? '닫기' : '수정'}</button>
+                      {remove && <button onClick={() => { if (confirm(dLabel(x.date) + ' 일기를 삭제할까요?')) remove(x.date); }} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)' }}
+                        onMouseEnter={ev => ev.currentTarget.style.color = 'var(--loss)'} onMouseLeave={ev => ev.currentTarget.style.color = 'var(--ink-4)'}>삭제</button>}
                     </div>
                     {editDate === x.date
                       ? <DiaryDayEditor key={x.date + (x.updated_at || '')} date={x.date} entry={x} upsert={upsert} />

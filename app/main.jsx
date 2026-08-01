@@ -57,8 +57,10 @@ function mergeBlobs(a, b) {
     const prev = dd.get(x.date);
     if (!prev || (x.updated_at || '') >= (prev.updated_at || '')) dd.set(x.date, x);
   }
-  // 빈 일기(글도 기분도 없음)는 버림 — 예전 버전이 만들어 둔 껍데기가 동기화로 되살아나지 않게
-  const diary = [...dd.values()].filter(x => (x.text && x.text.trim()) || x.mood);
+  // 빈 일기(글도 기분도 없음)와 지운 일기는 버림 — 동기화로 되살아나지 않게
+  const diary = [...dd.values()]
+    .filter(x => (x.text && x.text.trim()) || x.mood)
+    .filter(x => !buried('diary:' + x.date, x.updated_at || ''));
   // 보유종목: id 합집합, 같은 id면 updated_at 최신, 삭제된 건 제외
   const hm = new Map();
   for (const h of [...(a.holdings || []), ...(b.holdings || [])]) {
@@ -290,7 +292,7 @@ function App() {
     if (b.settings) setSettings(TJ.migrateSettings(b.settings));
     if (typeof b.principles === 'string' && b.principles.trim() && localStorage.getItem('tj_principles_custom') === '1') setPrinciples(b.principles); // 직접 편집본만 동기화 반영, 기본문구는 항상 최신 유지
     if (Array.isArray(b.memos)) setMemos(b.memos);
-    if (Array.isArray(b.diary)) setDiary(b.diary);
+    if (Array.isArray(b.diary)) setDiary(b.diary.filter(x => x && ((x.text && x.text.trim()) || x.mood)));   // 빈 껍데기는 어떤 경로로도 안 들어오게
     if (Array.isArray(b.holdings)) setHoldings(b.holdings);
     if (b.deleted) setDeleted(b.deleted);
   };
@@ -420,6 +422,11 @@ function App() {
   }, [fx.at]);
 
   // 일기 — 날짜별 한 편, upsert(있으면 수정 / 없으면 생성)
+  // 일기 삭제 — 날짜가 열쇠라 무덤도 날짜로 남김(동기화로 되살아나지 않게)
+  const removeDiary = (date) => {
+    setDiary(prev => prev.filter(x => x.date !== date));
+    setDeleted(p => ({ ...p, ['diary:' + date]: new Date().toISOString() }));
+  };
   const upsertDiary = (date, patch) => {
     setDiary(prev => {
       const now = new Date().toISOString();
@@ -794,7 +801,7 @@ function App() {
         {recentBlock}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', position: 'sticky', top: 76 }}>
-        <DiaryHome diary={diary} upsert={upsertDiary} />
+        <DiaryHome diary={diary} upsert={upsertDiary} remove={removeDiary} />
         <RoutineCard routine={{ ...routineProps, open: routineOpen, setOpen: setRoutineOpen }} />
         <CalendarMemoCard memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} />
       </div>
@@ -802,7 +809,7 @@ function App() {
   ) : (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       {riskBanner}
-      <DiaryHome diary={diary} upsert={upsertDiary} />
+      <DiaryHome diary={diary} upsert={upsertDiary} remove={removeDiary} />
       <BalanceBand market={filter} bal={bal} holdVal={holdValue[filter]} onSeed={() => setModal({ type: 'settings' })} />
       <RedFolderCard items={redfolder} />
       <PerfCard stats={heroStats} onStats={() => setTab('stats')} height={96} />
@@ -859,7 +866,7 @@ function App() {
 
   const body = tab === 'home' ? homeView
     : tab === 'journal' ? journalView
-      : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
+      : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} remove={removeDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
         : <DashboardModal entries={entries} market={filter} asPage onClose={() => setTab('home')} />;
 
   return (
