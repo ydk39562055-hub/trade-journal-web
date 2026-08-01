@@ -583,6 +583,10 @@ function DiaryDayEditor({ date, entry, upsert }) {
   const put = (t, m) => { if (!t && !m) { upsert(date, null); return false; } upsert(date, { text: t, mood: m }); return true; };
   const save = () => { if (put(text.trim(), mood)) flash(); };
   const pickMood = v => { const nv = mood === v ? null : v; setMood(nv); if (put(text.trim(), nv)) flash(); };
+  // 저장 여부를 화면에서 바로 알 수 있게 — 저장된 값과 지금 값을 비교(다시 그려져도 유지됨)
+  const hasContent = !!(text.trim() || mood);
+  const dirty = text.trim() !== (entry?.text || '') || mood !== (entry?.mood || null);
+  const btnLabel = !hasContent ? '저장' : (dirty ? (saved ? '저장됨 ✓' : '저장') : '저장됨 ✓');
   return (
     <div>
       <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
@@ -597,7 +601,8 @@ function DiaryDayEditor({ date, entry, upsert }) {
       <textarea value={text} onChange={e => setText(e.target.value)} onBlur={save}
         onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') save(); }}
         placeholder="오늘 하루 어땠는지 — 시장·멘탈·컨디션 뭐든 자유롭게…" style={{ minHeight: 96, fontSize: 14, lineHeight: 1.6 }} />
-      <button className="btn" onClick={save} style={{ width: '100%', marginTop: 8, padding: 10, fontSize: 14 }}>{saved ? '저장됨 ✓' : '저장'}</button>
+      <button className="btn" onClick={save} style={{ width: '100%', marginTop: 8, padding: 10, fontSize: 14, background: (!dirty && hasContent) ? 'var(--win)' : undefined }}>{btnLabel}</button>
+      {dirty && hasContent && <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 5, textAlign: 'center' }}>아직 저장 전이에요 — 저장을 누르거나 칸 밖을 누르면 저장됩니다</div>}
     </div>
   );
 }
@@ -639,7 +644,7 @@ function DiaryHome({ diary, upsert, remove, alwaysOpen }) {
       </button>
       {open && (
         <>
-      <DiaryDayEditor key={'today-' + (today?.updated_at || 'new')} date={todayStr} entry={today} upsert={upsert} />
+      <DiaryDayEditor key={'today-' + todayStr} date={todayStr} entry={today} upsert={upsert} />
 
       <button onClick={() => setPastOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 13.5, color: 'var(--ink-2)', textAlign: 'left' }}>
         지난 일기 {past.length > 0 && <span className="mono" style={{ color: 'var(--ink-4)', fontWeight: 600 }}>{past.length}편</span>}
@@ -668,7 +673,7 @@ function DiaryHome({ diary, upsert, remove, alwaysOpen }) {
                         onMouseEnter={ev => ev.currentTarget.style.color = 'var(--loss)'} onMouseLeave={ev => ev.currentTarget.style.color = 'var(--ink-4)'}>삭제</button>}
                     </div>
                     {editDate === x.date
-                      ? <DiaryDayEditor key={x.date + (x.updated_at || '')} date={x.date} entry={x} upsert={upsert} />
+                      ? <DiaryDayEditor key={'past-' + x.date} date={x.date} entry={x} upsert={upsert} />
                       : <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{x.text || <span style={{ color: 'var(--ink-4)' }}>내용 없음</span>}</div>}
                   </div>
                 ))}
