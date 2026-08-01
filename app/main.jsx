@@ -208,6 +208,16 @@ function RedFolderCard({ items }) {
 function App() {
   const t = { accent: '코코아', density: 'regular', showRoutine: true };   // 고정 테마(꾸미기 패널 제거)
   const [redfolder, setRedfolder] = useState([]);
+  // 창 폭 — 크기를 바꾸거나 회전해도 바로 따라오게
+  const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1200));
+  useEffect(() => {
+    let raf;
+    const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => setVw(window.innerWidth)); };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    onResize();
+    return () => { window.removeEventListener('resize', onResize); window.removeEventListener('orientationchange', onResize); cancelAnimationFrame(raf); };
+  }, []);
   // 실시간 USD→KRW 환율 (캐시 우선 → 마운트/주기적 갱신). {rate, at}
   const [fx, setFx] = useState(() => { try { const c = JSON.parse(localStorage.getItem('tj_fx_krw') || 'null'); if (c && c.rate > 0) return c; } catch {} return { rate: 1350, at: null }; });
   const [entries, setEntries] = useState(() => {
@@ -233,7 +243,7 @@ function App() {
   useEffect(() => { localStorage.setItem('tj_tab', tab); window.scrollTo(0, 0); }, [tab]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');     // 일지 탭 구획 — 전체 / 보유중 / 청산
-  const [period, setPeriod] = useState('month');   // 기본=이번 달 (화면이 너무 길어지지 않게)
+  const [period, setPeriod] = useState('all');     // 기본=전체 기간 (달이 바뀌면 텅 비어 보이던 문제)
   const [modal, setModal] = useState(null);
   const [routineOpen, setRoutineOpen] = useState(false);
   const [memos, setMemos] = useState(() => {
@@ -699,6 +709,7 @@ function App() {
     else if (period === '30d') l = l.filter(e => (e.traded_at || '') >= d30);
     return l;
   }, [entries, filter, search, period]);
+  const allOfMarket = useMemo(() => entries.filter(e => e.market === filter), [entries, filter]);
   // 보유중 / 청산 구획 (일지 탭)
   const held = list.filter(e => e.result === 'holding');
   const closed = list.filter(e => e.result !== 'holding');
@@ -726,8 +737,10 @@ function App() {
   const checkItems = checklist.filter(x => x.line.trim().startsWith('☐'));
   const doneCount = checkItems.filter(x => checks.has(x.i)).length;
 
-  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width:680px)').matches;
-  const wide = typeof window !== 'undefined' && window.matchMedia('(min-width:1000px)').matches;
+  // 창 크기를 계속 지켜봄 — 예전엔 첫 렌더 때 한 번만 재서, 창을 키워도 모바일 화면에 머물렀음
+  const isMobile = vw <= 680;
+  const wide = vw >= 900;        // 좌측 내비 + 넓은 배치 (윈도우 배율 125%면 1366화면이 ~1090px라 1000은 너무 높았음)
+  const threeCol = vw >= 1180;   // 홈 오른쪽 열(일기·루틴·회고)까지 세 칸
   const routineProps = { items: checkItems, checks, done: doneCount, total: checkItems.length, toggle: toggleCheck, principles, onEdit: () => setModal({ type: 'principles' }) };
 
   // ── 리스크 규칙 감시 — 원칙에 적힌 "일일 −2R 종료 / 3연패 종료"를 앱이 실제로 지켜봄 ──
@@ -807,19 +820,20 @@ function App() {
   );
 
   /* ── 탭별 본문 ── */
-  const recentBlock = list.length > 0 && (
+  const recent = useMemo(() => allOfMarket.slice().sort((a, b) => (b.traded_at || '').localeCompare(a.traded_at || '')), [allOfMarket]);
+  const recentBlock = recent.length > 0 && (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 2px 0' }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>최근 일지</span>
-        <span className="mono" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-4)' }}>{list.length}건</span>
+        <span className="mono" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-4)' }}>{recent.length}건</span>
         <span style={{ flex: 1 }} />
         <button onClick={() => setTab('journal')} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--violet-600)' }}>전체 보기 ›</button>
       </div>
-      {cardsOf(list.slice(0, wide ? 4 : 3))}
+      {cardsOf(recent.slice(0, threeCol ? 4 : 3))}
     </>
   );
 
-  const homeView = wide ? (
+  const homeView = threeCol ? (
     /* 넓은 화면 — 중앙: 성과·일지 / 우: 일기·루틴·회고 (팝업 없이 한 화면) */
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: 'var(--gap)', alignItems: 'start' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
@@ -867,8 +881,15 @@ function App() {
         ))}
       </div>
       {shownList.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '52px 20px', color: 'var(--ink-3)' }}>
+        <div style={{ textAlign: 'center', padding: '44px 20px', color: 'var(--ink-3)' }}>
           <div style={{ fontSize: 15 }}>{(search || period !== 'all' || status !== 'all') ? '조건에 맞는 일지가 없어요.' : '아직 일지가 없어요.'}</div>
+          {/* 달이 바뀌면 '이번 달'에 걸리는 게 없어 텅 비어 보임 — 기록은 그대로 있음 */}
+          {period !== 'all' && allOfMarket.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 13, marginBottom: 9 }}>{filter} 기록 <b className="mono" style={{ color: 'var(--ink)' }}>{allOfMarket.length}건</b>이 다른 기간에 있어요.</div>
+              <button className="btn" onClick={() => setPeriod('all')} style={{ padding: '10px 18px' }}>전체 기간 보기</button>
+            </div>
+          )}
           {!(search || period !== 'all' || status !== 'all') && <div style={{ fontSize: 13.5, marginTop: 4 }}>오른쪽 아래 <b style={{ color: 'var(--violet)' }}>＋</b> 로 첫 기록을 남겨보세요.</div>}
         </div>
       ) : status !== 'all' ? cardsOf(shownList) : (
