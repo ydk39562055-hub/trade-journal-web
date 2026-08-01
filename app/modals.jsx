@@ -601,7 +601,7 @@ function SyncModal({ syncId, onEnable, onJoin, onDisable, onClose }) {
 }
 
 /* ───────────── 더보기 (CSV / JSON) ───────────── */
-function MenuModal({ entries, syncId, onImport, onReset, onSync, onClose, blob }) {
+function MenuModal({ entries, syncId, onImport, onReset, onSync, onPurgePhotos, onClose, blob }) {
   const fileRef = useRefM();
   const today = new Date().toISOString().slice(0, 10);
   const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
@@ -649,8 +649,14 @@ function MenuModal({ entries, syncId, onImport, onReset, onSync, onClose, blob }
           <div style={{ height: '100%', width: pct + '%', background: pct >= 70 ? 'var(--violet)' : 'var(--ink-4)' }} />
         </div>
         {pct >= 70 && <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 7, lineHeight: 1.5 }}>
-          거의 찼습니다. JSON 백업을 먼저 받아두고, 오래된 일지의 사진을 지우면 여유가 생깁니다. (거의 다 사진 용량입니다)
+          거의 찼습니다. JSON 백업을 먼저 받아두고, 아래 버튼으로 사진을 정리하세요. (용량은 거의 다 사진입니다)
         </div>}
+        {onPurgePhotos && photoN > 0 && (
+          <div style={{ display: 'flex', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
+            <button className="btn-ghost btn-sm" onClick={() => { if (confirm('30일보다 오래된 일지의 사진을 지울까요? 글과 기록은 그대로 남습니다.')) onPurgePhotos(30); }}>30일 이전 사진 지우기</button>
+            <button className="btn-ghost btn-sm" onClick={() => { if (confirm('사진 ' + photoN + '장을 전부 지울까요? 글과 기록은 그대로 남습니다. (되돌릴 수 없음)')) onPurgePhotos(0); }} style={{ color: 'var(--loss)' }}>사진 전부 지우기</button>
+          </div>
+        )}
       </div>
 
       <div style={{ borderTop: '1px solid var(--border)', margin: '14px 0 10px' }} />

@@ -273,18 +273,35 @@ function App() {
   const lastSentRef = useRef('');
   const debRef = useRef();
 
-  // persist — 저장 실패(용량 초과 등)는 조용히 삼키지 않고 경고
-  useEffect(() => {
-    try { localStorage.setItem('tj_entries_v3', JSON.stringify(entries)); }
-    catch (e) { doFlash('⚠ 저장 공간 부족 — 사진을 줄이거나 오래된 일지를 정리하세요'); }
-  }, [entries]);
-  useEffect(() => { localStorage.setItem('tj_settings_v2', JSON.stringify(settings)); }, [settings]);
-  useEffect(() => { localStorage.setItem('tj_principles_v2', principles); }, [principles]);
-  useEffect(() => { localStorage.setItem('tj_checks_v2', JSON.stringify({ d: todayStr(), s: [...checks] })); }, [checks]);
-  useEffect(() => { localStorage.setItem('tj_memos_v2', JSON.stringify(memos)); }, [memos]);
-  useEffect(() => { localStorage.setItem('tj_diary_v1', JSON.stringify(diary)); }, [diary]);
-  useEffect(() => { localStorage.setItem('tj_holdings_v1', JSON.stringify(holdings)); }, [holdings]);
-  useEffect(() => { localStorage.setItem('tj_deleted_v1', JSON.stringify(deleted)); }, [deleted]);
+  // persist — 저장 실패(용량 초과 등)를 전부 잡아냄.
+  // ★ 예전엔 일지에만 try/catch가 있어서, 공간이 차면 일기·설정·보유 저장이 예외로 멈춰버렸음
+  const [saveErr, setSaveErr] = useState(false);
+  const safeSet = (k, v) => {
+    try { localStorage.setItem(k, v); setSaveErr(prev => (prev ? false : prev)); return true; }
+    catch (e) { setSaveErr(true); return false; }
+  };
+  useEffect(() => { safeSet('tj_entries_v3', JSON.stringify(entries)); }, [entries]);
+  useEffect(() => { safeSet('tj_settings_v2', JSON.stringify(settings)); }, [settings]);
+  useEffect(() => { safeSet('tj_principles_v2', principles); }, [principles]);
+  useEffect(() => { safeSet('tj_checks_v2', JSON.stringify({ d: todayStr(), s: [...checks] })); }, [checks]);
+  useEffect(() => { safeSet('tj_memos_v2', JSON.stringify(memos)); }, [memos]);
+  useEffect(() => { safeSet('tj_diary_v1', JSON.stringify(diary)); }, [diary]);
+  useEffect(() => { safeSet('tj_holdings_v1', JSON.stringify(holdings)); }, [holdings]);
+  useEffect(() => { safeSet('tj_deleted_v1', JSON.stringify(deleted)); }, [deleted]);
+
+  // 사진 비우기 — 공간이 찼을 때 글은 남기고 사진만 지워 즉시 확보
+  const purgePhotos = (days) => {
+    const cut = days ? new Date(Date.now() - days * 864e5).toISOString().slice(0, 10) : null;
+    const now = new Date().toISOString();
+    let n = 0;
+    setEntries(prev => prev.map(e => {
+      const has = (e.photos || []).length;
+      if (!has) return e;
+      if (cut && (e.traded_at || '') >= cut) return e;
+      n += has; return { ...e, photos: [], updated_at: now };
+    }));
+    setModal(null); doFlash(n ? `사진 ${n}장 정리됨 ✓` : '지울 사진이 없어요');
+  };
 
   const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, diary, holdings, deleted });
   const applyBlob = (b) => {
@@ -737,6 +754,18 @@ function App() {
   const [riskHid, setRiskHid] = useState(() => localStorage.getItem('tj_risk_hidden') === todayStr());
   const hideRisk = () => { localStorage.setItem('tj_risk_hidden', todayStr()); setRiskHid(true); };
 
+  // 저장이 막혔을 때 — 조용히 지나가면 기록이 통째로 사라진 줄 모름
+  const saveBanner = saveErr && (
+    <div style={{ background: 'var(--loss)', color: '#fff', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 16, flexShrink: 0 }}>⚠</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800 }}>저장이 안 되고 있어요 — 저장 공간이 찼습니다</div>
+        <div style={{ fontSize: 11.5, opacity: .85, marginTop: 2 }}>사진이 공간을 거의 다 씁니다. 사진을 정리하면 바로 다시 저장됩니다.</div>
+      </div>
+      <button onClick={() => setModal({ type: 'menu' })} style={{ fontSize: 12, fontWeight: 800, color: 'var(--loss)', background: '#fff', borderRadius: 8, padding: '7px 11px', flexShrink: 0 }}>정리하기</button>
+    </div>
+  );
+
   const riskBanner = riskAlert && !riskHid && (
     <div style={{ background: 'var(--ink)', color: '#fff', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
       <span style={{ fontSize: 16, flexShrink: 0 }}>⛔</span>
@@ -794,6 +823,7 @@ function App() {
     /* 넓은 화면 — 중앙: 성과·일지 / 우: 일기·루틴·회고 (팝업 없이 한 화면) */
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: 'var(--gap)', alignItems: 'start' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
+        {saveBanner}
         {riskBanner}
         <BalanceBand market={filter} bal={bal} holdVal={holdValue[filter]} onSeed={() => setModal({ type: 'settings' })} />
         <RedFolderCard items={redfolder} />
@@ -808,6 +838,7 @@ function App() {
     </div>
   ) : (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      {saveBanner}
       {riskBanner}
       <DiaryHome diary={diary} upsert={upsertDiary} remove={removeDiary} />
       <BalanceBand market={filter} bal={bal} holdVal={holdValue[filter]} onSeed={() => setModal({ type: 'settings' })} />
@@ -981,7 +1012,7 @@ function App() {
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
       {modal?.type === 'sell' && modal.entry && <SellModal entry={modal.entry} quote={quoteOf(modal.entry.ticker)} onSell={sellPosition} onClose={() => setModal(null)} />}
-      {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
+      {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onPurgePhotos={purgePhotos} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
       {modal?.type === 'reset' && <ResetModal market={filter} entries={entries} onResetMarket={resetMarket} onResetAll={clearAll} onRestore={restoreSamples} onClose={() => setModal(null)} />}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}
     </div>
