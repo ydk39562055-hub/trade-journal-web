@@ -355,7 +355,8 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {shot.map((s) => (
               <div key={s._i} style={{ display: 'flex', alignItems: 'center', gap: 9, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 11px', opacity: s.on ? 1 : 0.45 }}>
-                <input type="checkbox" checked={s.on} onChange={() => setShot(shot.map((x) => (x._i === s._i ? Object.assign({}, x, { on: !x.on }) : x)))} />
+                <input type="checkbox" checked={s.on} style={{ width: 17, height: 17, flex: 'none' }}
+                  onChange={() => setShot(shot.map((x) => (x._i === s._i ? Object.assign({}, x, { on: !x.on }) : x)))} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {s.name}{s.symbol ? <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-4)', marginLeft: 5 }}>{s.symbol}</span> : null}
