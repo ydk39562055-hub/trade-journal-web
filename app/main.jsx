@@ -944,6 +944,10 @@ function App() {
     </div>
   );
 
+  /* 본문 최대 폭. 예전엔 1080 고정이라 큰 모니터에서 좌측 내비와 본문 사이가 텅 비었다
+     (2026-08-09 지적). 화면이 넓으면 그만큼 더 쓰되, 너무 길어져 눈이 피로하지 않게 1520 에서 멈춘다. */
+  const CONTENT_W = wide ? 1520 : 1080;
+
   const TABS = [['home', '◧', '홈'], ['journal', '☰', '일지'], ['assets', '◈', '자산'], ['diary', '✎', '일기'], ['stats', '◍', '통계']];
   const MKT_C = { '선물': 'var(--futures)', '스윙': 'var(--swing)', '장기': 'var(--long)' };
   const balOf = m => (m === '스윙' ? balW : m === '장기' ? balL : balF);
@@ -1127,7 +1131,7 @@ function App() {
         position: 'sticky', top: 0, zIndex: 30, background: 'rgba(250,246,240,.92)',
         backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)',
       }}>
-        <div style={{ maxWidth: 1080, margin: '0 auto', padding: wide ? '11px 20px' : '10px 14px 9px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+        <div style={{ maxWidth: CONTENT_W, margin: '0 auto', padding: wide ? '11px 20px' : '10px 14px 9px', display: 'flex', flexDirection: 'column', gap: 9 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {!wide && (
               <div style={{ width: 22, height: 22, borderRadius: 7, background: 'var(--violet)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -1155,7 +1159,7 @@ function App() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1080, margin: '0 auto', padding: wide ? '18px 20px' : '14px 14px 10px' }}>
+      <main style={{ maxWidth: CONTENT_W, margin: '0 auto', padding: wide ? '18px 20px' : '14px 14px 10px' }}>
         {body}
       </main>
       </div>
