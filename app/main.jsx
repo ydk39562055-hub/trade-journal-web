@@ -739,11 +739,29 @@ function App() {
   };
   // ② 전체 비우기 — 3계좌 전부 빈 일지로
   const clearAll = () => {
-    if (!confirm('선물·스윙·장기 3계좌 전부와 모든 시드를 비우고 빈 일지로 시작할까요?\n안전을 위해 백업 파일이 자동 저장됩니다. 계속할까요?')) return;
+    /* 예전엔 일지·시드만 지우고 보유현황·자산은 남겼다. '전체 비우기'라는 이름과 달라
+       초기화했는데도 옛 종목·자산이 남아 헷갈렸다(2026-08-09). 이제 정말 전부 비운다. */
+    const MSG = [
+      '정말 전부 비웁니다.', '',
+      '· 선물·스윙·장기 일지 전부',
+      '· 계좌별 시드·입금',
+      '· 보유 현황(종목)',
+      '· 자산(예금·부동산 등)', '',
+      '일기·원칙·메모는 남습니다.',
+      '안전을 위해 백업 파일이 자동 저장됩니다. 계속할까요?',
+    ].join(String.fromCharCode(10));
+    if (!confirm(MSG)) return;
     downloadBackup();
     const ts = new Date().toISOString();
-    setDeleted(prev => { const n = { ...prev }; entries.forEach(e => { n[e.id] = ts; }); return n; }); // 동기화 시 다른 기기에서도 비워지도록
-    setEntries([]); setSettings({ futuresSeed: null, swingSeed: null, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0 });
+    setDeleted(prev => {
+      const n = { ...prev };
+      entries.forEach(x => { n[x.id] = ts; });
+      holdings.forEach(x => { n[x.id] = ts; });
+      assets.forEach(x => { n[x.id] = ts; });
+      return n;                                    // 동기화 시 다른 기기에서도 비워지도록
+    });
+    setEntries([]); setHoldings([]); setAssets([]);
+    setSettings({ futuresSeed: null, swingSeed: null, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0 });
     setModal(null); doFlash('전체 초기화됨 — 새로 시작 ✓');
   };
   // ③ 예시로 되돌리기 — 앱 첫 상태(예시 28건 + 기본 시드)로 복원

@@ -681,7 +681,7 @@ function ResetModal({ market, entries, onResetMarket, onResetAll, onRestore, onC
       </button>
       <button className="btn-ghost" style={box} onClick={onResetAll}>
         <div style={{ ...h, color: 'var(--loss)' }}>전체 비우기 — 빈 일지</div>
-        <div style={d}>선물·스윙·장기 3계좌 전부({total}건)와 모든 시드를 비우고 빈 일지로 시작합니다.</div>
+        <div style={d}>일지 {total}건 · 시드 · 보유 현황 · 자산(예금·부동산)까지 <b>전부</b> 비웁니다. 일기·원칙·메모는 남습니다.</div>
       </button>
       <button className="btn-ghost" style={box} onClick={onRestore}>
         <div style={h}>예시로 되돌리기</div>
