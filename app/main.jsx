@@ -282,6 +282,10 @@ function App() {
   const flashTimer = useRef();
   // ── 클라우드 동기화 ──
   const [syncId, setSyncId] = useState(() => localStorage.getItem('tj_sync_id') || null);
+  /* ★ 2026-08-09 사용자 지적: "브라우저 데이터를 지우면 전부 사라진다니 너무 안 좋다".
+     동기화(코드)는 기기 고장·브라우저 삭제를 막아주지만 **실수로 지운 것까지 서버에 그대로 반영**된다.
+     되돌릴 수 있는 건 백업 파일뿐이라, 오래됐으면 홈에서 눈에 띄게 알려준다. */
+  const [lastBackup, setLastBackup] = useState(() => localStorage.getItem('tj_last_backup') || '');
   const [deleted, setDeleted] = useState(() => {   // 180일 지난 삭제기록(무덤)은 정리 — 무한 증식 방지
     try {
       const raw = JSON.parse(localStorage.getItem('tj_deleted_v1') || '{}');
@@ -720,6 +724,7 @@ function App() {
       const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), ...gatherBlob() }, null, 1)], { type: 'application/json' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
       a.download = `거래일지_백업_${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove();
+      safeSet('tj_last_backup', todayStr()); setLastBackup(todayStr());   // 언제 받았는지 기억 → 오래되면 알려준다
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     } catch (e) {}
   };
@@ -931,6 +936,29 @@ function App() {
     </div>
   );
 
+  const backupAge = (() => {
+    if (!lastBackup) return null;                       // 한 번도 안 받음
+    const d = new Date(lastBackup.slice(0, 4) + '-' + lastBackup.slice(4, 6) + '-' + lastBackup.slice(6, 8));
+    return Math.floor((Date.now() - d.getTime()) / 86400000);
+  })();
+  const needBackup = entries.length > 0 && (backupAge == null || backupAge >= 14);
+  const backupBanner = needBackup && (
+    <div style={{ background: 'var(--surface)', border: '1.5px solid var(--violet)', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 16, flexShrink: 0 }}>🗂</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800 }}>
+          {backupAge == null ? '백업 파일을 아직 한 번도 안 받으셨어요' : `백업한 지 ${backupAge}일 됐어요`}
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.5 }}>
+          {syncId
+            ? '동기화는 기기가 바뀌어도 지켜주지만, 실수로 지운 건 못 되돌립니다. 백업 파일이 유일한 되돌리기예요.'
+            : '동기화도 꺼져 있습니다. 지금 브라우저를 지우면 전부 사라집니다.'}
+        </div>
+      </div>
+      <button className="btn" onClick={downloadBackup} style={{ fontSize: 12, padding: '8px 12px', flexShrink: 0 }}>지금 백업</button>
+    </div>
+  );
+
   const riskBanner = riskAlert && !riskHid && (
     <div style={{ background: 'var(--ink)', color: '#fff', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
       <span style={{ fontSize: 16, flexShrink: 0 }}>⛔</span>
@@ -994,6 +1022,7 @@ function App() {
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: 'var(--gap)', alignItems: 'start' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
         {saveBanner}
+        {backupBanner}
         {riskBanner}
         {netWorthCard}
         <BalanceBand market={filter} bal={bal} onSeed={() => setModal({ type: 'settings' })} />
@@ -1010,6 +1039,7 @@ function App() {
   ) : (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       {saveBanner}
+      {backupBanner}
       {riskBanner}
       {netWorthCard}
       <DiaryHome diary={diary} upsert={upsertDiary} remove={removeDiary} />
