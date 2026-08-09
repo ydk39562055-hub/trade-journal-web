@@ -43,10 +43,19 @@
   /* ★ 2026-08-09 사용자 요청: "원화로 보이게 하고 옆에 달러도 표시".
      자산 화면은 큰 금액이라 원화가 기준이 맞다. 달러는 괄호로 같이 적어 감을 잃지 않게 한다.
      저장값은 늘 달러 기준이므로 여기서 표시만 환산한다(비파괴). */
-  const won = n => '₩' + _grp((Number(n) || 0) * _RATE);
-  const wonS = n => { const v = (Number(n) || 0) * _RATE; return (v > 0 ? '+' : v < 0 ? '−' : '') + '₩' + _grp(v); };
+  /* ⚠ 원화는 달러를 환율로 곱해 만든 값이라 끝자리가 의미 없다(₩421,743,287 의 287원).
+     ★ 2026-08-09 사용자 요청 "1원 단위 밑에는 빼버려" — 자릿수에 맞춰 잔돈을 정리한다.
+       1천만 이상 → 만원 단위 · 100만 이상 → 천원 단위 · 그 밑 → 1원 그대로.
+     같은 규칙을 모든 원화 표시에 쓰므로 합계와 항목이 크게 어긋나지 않는다. */
+  const _tidyWon = v => {
+    const a = Math.abs(v);
+    const unit = a >= 10000000 ? 10000 : a >= 1000000 ? 1000 : 1;
+    return Math.round(v / unit) * unit;
+  };
+  const won = n => '₩' + _grp(_tidyWon((Number(n) || 0) * _RATE));
+  const wonS = n => { const v = _tidyWon((Number(n) || 0) * _RATE); return (v > 0 ? '+' : v < 0 ? '−' : '') + '₩' + _grp(v); };
   const usdOnly = n => '$' + _grp(Number(n) || 0);
-  const both = n => won(n) + ' (' + usdOnly(n) + ')';                 // ₩12,345,678 ($9,145)
+  const both = n => won(n) + ' (' + usdOnly(n) + ')';
   const bothS = n => wonS(n) + ' (' + ((Number(n) || 0) > 0 ? '+' : (Number(n) || 0) < 0 ? '−' : '') + usdOnly(n) + ')';
 
   // ── 샘플 거래 (시간순으로 작성; 앱이 최신순 정렬) ──
