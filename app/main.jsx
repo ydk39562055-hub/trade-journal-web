@@ -386,24 +386,13 @@ function App() {
     holdings.forEach(h => { if (h.ticker) s.add(h.ticker.toUpperCase()); });
     return [...s].sort().join(',');
   }, [entries, holdings]);
-  useEffect(() => {
-    if (!holdTickers || !window.TJPortfolio) return;
-    let alive = true;
-    const syms = holdTickers.split(',').map(t => TJPortfolio.yahooSym({ ticker: t, market: /^\d{6}$/.test(t) ? 'KR' : 'US' })).filter(Boolean);
-    const load = () => {
-      if (document.hidden) return;                                  // 탭 안 보면 굳이 조회 안 함
-      TJPortfolio.quotes(syms).then(j => { if (alive && j && j.quotes) setQuotes(q => ({ ...q, ...j.quotes })); }).catch(() => {});
-    };
-    load();
-    const id = setInterval(load, 60 * 1000);                        // 장중이면 1분마다 갱신
-    document.addEventListener('visibilitychange', load);
-    return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', load); };
-  }, [holdTickers]);
-  // 티커 → {price, currency} (카드가 쓰기 쉬운 형태)
-  const quoteOf = (ticker) => {
-    const t = (ticker || '').toUpperCase(); if (!t) return null;
-    return quotes[t] || quotes[t + '.KS'] || null;
-  };
+  /* ★ 2026-08-09 사용자 결정: **거래일지에서는 실시간 시세를 쓰지 않는다.**
+     "이게 문제가 많아, 내가 수동으로 작성할거고" — 장중 시세가 1분마다 바뀌면 일지의
+     숫자(평가손익·잔고)가 볼 때마다 달라져서, 기록이라는 물건의 성질과 안 맞았다.
+     일지는 **내가 적은 값**만 쓴다. 실시간 시세는 '전체 재산 포트폴리오' 화면에서만 본다.
+     (조회 모듈 TJPortfolio 는 그 화면이 쓰므로 그대로 둔다.) */
+  // 일지에서는 시세를 쓰지 않는다(위 주석). 카드·모달이 부르던 자리는 남겨 두고 늘 null 을 준다.
+  const quoteOf = () => null;
   // 계좌별 보유 평가금액(현재가 × 수량) — 참고용 표시. 시드는 사용자가 직접 적음.
   const holdValue = useMemo(() => {
     const out = {};
@@ -577,6 +566,45 @@ function App() {
     setModal(null); doFlash('청산 기록됨 ✓');
   };
 
+  /* 추가 매수(분할매수) — 매도와 짝. 수량을 더하고 평단을 가중평균으로 다시 낸다.
+     ★ 사용자 요청 2026-08-09: "분할매도는 가능한데 분할매수는 또 안 되네".
+     lots 에 산 기록을 쌓아 둔다 — 언제 얼마에 얼마나 담았는지가 나중에 판단 근거가 된다. */
+  const buyMore = (id, { qty, price, date, note }) => {
+    const now = new Date().toISOString();
+    let tk = null, mk = null, addQty = 0;
+    setEntries(prev => {
+      const i = prev.findIndex(e => e.id === id); if (i < 0) return prev;
+      const e = prev[i];
+      const add = Number(qty) || 0, px = Number(price);
+      if (!(add > 0) || isNaN(px)) return prev;
+      const have = Number(e.shares) || 0;
+      const buy0 = e.entry_price != null ? Number(e.entry_price) : null;
+      const totalQty = have + add;
+      const avg = buy0 != null && totalQty > 0 ? (buy0 * have + px * add) / totalQty : px;
+      tk = (e.ticker || '').toUpperCase(); mk = e.market; addQty = add;
+      // 첫 추가매수면 기존 보유분도 한 칸(lot)으로 남겨 둔다 — 안 그러면 최초 매수 기록이 사라진다
+      const lots = e.lots && e.lots.length ? e.lots.slice()
+        : (have > 0 ? [{ qty: have, price: buy0, date: e.traded_at || '', note: '최초 매수' }] : []);
+      lots.push({ qty: add, price: px, date: date || todayStr(), note: (note || '').trim() });
+      const next = prev.slice();
+      next[i] = {
+        ...e, shares: Math.round(totalQty * 100000) / 100000,
+        entry_price: Math.round(avg * 100000) / 100000,
+        lots, updated_at: now,
+        body: (note && note.trim())
+          ? ((e.body || '') + (e.body ? String.fromCharCode(10) : '') + date + ' 추가매수 ' + add + '주 @' + px + ' — ' + note.trim())
+          : (e.body || ''),
+      };
+      return next;
+    });
+    // 보유현황 수량도 같이 늘림(없으면 새로 만들지 않는다 — 보유현황은 사용자가 따로 관리)
+    if (tk) {
+      const cur = holdings.find(h => h.account === mk && (h.ticker || '').toUpperCase() === tk);
+      if (cur) setHoldings(prev => prev.map(h => (h.id === cur.id ? { ...h, qty: (Number(h.qty) || 0) + addQty, updated_at: now } : h)));
+    }
+    setModal(null); doFlash('추가 매수 기록됨 ✓');
+  };
+
   const clearHoldings = (account) => {
     const rm = holdings.filter(h => h.account === account).map(h => h.id);
     if (!rm.length) return;
@@ -724,8 +752,8 @@ function App() {
   TJ.setCurrency(settings.currency); TJ.setRate(fx.rate);   // 전역 통화($/₩)+실시간환율 — 렌더 전 동기 반영(자식 포매터가 읽음)
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
   // 스윙·장기는 자금이 보유중에 묶여 있어 미실현 평가손익까지 잔고에 반영 (시드는 사용자가 직접 입력)
-  const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit, { quoteOf });
-  const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit, { quoteOf });
+  const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit);
+  const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit);
   // 선물/스윙/장기 완전 분리 — 활성 시장만 표시(합산 없음)
   const bal = filter === '스윙' ? balW : filter === '장기' ? balL : balF;
 
@@ -815,7 +843,7 @@ function App() {
   const editorFor = id => setModal({ type: 'editor', entry: entries.find(x => x.id === id) });
   const cardsOf = (arr) => (
     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(330px, 1fr))', gap: 'var(--gap)', alignItems: 'start' }}>
-      {arr.map((e, idx) => <EntryCard key={e.id} e={e} index={idx + 1} quote={quoteOf(e.ticker)} onEdit={editorFor} onDelete={deleteEntry} onSell={id => setModal({ type: 'sell', entry: entries.find(x => x.id === id) })} />)}
+      {arr.map((e, idx) => <EntryCard key={e.id} e={e} index={idx + 1} quote={quoteOf(e.ticker)} onEdit={editorFor} onDelete={deleteEntry} onSell={id => setModal({ type: 'sell', entry: entries.find(x => x.id === id) })} onBuyMore={id => setModal({ type: 'buymore', entry: entries.find(x => x.id === id) })} />)}
     </div>
   );
 
@@ -900,7 +928,7 @@ function App() {
                 보유중
                 {holdValue[filter] && holdValue[filter].total > 0 && <span className="mono"> · 평가금액 {TJ.money(holdValue[filter].total)}</span>}
                 {heldPnl !== 0 && <span className="mono"> · 평가손익 {TJ.moneyS(heldPnl)}</span>}
-                {quoteAgeLabel && <span style={{ fontWeight: 600, color: 'var(--ink-4)' }}> · 시세 {quoteAgeLabel}</span>}
+
               </div>
               {cardsOf(held)}
             </>
@@ -1032,6 +1060,7 @@ function App() {
       {modal?.type === 'settings' && <SettingsModal settings={settings} seedSuggest={holdValue} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
+      {modal?.type === 'buymore' && modal.entry && <BuyMoreModal entry={modal.entry} onBuy={buyMore} onClose={() => setModal(null)} />}
       {modal?.type === 'sell' && modal.entry && <SellModal entry={modal.entry} quote={quoteOf(modal.entry.ticker)} onSell={sellPosition} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onPurgePhotos={purgePhotos} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
       {modal?.type === 'reset' && <ResetModal market={filter} entries={entries} onResetMarket={resetMarket} onResetAll={clearAll} onRestore={restoreSamples} onClose={() => setModal(null)} />}

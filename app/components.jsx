@@ -92,7 +92,7 @@ function IconBtn({ onClick, title, danger, children }) {
 }
 
 /* ─── 일지 카드 ─── */
-function EntryCard({ e, onEdit, onDelete, onSell, index, quote }) {
+function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote }) {
   const [hov, setHov] = useStateCo(false);
   const rv = TJStats.num(e.realized_r);
   const rpv = TJStats.num(e.return_pct);   // 현물 수익률%
@@ -152,11 +152,6 @@ function EntryCard({ e, onEdit, onDelete, onSell, index, quote }) {
       {/* 보유중 — 숫자 자리를 채운 고정 격자 (수량 · 평단 · 현재가 · 평가손익) */}
       {e.result === 'holding' && (() => {
         const sh = TJStats.num(e.shares), px = TJStats.num(e.entry_price);
-        const live = quote ? TJStats.num(quote.price) : null;
-        const lsym = quote && quote.currency === 'KRW' ? '₩' : '$';
-        // 평단과 시세 통화가 다르면 평단을 시세 통화로 맞춰 비교
-        const pxL = px == null ? null : (e.currency === lsym ? px : (lsym === '₩' ? TJ.toUSD(px, e.currency) * TJ.rateKRW() : TJ.toUSD(px, e.currency)));
-        const pl = (sh != null && pxL != null && live != null) ? (live - pxL) * sh : null;
         const cell = (label, val, right) => (
           <div style={{ textAlign: right ? 'right' : 'left', minWidth: 0 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-3)' }}>{label}</div>
@@ -167,8 +162,10 @@ function EntryCard({ e, onEdit, onDelete, onSell, index, quote }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 11, padding: '9px 11px' }}>
             {cell('수량', sh != null ? sh : '—')}
             {cell('평단', px != null ? (e.avg_est ? TJ.fmt(px, e.currency) + '?' : TJ.fmt(px, e.currency)) : '—')}
-            {cell('현재가', live != null ? TJ.fmt(live, lsym) : '—')}
-            {cell('평가손익', pl != null ? TJ.fmt(pl, lsym, true) : '—', true)}
+            {/* ★ 2026-08-09: 일지에서 실시간 시세를 뺐다. 대신 '내가 넣은 값'만으로 나오는
+                매수금액(평단×수량)을 보여준다 — 볼 때마다 숫자가 달라지지 않는다. */}
+            {cell('매수금액', (sh != null && px != null) ? TJ.fmt(sh * px, e.currency) : '—')}
+            {cell('담은 날', e.traded_at || '—', true)}
           </div>
         );
       })()}
@@ -181,8 +178,12 @@ function EntryCard({ e, onEdit, onDelete, onSell, index, quote }) {
       )}
 
       {/* 팔았을 때 — 수량·가격만 넣으면 손익 자동 (분할 매도 지원) */}
-      {e.result === 'holding' && onSell && (
-        <button onClick={() => onSell(e.id)} className="btn-ghost btn-sm" style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: 12.5, marginTop: -3 }}>매도 기록</button>
+      {e.result === 'holding' && (onSell || onBuyMore) && (
+        <div style={{ display: 'flex', gap: 7, alignSelf: 'flex-start', marginTop: -3, flexWrap: 'wrap' }}>
+          {/* ★ 분할매수(2026-08-09) — 매도와 짝을 맞춘다. 더 담으면 평단이 다시 계산된다. */}
+          {onBuyMore && <button onClick={() => onBuyMore(e.id)} className="btn-ghost btn-sm" style={{ padding: '6px 12px', fontSize: 12.5 }}>추가 매수</button>}
+          {onSell && <button onClick={() => onSell(e.id)} className="btn-ghost btn-sm" style={{ padding: '6px 12px', fontSize: 12.5 }}>매도 기록</button>}
+        </div>
       )}
 
       {/* 청산가 — 팔고 나면 얼마에 팔았는지 */}

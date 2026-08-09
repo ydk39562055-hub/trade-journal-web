@@ -762,6 +762,82 @@ function SellModal({ entry: e, quote, onSell, onClose }) {
   );
 }
 
+/* ───────────── 추가 매수(분할매수) ─────────────
+   ★ 사용자 요청 2026-08-09: "분할매도는 되는데 분할매수가 안 된다".
+   매도와 짝을 맞춘다 — 같은 종목을 더 사면 수량을 더하고 평단을 가중평균으로 다시 낸다.
+   산 기록은 lots 에 그대로 쌓아 둔다(언제 얼마에 얼마나 담았는지 나중에 되짚기 위함). */
+function BuyMoreModal({ entry: e, onBuy, onClose }) {
+  const have = Number(e.shares) || 0;
+  const dsym = e.currency === '₩' ? '₩' : '$';
+  const [qty, setQty] = useStateM('');
+  const [price, setPrice] = useStateM('');
+  const [date, setDate] = useStateM(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useStateM('');
+  const fld = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
+
+  const q = Number(qty), p = Number(price);
+  const ok = q > 0 && !isNaN(p) && price !== '';
+  const buy0 = e.entry_price != null ? Number(e.entry_price) : null;
+  const totalQty = have + (ok ? q : 0);
+  // 가중평균 평단 = (기존 평단×기존 수량 + 산 가격×산 수량) ÷ 총 수량
+  const avg = (ok && buy0 != null && totalQty > 0) ? (buy0 * have + p * q) / totalQty : null;
+
+  return (
+    <Modal open onClose={onClose} title="추가 매수" sub={`${e.ticker || '종목'} · ${e.market}`} maxWidth={420} sheet={window.matchMedia('(max-width:560px)').matches}>
+      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', fontSize: 12.5, color: 'var(--ink-2)' }}>
+        보유 <b className="mono">{have}주</b>{buy0 != null && <> · 평단 <b className="mono">{TJ.fmt(buy0, dsym)}</b></>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <label style={fld}>산 수량</label>
+          <input type="number" inputMode="decimal" value={qty} onChange={ev => setQty(ev.target.value)} autoFocus />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={fld}>산 가격 ({dsym} · 1주)</label>
+          <input type="number" inputMode="decimal" value={price} onChange={ev => setPrice(ev.target.value)} placeholder="0" />
+        </div>
+      </div>
+      {have > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
+          {[['보유만큼', have], ['절반', Math.round(have / 2 * 100) / 100]].map(([l, v]) => (
+            v > 0 ? <button key={l} className="chip" onClick={() => setQty(String(v))} style={{ fontSize: 12, padding: '5px 11px' }}>{l} {v}주</button> : null
+          ))}
+        </div>
+      )}
+
+      <label style={fld}>날짜</label>
+      <input type="date" value={date} onChange={ev => setDate(ev.target.value)} />
+      <label style={fld}>메모 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>(선택 — 왜 더 샀는지)</span></label>
+      <textarea value={note} onChange={ev => setNote(ev.target.value)} placeholder="눌림목 추가 / 분할 매집 2차 / 지지 확인…" style={{ minHeight: 54, fontSize: 13.5 }} />
+
+      <div style={{ marginTop: 14, background: 'var(--violet-50)', borderRadius: 11, padding: '11px 13px' }}>
+        {ok ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>합친 뒤</span>
+              <span className="mono" style={{ fontSize: 19, fontWeight: 800 }}>{Math.round(totalQty * 10000) / 10000}주</span>
+              {avg != null && <span className="mono" style={{ fontSize: 13.5, fontWeight: 700 }}>평단 {TJ.fmt(avg, dsym)}</span>}
+            </div>
+            {avg != null && buy0 != null && (
+              <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 5 }}>
+                평단이 {TJ.fmt(buy0, dsym)} → <b>{TJ.fmt(avg, dsym)}</b>
+                {avg < buy0 ? ' 로 내려갑니다(물타기).' : avg > buy0 ? ' 로 올라갑니다(불타기).' : ' 로 그대로입니다.'}
+              </div>
+            )}
+            {buy0 == null && <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 5 }}>기존 평단이 없어 이번 가격이 평단이 됩니다.</div>}
+          </>
+        ) : <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>수량과 가격을 넣으면 합친 평단을 미리 보여드립니다.</div>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+        <button className="btn" style={{ flex: 1 }} disabled={!ok} onClick={() => onBuy(e.id, { qty: q, price: p, date, note })}>추가 매수 기록</button>
+        <button className="btn-ghost" onClick={onClose}>취소</button>
+      </div>
+    </Modal>
+  );
+}
+
 /* ───────────── 보유 현황 (스크린샷 자동입력 + 실시간 시세 + 일지로 보내기) ───────────── */
 function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHoldings, addPositions, defaultAccount, onClose }) {
   const [acct, setAcct] = useStateM(defaultAccount === '장기' ? '장기' : '스윙');
@@ -960,4 +1036,4 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
   );
 }
 
-Object.assign(window, { EditorModal, SettingsModal, PrinciplesModal, MenuModal, ResetModal, SyncModal, HoldingsModal, SellModal });
+Object.assign(window, { EditorModal, SettingsModal, PrinciplesModal, MenuModal, ResetModal, SyncModal, HoldingsModal, SellModal, BuyMoreModal });
