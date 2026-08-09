@@ -286,6 +286,9 @@ function App() {
      동기화(코드)는 기기 고장·브라우저 삭제를 막아주지만 **실수로 지운 것까지 서버에 그대로 반영**된다.
      되돌릴 수 있는 건 백업 파일뿐이라, 오래됐으면 홈에서 눈에 띄게 알려준다. */
   const [lastBackup, setLastBackup] = useState(() => localStorage.getItem('tj_last_backup') || '');
+  /* 자동 백업 — 동기화가 켜져 있으면 하루 한 번 서버에 그날 상태를 통째로 쌓는다.
+     사용자가 아무것도 안 눌러도 되돌릴 지점이 생긴다(수동 백업 파일은 그대로 보조 수단). */
+  const snapDoneRef = useRef(false);
   const [deleted, setDeleted] = useState(() => {   // 180일 지난 삭제기록(무덤)은 정리 — 무한 증식 방지
     try {
       const raw = JSON.parse(localStorage.getItem('tj_deleted_v1') || '{}');
@@ -379,6 +382,13 @@ function App() {
     }, 1400);
     return () => clearTimeout(debRef.current);
   }, [entries, settings, principles, memos, diary, holdings, assets, deleted, syncId, syncReady]);
+
+  useEffect(() => {
+    if (!syncId || !syncReady || snapDoneRef.current || !window.TJSync || !TJSync.snapPush) return;
+    if (!entries.length && !assets.length && !holdings.length) return;   // 빈 상태를 덮어쓰지 않는다
+    snapDoneRef.current = true;                                          // 앱을 켠 동안 한 번만 시도
+    TJSync.snapPush(syncId, gatherBlob()).catch(() => { snapDoneRef.current = false; });
+  }, [syncId, syncReady, entries.length, assets.length, holdings.length]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const enableSync = () => { const c = TJSync.genCode(); localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('동기화 켜짐 ☁'); return c; };
   const joinSync = (raw) => { const c = TJSync.clean(raw); if (c.length < 12) { alert('코드가 너무 짧아요. 다시 확인해주세요.'); return false; } localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('연결 중… ☁'); return true; };
@@ -951,7 +961,7 @@ function App() {
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.5 }}>
           {syncId
-            ? '동기화는 기기가 바뀌어도 지켜주지만, 실수로 지운 건 못 되돌립니다. 백업 파일이 유일한 되돌리기예요.'
+            ? '자동 백업이 하루 한 번 서버에 쌓입니다(왼쪽 ↺ 되돌리기). 파일 백업은 그것까지 날아갈 때를 위한 보험이에요.'
             : '동기화도 꺼져 있습니다. 지금 브라우저를 지우면 전부 사라집니다.'}
         </div>
       </div>
@@ -1150,6 +1160,7 @@ function App() {
           <span style={{ flex: 1 }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <button className="navitem" onClick={() => setModal({ type: 'sync' })} style={{ fontSize: 12.5, color: 'var(--ink-3)' }}><span>◷</span>{syncId ? (syncStatus === 'err' ? '동기화 오프라인' : '동기화됨') : '동기화'}</button>
+            <button className="navitem" onClick={() => setModal({ type: 'restore' })} style={{ fontSize: 12.5, color: 'var(--ink-3)' }}><span>↺</span>되돌리기</button>
             <button className="navitem" onClick={() => setModal({ type: 'principles' })} style={{ fontSize: 12.5, color: 'var(--ink-3)' }}><span>◎</span>원칙</button>
             <button className="navitem" onClick={() => setModal({ type: 'menu' })} style={{ fontSize: 12.5, color: 'var(--ink-3)' }}><span>⚙</span>설정 · 백업</button>
           </div>
@@ -1227,6 +1238,10 @@ function App() {
       {modal?.type === 'sell' && modal.entry && <SellModal entry={modal.entry} quote={quoteOf(modal.entry.ticker, modal.entry.market)} onSell={sellPosition} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onPurgePhotos={purgePhotos} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
       {modal?.type === 'reset' && <ResetModal market={filter} entries={entries} onResetMarket={resetMarket} onResetAll={clearAll} onRestore={restoreSamples} onClose={() => setModal(null)} />}
+      {modal?.type === 'restore' && (
+        <RestoreModal syncId={syncId} onBackupNow={downloadBackup} onClose={() => setModal(null)}
+          onRestore={(blob) => { importBlob(blob); setModal(null); doFlash('되돌렸습니다 ✓'); }} />
+      )}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}
     </div>
   );

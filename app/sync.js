@@ -32,5 +32,13 @@
   async function push(code, data) {
     return await rpc('sync_push', { p_sync_id: clean(code), p_data: data });
   }
-  window.TJSync = { genCode, clean, pull, push };
+  /* ── 자동 백업(스냅샷) ─────────────────────────────────────────────
+     동기화는 '거울'이라 지운 것도 그대로 반영된다. 되돌리려면 지우기 전 상태가
+     따로 남아야 해서, 하루 한 번 통째로 쌓아둔다(서버에서 20시간 제한·최근 14개 유지).
+     서버 준비: supabase_snapshot_setup.sql 을 SQL Editor 에 한 번 실행. */
+  async function snapPush(code, data) { return await rpc('snap_push', { p_sync_id: clean(code), p_data: data }); }
+  async function snapList(code) { return await rpc('snap_list', { p_sync_id: clean(code) }); }
+  async function snapGet(code, id) { return await rpc('snap_get', { p_sync_id: clean(code), p_id: id }); }
+
+  window.TJSync = { genCode, clean, pull, push, snapPush, snapList, snapGet };
 })();
