@@ -120,11 +120,12 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
       {/* ── 총자산 ── */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '16px 17px' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>총자산</div>
-        <div className="mono" style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.25 }}>{TJ.money(totalUSD)}</div>
+        <div className="mono" style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.25 }}>{TJ.won(totalUSD)}</div>
+        <div className="mono" style={{ fontSize: 12.5, color: 'var(--ink-4)', marginTop: -2 }}>{TJ.usdOnly(totalUSD)}</div>
         <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
           {costUSD > 0 && (
             <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: plUSD >= 0 ? 'var(--win)' : 'var(--loss)' }}>
-              {TJ.moneyS(plUSD)} · {(costUSD ? (plUSD / costUSD) * 100 : 0).toFixed(1)}%
+              {TJ.wonS(plUSD)} · {(costUSD ? (plUSD / costUSD) * 100 : 0).toFixed(1)}%
             </span>
           )}
           <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>{all.length}개 자산{autoAssets.length ? ' (일지에서 ' + autoAssets.length + '개 자동)' : ''}</span>
@@ -174,14 +175,14 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
                 {accounts.map(([nm, b]) => (
                   <tr key={nm} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '7px 6px', fontWeight: 700 }}>{nm}</td>
-                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: 'var(--ink-3)' }}>{b.base ? TJ.money(b.base) : '—'}</td>
+                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: 'var(--ink-3)' }}>{b.base ? TJ.won(b.base) : '—'}</td>
                     <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800, color: b.pnl > 0 ? 'var(--win)' : b.pnl < 0 ? 'var(--loss)' : 'inherit' }}>
-                      {b.pnl ? TJ.moneyS(b.pnl) : '—'}
+                      {b.pnl ? TJ.wonS(b.pnl) : '—'}
                     </td>
                     <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: b.ret == null ? 'var(--ink-4)' : b.ret >= 0 ? 'var(--win)' : 'var(--loss)' }}>
                       {b.ret == null ? '—' : (b.ret >= 0 ? '+' : '') + b.ret.toFixed(1) + '%'}
                     </td>
-                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 700 }}>{b.base || b.pnl ? TJ.money(b.bal) : '—'}</td>
+                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 700 }}>{b.base || b.pnl ? TJ.won(b.bal) : '—'}</td>
                   </tr>
                 ))}
                 {(() => {
@@ -192,12 +193,12 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
                   return (
                     <tr style={{ borderTop: '2px solid var(--border)' }}>
                       <td style={{ padding: '7px 6px', fontWeight: 800 }}>합계</td>
-                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: 'var(--ink-3)' }}>{TJ.money(base)}</td>
-                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800, color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{TJ.moneyS(pnl)}</td>
+                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: 'var(--ink-3)' }}>{TJ.won(base)}</td>
+                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800, color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{TJ.wonS(pnl)}</td>
                       <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>
                         {base ? (pnl >= 0 ? '+' : '') + (pnl / base * 100).toFixed(1) + '%' : '—'}
                       </td>
-                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800 }}>{TJ.money(bal)}</td>
+                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800 }}>{TJ.won(bal)}</td>
                     </tr>
                   );
                 })()}
@@ -256,10 +257,11 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flex: 'none' }}>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 800, whiteSpace: 'nowrap' }}>{TJ.money(val)}</div>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 800, whiteSpace: 'nowrap' }}>{TJ.won(val)}</div>
+                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--ink-4)', whiteSpace: 'nowrap' }}>{TJ.usdOnly(val)}</div>
                   {cost > 0 && hasQty && (
                     <div className="mono" style={{ fontSize: 11.5, fontWeight: 700, color: pl >= 0 ? 'var(--win)' : 'var(--loss)' }}>
-                      {TJ.moneyS(pl)} · {(cost ? (pl / cost) * 100 : 0).toFixed(1)}%
+                      {TJ.wonS(pl)} · {(cost ? (pl / cost) * 100 : 0).toFixed(1)}%
                     </div>
                   )}
                 </div>

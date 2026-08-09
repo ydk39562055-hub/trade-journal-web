@@ -68,12 +68,13 @@ function NetWorthCard({ total, pl, cost, count, autoCount, onOpen, onQuickAdd })
       ) : (
         <React.Fragment>
           <div className="mono" style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.25, marginTop: 2 }}>
-            {TJ.money(total)}
+            {TJ.won(total)}
           </div>
+          <div className="mono" style={{ fontSize: 12.5, color: 'var(--ink-4)', marginTop: -2 }}>{TJ.usdOnly(total)}</div>
           <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginTop: 5, alignItems: 'center' }}>
             {cost > 0 && (
               <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: pl >= 0 ? 'var(--win)' : 'var(--loss)' }}>
-                {TJ.moneyS(pl)} · {(cost ? (pl / cost) * 100 : 0).toFixed(1)}%
+                {TJ.wonS(pl)} · {(cost ? (pl / cost) * 100 : 0).toFixed(1)}%
               </span>
             )}
             <span style={{ fontSize: 11.5, color: 'var(--ink-4)' }}>

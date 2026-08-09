@@ -40,6 +40,14 @@
   // 거래별 네이티브 통화 그대로 표기(환율 환산 없음). sym = 그 거래의 통화($/₩)
   const fmt = (n, sym, signed) => { const s = (sym === '₩') ? '₩' : '$'; const v = _grp(n); return signed ? ((n > 0 ? '+' : n < 0 ? '−' : '') + s + v) : ((n < 0 ? '−' : '') + s + v); };
   const toUSD = (n, sym) => (sym === '₩') ? (Number(n) || 0) / _RATE : (Number(n) || 0); // 합계용: 네이티브→달러 정규화
+  /* ★ 2026-08-09 사용자 요청: "원화로 보이게 하고 옆에 달러도 표시".
+     자산 화면은 큰 금액이라 원화가 기준이 맞다. 달러는 괄호로 같이 적어 감을 잃지 않게 한다.
+     저장값은 늘 달러 기준이므로 여기서 표시만 환산한다(비파괴). */
+  const won = n => '₩' + _grp((Number(n) || 0) * _RATE);
+  const wonS = n => { const v = (Number(n) || 0) * _RATE; return (v > 0 ? '+' : v < 0 ? '−' : '') + '₩' + _grp(v); };
+  const usdOnly = n => '$' + _grp(Number(n) || 0);
+  const both = n => won(n) + ' (' + usdOnly(n) + ')';                 // ₩12,345,678 ($9,145)
+  const bothS = n => wonS(n) + ' (' + ((Number(n) || 0) > 0 ? '+' : (Number(n) || 0) < 0 ? '−' : '') + usdOnly(n) + ')';
 
   // ── 샘플 거래 (시간순으로 작성; 앱이 최신순 정렬) ──
   const T = [
@@ -141,5 +149,6 @@
     ERROR_TAGS, TIMEFRAMES, RESULT, SEED, ENTRIES, DEFAULT_PRINCIPLES,
     getErrorTags, addErrorTag, migrateEntries, migrateSettings,
     CURRENCIES, setCurrency, setRate, rateKRW, curSym, money, moneyS, fmt, toUSD,
+    won, wonS, usdOnly, both, bothS,
   };
 })();

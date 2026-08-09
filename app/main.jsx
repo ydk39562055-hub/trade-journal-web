@@ -809,7 +809,25 @@ function App() {
                  cat: isCoin(k) ? '암호화폐' : '주식_ETF', qty: Number(e.shares) || 0,
                  buyPrice: Number(e.entry_price) || 0, currency: e.currency || '₩' });
     });
-    // ② 스윙·선물 — 종목이 곧 사라지는 계좌라 종목 대신 **돈**으로 얹는다.
+    /* ② 장기에서 팔면 어떻게 되나 — 이게 구멍이었다(2026-08-09 사용자 지적).
+       장기는 '종목'을 자산에 얹는다. 그런데 팔면 그 종목이 목록에서 사라지고,
+       판 돈은 어디에도 안 잡혀 **총자산이 갑자기 줄어 보인다**. 판 게 아니라 사라진 것처럼.
+       그래서 장기 계좌를 이렇게 본다:
+           장기 재산 = 보유종목 평가액 + 남은 현금
+           남은 현금 = (시드 + 입금 + 실현손익) − 지금 들고 있는 종목의 원가
+       팔면 원가가 빠지고 그만큼 현금이 늘어 **총액이 그대로 유지된다.**
+       (판 값이 원가보다 높았으면 실현손익이 늘어 자산도 그만큼 늘어난다 — 맞는 동작이다) */
+    const heldCostUSD = out.filter(x => x.auto === '장기')
+      .reduce((s, x) => s + TJ.toUSD((Number(x.buyPrice) || 0) * (Number(x.qty) || 0), x.currency), 0);
+    const longCash = (balL.base || 0) + (balL.realized || 0) - heldCostUSD;
+    if (Math.abs(longCash) > 0.5) {
+      out.push({ id: 'auto-장기현금', auto: '장기', name: longCash >= 0 ? '장기 계좌 현금' : '장기 계좌 (시드 미입력)',
+                 cat: '현금_예금', qty: 0, buyPrice: 0, amount: Math.max(0, longCash), currency: '$',
+                 note: longCash >= 0 ? '넣은 돈 + 번 돈 − 지금 들고 있는 종목 원가'
+                                     : '설정에서 장기 시드를 적으면 정확해집니다' });
+    }
+
+    // ③ 스윙·선물 — 종목이 곧 사라지는 계좌라 종목 대신 **돈**으로 얹는다.
     //    기본은 '번 돈만'(시드를 예금에 이미 적어뒀을 테니 이중계상 방지). 설정에서 계좌째로 바꿀 수 있다.
     const whole = settings.swingInAssets === 'account';
     [['스윙', balW], ['선물', balF]].forEach(([nm, b]) => {
@@ -820,7 +838,7 @@ function App() {
                  note: whole ? '시드 + 실현손익' : '실현손익 누계 (시드는 뺀 값)' });
     });
     return out;
-  }, [holdings, entries, balW.bal, balW.realized, balF.bal, balF.realized, settings.swingInAssets]);
+  }, [holdings, entries, balW.bal, balW.realized, balF.bal, balF.realized, balL.base, balL.realized, settings.swingInAssets]);
 
   // 홈과 자산 탭이 **같은 총자산**을 보여야 한다 — 계산은 한 군데(assetsTotal)에서만 한다.
   const netWorth = useMemo(() => (window.assetsTotal
