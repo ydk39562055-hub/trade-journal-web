@@ -1096,8 +1096,9 @@ function App() {
             <div className="seclabel" style={{ paddingLeft: 2 }}>계좌</div>
             {TJ.MARKETS.map(m => {
               const on = filter === m, b = balOf(m);
+              // 계좌를 고르면 홈으로 간다 — 다른 탭에 있으면 계좌만 바꿔봐야 뭘 눌렀는지 안 보인다
               return (
-                <button key={m} onClick={() => setFilter(m)} style={{
+                <button key={m} onClick={() => { setFilter(m); setTab('home'); }} style={{
                   display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', borderRadius: 11,
                   background: on ? MKT_C[m] : 'var(--surface)', color: on ? '#fff' : 'var(--ink-2)',
                   border: on ? 'none' : '1px solid var(--border)', width: '100%', textAlign: 'left',
