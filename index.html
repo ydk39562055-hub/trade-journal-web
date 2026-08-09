@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spline+Sans+Mono:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="app/theme.css?v=20260809c">
+<link rel="stylesheet" href="app/theme.css?v=20260809d">
 
 <!-- React + Babel (pinned) -->
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -39,7 +39,7 @@
 <script>
 (async function () {
   const bust = '?v=' + Date.now();
-  const plain = ['app/data.js', 'app/stats.js', 'app/sync.js', 'app/portfolio.js'];
+  const plain = ['app/data.js', 'app/stats.js', 'app/sync.js', 'app/portfolio.js', 'app/local-backup.js'];
   const babel = ['app/charts.jsx', 'app/components.jsx', 'app/assets-panel.jsx', 'app/networth-card.jsx', 'app/modals.jsx', 'app/restore-modal.jsx', 'app/dashboard.jsx', 'app/hero.jsx', 'app/main.jsx'];
   const fail = (m) => { document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#9a5a34;font-family:sans-serif">로딩 실패 — 인터넷 확인 후 새로고침<br><small>' + m + '</small></div>'; };
   try {

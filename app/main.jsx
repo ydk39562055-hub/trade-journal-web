@@ -289,6 +289,10 @@ function App() {
   /* 자동 백업 — 동기화가 켜져 있으면 하루 한 번 서버에 그날 상태를 통째로 쌓는다.
      사용자가 아무것도 안 눌러도 되돌릴 지점이 생긴다(수동 백업 파일은 그대로 보조 수단). */
   const snapDoneRef = useRef(false);
+  /* 내 PC 파일에 자동 저장 — 파일을 한 번 정해두면 하루 한 번 조용히 덮어쓴다.
+     OneDrive 폴더에 두면 PC가 고장나도 클라우드에 남는다. */
+  const [localBk, setLocalBk] = useState({ state: 'none', name: '' });
+  const localDoneRef = useRef(false);
   const [deleted, setDeleted] = useState(() => {   // 180일 지난 삭제기록(무덤)은 정리 — 무한 증식 방지
     try {
       const raw = JSON.parse(localStorage.getItem('tj_deleted_v1') || '{}');
@@ -382,6 +386,35 @@ function App() {
     }, 1400);
     return () => clearTimeout(debRef.current);
   }, [entries, settings, principles, memos, diary, holdings, assets, deleted, syncId, syncReady]);
+
+  useEffect(() => {
+    if (!window.TJLocalBackup) return;
+    TJLocalBackup.status().then(setLocalBk).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!window.TJLocalBackup || localDoneRef.current) return;
+    if (localBk.state !== 'granted') return;
+    if (!entries.length && !assets.length && !holdings.length) return;
+    if (localStorage.getItem('tj_local_bk_day') === todayStr()) return;   // 하루 한 번
+    localDoneRef.current = true;
+    TJLocalBackup.save(gatherBlob())
+      .then(okv => { if (okv) { safeSet('tj_local_bk_day', todayStr()); setLastBackup(todayStr()); safeSet('tj_last_backup', todayStr()); } })
+      .catch(() => { localDoneRef.current = false; });
+  }, [localBk.state, entries.length, assets.length, holdings.length]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickLocalBackup = async () => {
+    try {
+      const name = await TJLocalBackup.choose();
+      await TJLocalBackup.save(gatherBlob());
+      safeSet('tj_local_bk_day', todayStr()); safeSet('tj_last_backup', todayStr()); setLastBackup(todayStr());
+      setLocalBk({ state: 'granted', name });
+      doFlash('내 PC 자동 백업 켜짐 ✓');
+    } catch (e) { if (e && e.name !== 'AbortError') doFlash('백업 파일을 못 정했어요'); }
+  };
+  const regrantLocal = async () => {
+    const okv = await TJLocalBackup.regrant();
+    if (okv) { setLocalBk(p => ({ ...p, state: 'granted' })); localDoneRef.current = false; doFlash('다시 이어졌어요 ✓'); }
+  };
 
   useEffect(() => {
     if (!syncId || !syncReady || snapDoneRef.current || !window.TJSync || !TJSync.snapPush) return;
@@ -951,21 +984,30 @@ function App() {
     const d = new Date(lastBackup.slice(0, 4) + '-' + lastBackup.slice(4, 6) + '-' + lastBackup.slice(6, 8));
     return Math.floor((Date.now() - d.getTime()) / 86400000);
   })();
-  const needBackup = entries.length > 0 && (backupAge == null || backupAge >= 14);
+  // 내 PC 자동 저장이 켜져 있으면 조를 필요가 없다. 권한이 끊겼을 때만 다시 부른다.
+  const needBackup = entries.length > 0
+    && (localBk.state === 'prompt' || (localBk.state !== 'granted' && (backupAge == null || backupAge >= 14)));
   const backupBanner = needBackup && (
     <div style={{ background: 'var(--surface)', border: '1.5px solid var(--violet)', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
       <span style={{ fontSize: 16, flexShrink: 0 }}>🗂</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 800 }}>
-          {backupAge == null ? '백업 파일을 아직 한 번도 안 받으셨어요' : `백업한 지 ${backupAge}일 됐어요`}
+          {localBk.state === 'prompt' ? '자동 백업이 끊겼어요 — 한 번만 눌러주세요'
+            : backupAge == null ? '백업이 아직 없어요' : `백업한 지 ${backupAge}일 됐어요`}
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.5 }}>
           {syncId
-            ? '자동 백업이 하루 한 번 서버에 쌓입니다(왼쪽 ↺ 되돌리기). 파일 백업은 그것까지 날아갈 때를 위한 보험이에요.'
+            ? (localBk.state === 'prompt'
+                ? `내 PC 파일(${localBk.name})에 자동 저장 중이었는데 브라우저가 권한을 다시 묻습니다.`
+                : '파일을 하나 정해두면 하루 한 번 알아서 덮어씁니다. OneDrive 폴더에 두면 PC가 고장나도 남아요.')
             : '동기화도 꺼져 있습니다. 지금 브라우저를 지우면 전부 사라집니다.'}
         </div>
       </div>
-      <button className="btn" onClick={downloadBackup} style={{ fontSize: 12, padding: '8px 12px', flexShrink: 0 }}>지금 백업</button>
+      {localBk.state === 'prompt'
+        ? <button className="btn" onClick={regrantLocal} style={{ fontSize: 12, padding: '8px 12px', flexShrink: 0 }}>자동 백업 잇기</button>
+        : localBk.state === 'none' && TJLocalBackup && TJLocalBackup.supported()
+          ? <button className="btn" onClick={pickLocalBackup} style={{ fontSize: 12, padding: '8px 12px', flexShrink: 0 }}>내 PC에 자동 저장</button>
+          : <button className="btn" onClick={downloadBackup} style={{ fontSize: 12, padding: '8px 12px', flexShrink: 0 }}>지금 백업</button>}
     </div>
   );
 
@@ -996,7 +1038,7 @@ function App() {
       {TJ.MARKETS.map(m => {
         const on = filter === m;
         return (
-          <button key={m} onClick={() => setFilter(m)} style={{
+          <button key={m} onClick={() => { setFilter(m); setTab('home'); }} style={{
             flex: 1, textAlign: 'center', padding: '8px 0', borderRadius: 9,
             background: on ? MKT_C[m] : 'transparent', color: on ? '#fff' : 'var(--ink-3)',
             fontSize: 13.5, fontWeight: on ? 700 : 600, transition: 'all .14s',
