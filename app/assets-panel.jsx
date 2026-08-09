@@ -54,7 +54,10 @@ function assetCostUSD(a) {
   return TJ.toUSD((Number(a.buyPrice) || 0) * qty, SYM(a.currency));
 }
 
-function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, removeAsset, loans = [], quotes = {}, asOf, onRefresh, swingMode = 'profit', onSwingMode }) {
+function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, removeAsset, addHoldings, addPositions, loans = [], quotes = {}, asOf, onRefresh }) {
+  /* ★ 2026-08-09 "바로 넣을 수 있게 하라고" — 보유현황까지 찾아가지 않아도
+     여기서 스크린샷 한 번으로 스윙·장기 계좌에 바로 넣는다. */
+  const [dest, setDest] = React.useState('스윙');
   const [cat, setCat] = React.useState('전체');
   const [edit, setEdit] = React.useState(null);
   // ★ 스크린샷으로 자산 추가(2026-08-09 요청) — 보유현황이 쓰던 추출기를 그대로 쓴다.
@@ -91,10 +94,21 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
     setBusy(false);
   };
   const addShots = () => {
-    (shot || []).filter((s) => s.on).forEach((s) => {
-      saveAsset({ name: s.name, cat: s.cat, symbol: s.symbol, qty: s.qty,
-                  buyPrice: s.buyPrice, price: 0, amount: 0, currency: s.currency, note: '스크린샷으로 추가' });
-    });
+    const picked = (shot || []).filter((s) => s.on);
+    if (!picked.length) { setShot(null); return; }
+    if (dest === '자산') {
+      picked.forEach((s) => saveAsset({ name: s.name, cat: s.cat, symbol: s.symbol, qty: s.qty,
+        buyPrice: s.buyPrice, price: 0, amount: 0, currency: s.currency, note: '스크린샷으로 추가' }));
+    } else {
+      // 스윙·장기 계좌로 — 보유현황과 일지(보유중)에 동시에 들어간다(보유현황 화면과 같은 동작)
+      const rows = picked.map((s) => ({
+        name: s.name, ticker: s.symbol, qty: s.qty, avgPrice: s.buyPrice,
+        currency: s.currency === '₩' ? 'KRW' : 'USD',
+        market: /^\d{6}$/.test(String(s.symbol)) ? 'KR' : 'US',
+      }));
+      if (addHoldings) addHoldings(dest, rows);
+      if (addPositions) addPositions(dest, rows);
+    }
     setShot(null);
   };
 
@@ -306,25 +320,14 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
         </div>
       )}
       {shotErr && <div style={{ fontSize: 12, color: 'var(--loss)', lineHeight: 1.6 }}>{shotErr}</div>}
-      {/* 스윙을 자산에 어떻게 얹을지 — 기본은 '번 돈만'. 평소엔 접어 둔다(2026-08-09: 복잡하다는 지적). */}
-      {onSwingMode && (
-        <details style={{ fontSize: 11.5, color: 'var(--ink-4)' }}>
-        <summary style={{ cursor: 'pointer' }}>스윙 계좌를 자산에 넣는 방식 바꾸기</summary>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 7 }}>
-          {[['profit', '번 돈만'], ['account', '계좌 전체(시드 포함)']].map(([k, l]) => (
-            <button key={k} className={'chip' + (swingMode === k ? ' on' : '')} onClick={() => onSwingMode(k)}
-              style={{ fontSize: 11.5, padding: '4px 10px' }}>{l}</button>
-          ))}
-          <span style={{ flexBasis: '100%', lineHeight: 1.5 }}>
-            스윙 시드를 이미 예금 자산으로 적어뒀다면 <b>번 돈만</b>이 맞습니다(두 번 세지 않게).
-          </span>
-        </div>
-        </details>
-      )}
+      {/* 규칙: 계좌는 계좌째, 예금은 증권계좌 밖 돈만 — 선택지 없음(2026-08-09) */}
+      <div style={{ fontSize: 11, color: 'var(--ink-4)', lineHeight: 1.55 }}>
+        선물·스윙·장기 계좌는 <b>계좌째로</b> 여기 잡힙니다. 예금·현금은 <b>증권계좌 밖의 돈만</b> 적어주세요.
+      </div>
 
       {!edit && !shot && (
         <div style={{ fontSize: 11, color: 'var(--ink-4)', lineHeight: 1.55 }}>
-          증권사·거래소 보유목록을 찍어 올리면 종목·수량·평단을 읽어 자산으로 넣습니다.
+          증권사·거래소 보유목록을 찍어 올리면 종목·수량·평단을 읽습니다. 읽은 뒤 <b>스윙·장기 계좌</b> 중 어디에 넣을지 고르면 됩니다.
           예금·부동산은 시세가 없으니 <b>직접 추가</b>로 금액만 적으세요.<br />장기 계좌 종목과 스윙 손익은 <b>일지에서 자동으로</b> 올라옵니다 — 여기 또 적지 마세요.
         </div>
       )}
@@ -335,6 +338,19 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
           <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 3 }}>읽어낸 {shot.length}개 — 맞는지 확인해 주세요</div>
           <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 9, lineHeight: 1.5 }}>
             분류가 틀렸으면 눌러서 바꾸고, 뺄 것은 체크를 풀어주세요. 넣은 뒤에도 수정할 수 있습니다.
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 5 }}>어디에 넣을까요</div>
+            <div className="seg" style={{ width: '100%' }}>
+              {['스윙', '장기', '자산'].map((k) => (
+                <button key={k} className={dest === k ? 'on' : ''} onClick={() => setDest(k)}>{k === '자산' ? '자산(계좌 밖)' : k + ' 계좌'}</button>
+              ))}
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--ink-4)', marginTop: 5, lineHeight: 1.5 }}>
+              {dest === '자산'
+                ? '증권계좌 밖에서 따로 들고 있는 것(다른 증권사·해외계좌 등)일 때만 고르세요.'
+                : dest + ' 계좌의 보유현황과 일지(보유중)에 함께 들어갑니다. 팔 때 그 카드에서 매도 기록을 누르면 손익이 자동 계산됩니다.'}
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {shot.map((s) => (
@@ -358,7 +374,7 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button className="btn" style={{ flex: 1 }} disabled={!shot.some((s) => s.on)} onClick={addShots}>
-              {shot.filter((s) => s.on).length}개 자산으로 넣기
+              {shot.filter((s) => s.on).length}개 {dest === '자산' ? '자산으로' : dest + ' 계좌에'} 넣기
             </button>
             <button className="btn-ghost" onClick={() => setShot(null)}>취소</button>
           </div>

@@ -852,7 +852,10 @@ function App() {
 
     // ③ 스윙·선물 — 종목이 곧 사라지는 계좌라 종목 대신 **돈**으로 얹는다.
     //    기본은 '번 돈만'(시드를 예금에 이미 적어뒀을 테니 이중계상 방지). 설정에서 계좌째로 바꿀 수 있다.
-    const whole = settings.swingInAssets === 'account';
+    /* ★ 2026-08-09: 선택지를 없앴다("왜 이렇게 어렵게 해"). 규칙 하나로 못박는다 —
+       **계좌는 계좌째로 자산에 잡고, 예금에는 증권계좌 밖의 돈만 적는다.**
+       그러면 "본전을 어디에 적지?"를 고민할 일이 없다. 증권사 앱 잔고 = 자산. */
+    const whole = true;
     [['스윙', balW], ['선물', balF]].forEach(([nm, b]) => {
       const amt = whole ? b.bal : b.realized;
       if (!amt) return;
@@ -1067,7 +1070,7 @@ function App() {
 
   const body = tab === 'home' ? homeView
     : tab === 'journal' ? journalView
-      : tab === 'assets' ? <AssetsTab assets={assets} autoAssets={autoAssets} accounts={[['선물', balF], ['스윙', balW], ['장기', balL]]} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} swingMode={settings.swingInAssets || 'profit'} onSwingMode={m => setSettings(p => ({ ...p, swingInAssets: m }))} />
+      : tab === 'assets' ? <AssetsTab assets={assets} autoAssets={autoAssets} addHoldings={addHoldings} addPositions={addPositions} accounts={[['선물', balF], ['스윙', balW], ['장기', balL]]} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} />
       : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} remove={removeDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
         : <DashboardModal entries={entries} market={filter} asPage onClose={() => setTab('home')} />;
 
