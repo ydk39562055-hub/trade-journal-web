@@ -152,6 +152,11 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote }) {
       {/* 보유중 — 숫자 자리를 채운 고정 격자 (수량 · 평단 · 현재가 · 평가손익) */}
       {e.result === 'holding' && (() => {
         const sh = TJStats.num(e.shares), px = TJStats.num(e.entry_price);
+        const live = quote ? TJStats.num(quote.price) : null;
+        const lsym = quote && quote.currency === 'KRW' ? '₩' : '$';
+        // 평단과 시세 통화가 다르면 평단을 시세 통화로 맞춰 비교
+        const pxL = px == null ? null : (e.currency === lsym ? px : (lsym === '₩' ? TJ.toUSD(px, e.currency) * TJ.rateKRW() : TJ.toUSD(px, e.currency)));
+        const pl = (sh != null && pxL != null && live != null) ? (live - pxL) * sh : null;
         const cell = (label, val, right) => (
           <div style={{ textAlign: right ? 'right' : 'left', minWidth: 0 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-3)' }}>{label}</div>
@@ -162,13 +167,33 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 11, padding: '9px 11px' }}>
             {cell('수량', sh != null ? sh : '—')}
             {cell('평단', px != null ? (e.avg_est ? TJ.fmt(px, e.currency) + '?' : TJ.fmt(px, e.currency)) : '—')}
-            {/* ★ 2026-08-09: 일지에서 실시간 시세를 뺐다. 대신 '내가 넣은 값'만으로 나오는
-                매수금액(평단×수량)을 보여준다 — 볼 때마다 숫자가 달라지지 않는다. */}
-            {cell('매수금액', (sh != null && px != null) ? TJ.fmt(sh * px, e.currency) : '—')}
-            {cell('담은 날', e.traded_at || '—', true)}
+            {/* ★ 2026-08-09: 실시간 시세는 **장기 계좌에서만** 쓴다(사용자 결정).
+                장기 → 현재가·평가손익. 스윙·선물 → 내가 적은 값만(매수금액·담은 날). */}
+            {live != null
+              ? cell('현재가', TJ.fmt(live, lsym))
+              : cell('매수금액', (sh != null && px != null) ? TJ.fmt(sh * px, e.currency) : '—')}
+            {live != null
+              ? cell('평가손익', pl != null ? TJ.fmt(pl, lsym, true) : '—', true)
+              : cell('담은 날', e.traded_at || '—', true)}
           </div>
         );
       })()}
+
+      {/* ★ 매수 기록(2026-08-09) — 언제 얼마에 얼마나 담았는지. 분할매수하면 여기 쌓인다.
+          "매수 기록도 넣어야지" — 평단 하나만 남으면 어떻게 만들어진 평단인지 알 수 없다. */}
+      {e.result === 'holding' && Array.isArray(e.lots) && e.lots.length > 0 && (
+        <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 4 }}>매수 기록 {e.lots.length}회</div>
+          {e.lots.map((L, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.7 }}>
+              <span className="mono" style={{ color: 'var(--ink-4)', flex: 'none' }}>{L.date || '—'}</span>
+              <span className="mono" style={{ fontWeight: 700 }}>{L.qty}주</span>
+              <span className="mono">@{L.price != null ? TJ.fmt(L.price, e.currency) : '—'}</span>
+              {L.note ? <span style={{ color: 'var(--ink-4)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{L.note}</span> : null}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 평단이 추정치면 알려줌 — 수정에서 실제 산 가격으로 고치면 수익률이 정확해짐 */}
       {e.result === 'holding' && e.avg_est && (
@@ -196,6 +221,11 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote }) {
       {/* 청산한 현물 거래 — 몇 주 얼마에 샀는지 */}
       {e.result !== 'holding' && e.market !== '선물' && (e.shares != null || e.entry_price != null) && (() => {
         const sh = TJStats.num(e.shares), px = TJStats.num(e.entry_price);
+        const live = quote ? TJStats.num(quote.price) : null;
+        const lsym = quote && quote.currency === 'KRW' ? '₩' : '$';
+        // 평단과 시세 통화가 다르면 평단을 시세 통화로 맞춰 비교
+        const pxL = px == null ? null : (e.currency === lsym ? px : (lsym === '₩' ? TJ.toUSD(px, e.currency) * TJ.rateKRW() : TJ.toUSD(px, e.currency)));
+        const pl = (sh != null && pxL != null && live != null) ? (live - pxL) * sh : null;
         const bits = [];
         if (sh != null) bits.push(sh + '주');
         if (px != null) bits.push('@ ' + TJ.fmt(px, e.currency));

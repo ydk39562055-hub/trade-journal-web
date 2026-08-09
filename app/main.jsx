@@ -398,13 +398,38 @@ function App() {
     holdings.forEach(h => { if (h.ticker) s.add(h.ticker.toUpperCase()); });
     return [...s].sort().join(',');
   }, [entries, holdings]);
-  /* ★ 2026-08-09 사용자 결정: **거래일지에서는 실시간 시세를 쓰지 않는다.**
-     "이게 문제가 많아, 내가 수동으로 작성할거고" — 장중 시세가 1분마다 바뀌면 일지의
-     숫자(평가손익·잔고)가 볼 때마다 달라져서, 기록이라는 물건의 성질과 안 맞았다.
-     일지는 **내가 적은 값**만 쓴다. 실시간 시세는 '전체 재산 포트폴리오' 화면에서만 본다.
-     (조회 모듈 TJPortfolio 는 그 화면이 쓰므로 그대로 둔다.) */
-  // 일지에서는 시세를 쓰지 않는다(위 주석). 카드·모달이 부르던 자리는 남겨 두고 늘 null 을 준다.
-  const quoteOf = () => null;
+  /* ★ 2026-08-09 사용자 결정(2차): 실시간 시세는 **장기 계좌에서만** 쓴다.
+     · 스윙 = 자주 사고파는 계좌. 1분마다 시세가 바뀌면 평가손익·잔고가 볼 때마다 달라져
+       '기록'이라는 성질과 안 맞았다 → 내가 적은 값만 쓴다.
+     · 장기 = 오래 들고 가는 계좌. 지금 얼마인지가 실제로 궁금한 곳이라 실시간을 되살렸다.
+     · 선물 = 종목 개념이 없어 해당 없음. */
+  const [quotes, setQuotes] = useState({});
+  const longTickers = useMemo(() => {
+    const s = new Set();
+    entries.forEach(e => { if (e.market === '장기' && e.result === 'holding' && e.ticker) s.add(e.ticker.toUpperCase()); });
+    holdings.forEach(h => { if (h.account === '장기' && h.ticker) s.add(h.ticker.toUpperCase()); });
+    return [...s].sort().join(',');
+  }, [entries, holdings]);
+  useEffect(() => {
+    if (!longTickers || !window.TJPortfolio) return;
+    let alive = true;
+    const syms = longTickers.split(',').map(t => TJPortfolio.yahooSym({ ticker: t, market: /^\d{6}$/.test(t) ? 'KR' : 'US' })).filter(Boolean);
+    const load = () => {
+      if (document.hidden) return;                                  // 탭 안 보면 굳이 조회 안 함
+      TJPortfolio.quotes(syms).then(j => { if (alive && j && j.quotes) setQuotes(q => ({ ...q, ...j.quotes })); }).catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 60 * 1000);
+    document.addEventListener('visibilitychange', load);
+    return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', load); };
+  }, [longTickers]);
+
+  // 티커 → 시세. **장기 계좌일 때만** 준다(스윙·선물은 늘 null).
+  const quoteOf = (ticker, market) => {
+    if (market !== '장기') return null;
+    const k = (ticker || '').toUpperCase(); if (!k) return null;
+    return quotes[k] || quotes[k + '.KS'] || null;
+  };
   // 계좌별 보유 평가금액은 더 이상 내지 않는다 — 실시간 시세를 안 쓰기로 했다(2026-08-09).
   // 시드 추천에 쓰던 자리는 빈 값을 준다.
   const holdValue = {};
@@ -749,7 +774,7 @@ function App() {
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
   // 스윙·장기는 자금이 보유중에 묶여 있어 미실현 평가손익까지 잔고에 반영 (시드는 사용자가 직접 입력)
   const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit);
-  const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit);
+  const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit, { quoteOf: (tk) => quoteOf(tk, '장기') });
   // 선물/스윙/장기 완전 분리 — 활성 시장만 표시(합산 없음)
   const bal = filter === '스윙' ? balW : filter === '장기' ? balL : balF;
 
@@ -839,7 +864,7 @@ function App() {
   const editorFor = id => setModal({ type: 'editor', entry: entries.find(x => x.id === id) });
   const cardsOf = (arr) => (
     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(330px, 1fr))', gap: 'var(--gap)', alignItems: 'start' }}>
-      {arr.map((e, idx) => <EntryCard key={e.id} e={e} index={idx + 1} quote={quoteOf(e.ticker)} onEdit={editorFor} onDelete={deleteEntry} onSell={id => setModal({ type: 'sell', entry: entries.find(x => x.id === id) })} onBuyMore={id => setModal({ type: 'buymore', entry: entries.find(x => x.id === id) })} />)}
+      {arr.map((e, idx) => <EntryCard key={e.id} e={e} index={idx + 1} quote={quoteOf(e.ticker, e.market)} onEdit={editorFor} onDelete={deleteEntry} onSell={id => setModal({ type: 'sell', entry: entries.find(x => x.id === id) })} onBuyMore={id => setModal({ type: 'buymore', entry: entries.find(x => x.id === id) })} />)}
     </div>
   );
 
@@ -1058,7 +1083,7 @@ function App() {
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} assets={assets} saveAsset={saveAsset} removeAsset={removeAsset} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
       {modal?.type === 'buymore' && modal.entry && <BuyMoreModal entry={modal.entry} onBuy={buyMore} onClose={() => setModal(null)} />}
-      {modal?.type === 'sell' && modal.entry && <SellModal entry={modal.entry} quote={quoteOf(modal.entry.ticker)} onSell={sellPosition} onClose={() => setModal(null)} />}
+      {modal?.type === 'sell' && modal.entry && <SellModal entry={modal.entry} quote={quoteOf(modal.entry.ticker, modal.entry.market)} onSell={sellPosition} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onPurgePhotos={purgePhotos} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
       {modal?.type === 'reset' && <ResetModal market={filter} entries={entries} onResetMarket={resetMarket} onResetAll={clearAll} onRestore={restoreSamples} onClose={() => setModal(null)} />}
       {modal?.type === 'sync' && <SyncModal syncId={syncId} onEnable={enableSync} onJoin={joinSync} onDisable={disableSync} onClose={() => setModal(null)} />}
