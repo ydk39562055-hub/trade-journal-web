@@ -23,25 +23,32 @@ const ASSET_CATS = [
 ];
 const CAT = (k) => ASSET_CATS.find((c) => c.key === k) || ASSET_CATS[ASSET_CATS.length - 1];
 
-/* 자산 한 건의 계산 — 차근차근 lib/calculations.ts 와 같은 규칙 */
+/* 자산 한 건의 계산 — 차근차근 lib/calculations.ts 와 같은 규칙.
+
+   ⚠ 통화를 반드시 기호('₩'/'$')로 맞춰서 쓴다. 'KRW' 같은 글자를 그대로 넘기면
+     TJ.toUSD 가 달러로 보고 환율을 안 나눠 1,350배로 부푼다(2026-08-09에 겪음).
+   ⚠ 현재가는 **시세가 온 통화**로 환산해야 한다. 한국주식 시세는 원화로 오는데
+     자산 통화가 달러라고 달러로 세면 값이 통째로 어긋난다. */
+const SYM = (c) => (c === '₩' || c === 'KRW') ? '₩' : '$';
+
+/** 현재가 — 심볼이 있으면 실시간(그 시세의 통화로), 없으면 내가 적은 값 */
+function livePrice(a, priceOf) {
+  if (a.symbol && priceOf) {
+    const q = priceOf(a.symbol);
+    if (q && q.price != null) return { price: Number(q.price), sym: SYM(q.currency === 'KRW' ? '₩' : '$'), live: true };
+  }
+  return { price: Number(a.price) || Number(a.buyPrice) || 0, sym: SYM(a.currency), live: false };
+}
 function assetValueUSD(a, priceOf) {
-  const cur = livePrice(a, priceOf);
   const qty = Number(a.qty) || 0;
-  if (a.cat === '현금_예금' || !qty) return TJ.toUSD(Number(a.amount) || 0, a.currency || '₩');
-  return TJ.toUSD((cur || 0) * qty, a.currency || '₩');
+  if (a.cat === '현금_예금' || !qty) return TJ.toUSD(Number(a.amount) || 0, SYM(a.currency));
+  const p = livePrice(a, priceOf);
+  return TJ.toUSD(p.price * qty, p.sym);
 }
 function assetCostUSD(a) {
   const qty = Number(a.qty) || 0;
-  if (a.cat === '현금_예금' || !qty) return TJ.toUSD(Number(a.amount) || 0, a.currency || '₩');
-  return TJ.toUSD((Number(a.buyPrice) || 0) * qty, a.currency || '₩');
-}
-/** 현재가 — 심볼이 있으면 실시간, 없으면 내가 적은 값 */
-function livePrice(a, priceOf) {
-  if (a.symbol && priceOf) {
-    const p = priceOf(a.symbol);
-    if (p != null) return p;
-  }
-  return Number(a.price) || Number(a.buyPrice) || 0;
+  if (a.cat === '현금_예금' || !qty) return TJ.toUSD(Number(a.amount) || 0, SYM(a.currency));
+  return TJ.toUSD((Number(a.buyPrice) || 0) * qty, SYM(a.currency));
 }
 
 function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, removeAsset, loans = [], quotes = {}, asOf, onRefresh, swingMode = 'profit', onSwingMode }) {
@@ -89,10 +96,9 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
   };
 
   // 심볼 → 실시간 가격(야후). 심볼 통화가 달라도 자산 통화 기준으로 적어둔 값을 쓴다.
-  const priceOf = (sym) => {
-    const s = String(sym || '').toUpperCase();
-    const q = quotes[s] || quotes[s + '.KS'];
-    return q ? Number(q.price) : null;
+  const priceOf = (s0) => {
+    const s = String(s0 || '').toUpperCase();
+    return quotes[s] || quotes[s + '.KS'] || null;   // {price, currency}
   };
 
   // 자동으로 딸려오는 자산(장기 보유·스윙 번 돈)을 앞에 두고 함께 센다.
@@ -233,12 +239,12 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {shown.map((a) => {
-            const cur = livePrice(a, priceOf);
+            const lp = livePrice(a, priceOf);
             const val = assetValueUSD(a, priceOf);
             const cost = assetCostUSD(a);
             const pl = val - cost;
             const hasQty = !!(Number(a.qty) > 0);
-            const isLive = !!(a.symbol && priceOf(a.symbol) != null);
+            const isLive = lp.live;
             return (
               <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '11px 13px' }}>
                 <i style={{ width: 9, height: 9, borderRadius: 3, flex: 'none', background: CAT(a.cat).color }} />
@@ -251,8 +257,8 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--ink-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {CAT(a.cat).label}
-                    {hasQty ? ' · ' + a.qty + '주 × ' + TJ.fmt(cur, a.currency) : ''}
-                    {hasQty && Number(a.buyPrice) > 0 ? ' · 평단 ' + TJ.fmt(Number(a.buyPrice), a.currency) : ''}
+                    {hasQty ? ' · ' + a.qty + '주 × ' + TJ.fmt(lp.price, lp.sym) : ''}
+                    {hasQty && Number(a.buyPrice) > 0 ? ' · 평단 ' + TJ.fmt(Number(a.buyPrice), SYM(a.currency)) : ''}
                     {!isLive && a.updated_at ? ' · ' + String(a.updated_at).slice(0, 10) + ' 기준' : ''}
                   </div>
                 </div>
@@ -450,10 +456,9 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
 
 /** 자산 합계 — 홈 화면도 같은 값을 써야 해서 밖으로 뺀다(두 곳이 다른 값을 보이면 안 된다). */
 function assetsTotal(list, quotes) {
-  const priceOf = (sym) => {
-    const s = String(sym || '').toUpperCase();
-    const q = (quotes || {})[s] || (quotes || {})[s + '.KS'];
-    return q ? Number(q.price) : null;
+  const priceOf = (s0) => {
+    const s = String(s0 || '').toUpperCase();
+    return (quotes || {})[s] || (quotes || {})[s + '.KS'] || null;
   };
   const total = (list || []).reduce((s, a) => s + assetValueUSD(a, priceOf), 0);
   const cost = (list || []).reduce((s, a) => s + assetCostUSD(a), 0);

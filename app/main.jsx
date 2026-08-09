@@ -814,18 +814,23 @@ function App() {
     const out = [];
     const seen = new Set();
     const isCoin = (s) => /BTC|ETH|XRP|SOL|DOGE|-USD$|USDT/.test(String(s || '').toUpperCase());
+    /* ⚠ 통화는 반드시 '₩'/'$' 기호로 맞춘다(2026-08-09 버그).
+       보유현황은 'KRW'/'USD' 라는 글자로 저장하는데, 그대로 넘기면 TJ.toUSD 가
+       '₩ 가 아니네 → 달러구나' 로 보고 환율을 안 나눠 **1,350배로 부풀었다**
+       (총자산이 −₩108억 처럼 말도 안 되는 값으로 나온 원인). */
+    const sym = (c) => (c === '₩' || c === 'KRW') ? '₩' : '$';
     // ① 장기 보유종목 — 보유현황이 1순위, 거기 없는 건 일지(보유중)로 채운다
     holdings.filter(h => h.account === '장기' && h.ticker).forEach(h => {
       const k = String(h.ticker).toUpperCase(); if (seen.has(k)) return; seen.add(k);
       out.push({ id: 'auto-h-' + h.id, auto: '장기', name: h.name || k, symbol: k,
                  cat: isCoin(k) ? '암호화폐' : '주식_ETF', qty: Number(h.qty) || 0,
-                 buyPrice: Number(h.avgPrice) || 0, currency: h.currency === 'USD' ? '$' : (h.currency || '₩') });
+                 buyPrice: Number(h.avgPrice) || 0, currency: sym(h.currency) });
     });
     entries.filter(e => e.market === '장기' && e.result === 'holding' && e.ticker).forEach(e => {
       const k = String(e.ticker).toUpperCase(); if (seen.has(k)) return; seen.add(k);
       out.push({ id: 'auto-e-' + e.id, auto: '장기', name: e.ticker, symbol: k,
                  cat: isCoin(k) ? '암호화폐' : '주식_ETF', qty: Number(e.shares) || 0,
-                 buyPrice: Number(e.entry_price) || 0, currency: e.currency || '₩' });
+                 buyPrice: Number(e.entry_price) || 0, currency: sym(e.currency) });
     });
     /* ② 장기에서 팔면 어떻게 되나 — 이게 구멍이었다(2026-08-09 사용자 지적).
        장기는 '종목'을 자산에 얹는다. 그런데 팔면 그 종목이 목록에서 사라지고,
@@ -836,7 +841,7 @@ function App() {
        팔면 원가가 빠지고 그만큼 현금이 늘어 **총액이 그대로 유지된다.**
        (판 값이 원가보다 높았으면 실현손익이 늘어 자산도 그만큼 늘어난다 — 맞는 동작이다) */
     const heldCostUSD = out.filter(x => x.auto === '장기')
-      .reduce((s, x) => s + TJ.toUSD((Number(x.buyPrice) || 0) * (Number(x.qty) || 0), x.currency), 0);
+      .reduce((s, x) => s + TJ.toUSD((Number(x.buyPrice) || 0) * (Number(x.qty) || 0), sym(x.currency)), 0);
     const longCash = (balL.base || 0) + (balL.realized || 0) - heldCostUSD;
     if (Math.abs(longCash) > 0.5) {
       out.push({ id: 'auto-장기현금', auto: '장기', name: longCash >= 0 ? '장기 계좌 현금' : '장기 계좌 (시드 미입력)',
