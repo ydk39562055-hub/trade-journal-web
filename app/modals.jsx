@@ -840,7 +840,7 @@ function BuyMoreModal({ entry: e, onBuy, onClose }) {
 }
 
 /* ───────────── 보유 현황 (스크린샷 자동입력 + 실시간 시세 + 일지로 보내기) ───────────── */
-function HoldingsModal({ holdings, entries, assets = [], saveAsset, removeAsset, addHoldings, removeHolding, clearHoldings, addPositions, defaultAccount, onClose }) {
+function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHoldings, addPositions, defaultAccount, onClose }) {
   const [acct, setAcct] = useStateM(defaultAccount === '장기' ? '장기' : '스윙');
   const [quotes, setQuotes] = useStateM({});
   const [loading, setLoading] = useStateM(false);
@@ -1035,11 +1035,7 @@ function HoldingsModal({ holdings, entries, assets = [], saveAsset, removeAsset,
             </>
           )}
       </div>
-      {/* ★ 전체 재산 포트폴리오 — 보유현황 바로 아래(2026-08-09 사용자 요청).
-          위(보유현황)는 증권계좌 종목이라 티커로 실시간 평가하고,
-          여기는 시세가 없는 자산(현금·예금·부동산·연금 등)을 직접 적는다. 둘을 합쳐 총 재산이 된다. */}
-      <PortfolioSection assets={assets} saveAsset={saveAsset} removeAsset={removeAsset}
-        holdingsUSD={allHoldingsUSD} />
+
     </Modal>
   );
 }

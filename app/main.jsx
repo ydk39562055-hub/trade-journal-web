@@ -246,7 +246,7 @@ function App() {
   // 화면 탭 — 홈 / 일지 / 일기 / 통계 (모바일 하단 탭바 · 넓은 화면 좌측 내비)
   const [tab, setTab] = useState(() => {
     const t = localStorage.getItem('tj_tab');
-    return ['home', 'journal', 'diary', 'stats'].includes(t) ? t : 'home';
+    return ['home', 'journal', 'diary', 'stats', 'assets'].includes(t) ? t : 'home';
   });
   useEffect(() => { localStorage.setItem('tj_tab', tab); window.scrollTo(0, 0); }, [tab]);
   const [search, setSearch] = useState('');
@@ -404,25 +404,36 @@ function App() {
      · 장기 = 오래 들고 가는 계좌. 지금 얼마인지가 실제로 궁금한 곳이라 실시간을 되살렸다.
      · 선물 = 종목 개념이 없어 해당 없음. */
   const [quotes, setQuotes] = useState({});
-  const longTickers = useMemo(() => {
+  const [assetAsOf, setAssetAsOf] = useState('');
+  // 시세를 물어볼 심볼 = 장기 계좌 종목 + 자산 탭에 심볼을 적어둔 자산
+  const liveSyms = useMemo(() => {
     const s = new Set();
     entries.forEach(e => { if (e.market === '장기' && e.result === 'holding' && e.ticker) s.add(e.ticker.toUpperCase()); });
     holdings.forEach(h => { if (h.account === '장기' && h.ticker) s.add(h.ticker.toUpperCase()); });
+    assets.forEach(a => { if (a.symbol) s.add(String(a.symbol).toUpperCase()); });
     return [...s].sort().join(',');
-  }, [entries, holdings]);
+  }, [entries, holdings, assets]);
+  const refreshAssetQuotes = React.useCallback(() => {
+    if (!liveSyms || !window.TJPortfolio) return;
+    const syms = liveSyms.split(',').map(t => TJPortfolio.yahooSym({ ticker: t, market: /^\d{6}$/.test(t) ? 'KR' : 'US' })).filter(Boolean);
+    TJPortfolio.quotes(syms).then(j => {
+      if (j && j.quotes) {
+        // 야후 심볼(005930.KS)로 온 값을 원래 심볼(005930)로도 찾을 수 있게 같이 넣는다
+        const add = {};
+        Object.keys(j.quotes).forEach(k => { add[k] = j.quotes[k]; add[k.replace(/\.[A-Z]+$/, '')] = j.quotes[k]; });
+        setQuotes(q => ({ ...q, ...add }));
+        setAssetAsOf(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
+      }
+    }).catch(() => {});
+  }, [liveSyms]);
   useEffect(() => {
-    if (!longTickers || !window.TJPortfolio) return;
-    let alive = true;
-    const syms = longTickers.split(',').map(t => TJPortfolio.yahooSym({ ticker: t, market: /^\d{6}$/.test(t) ? 'KR' : 'US' })).filter(Boolean);
-    const load = () => {
-      if (document.hidden) return;                                  // 탭 안 보면 굳이 조회 안 함
-      TJPortfolio.quotes(syms).then(j => { if (alive && j && j.quotes) setQuotes(q => ({ ...q, ...j.quotes })); }).catch(() => {});
-    };
+    if (!liveSyms) return;
+    const load = () => { if (!document.hidden) refreshAssetQuotes(); };
     load();
     const id = setInterval(load, 60 * 1000);
     document.addEventListener('visibilitychange', load);
-    return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', load); };
-  }, [longTickers]);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', load); };
+  }, [liveSyms, refreshAssetQuotes]);
 
   // 티커 → 시세. **장기 계좌일 때만** 준다(스윙·선물은 늘 null).
   const quoteOf = (ticker, market) => {
@@ -841,7 +852,7 @@ function App() {
     </div>
   );
 
-  const TABS = [['home', '◧', '홈'], ['journal', '☰', '일지'], ['diary', '✎', '일기'], ['stats', '◍', '통계']];
+  const TABS = [['home', '◧', '홈'], ['journal', '☰', '일지'], ['assets', '◈', '자산'], ['diary', '✎', '일기'], ['stats', '◍', '통계']];
   const MKT_C = { '선물': 'var(--futures)', '스윙': 'var(--swing)', '장기': 'var(--long)' };
   const balOf = m => (m === '스윙' ? balW : m === '장기' ? balL : balF);
 
@@ -968,6 +979,7 @@ function App() {
 
   const body = tab === 'home' ? homeView
     : tab === 'journal' ? journalView
+      : tab === 'assets' ? <AssetsTab assets={assets} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} />
       : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} remove={removeDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
         : <DashboardModal entries={entries} market={filter} asPage onClose={() => setTab('home')} />;
 
@@ -1081,7 +1093,7 @@ function App() {
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} seedSuggest={holdValue} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
-      {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} assets={assets} saveAsset={saveAsset} removeAsset={removeAsset} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
+      {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
       {modal?.type === 'buymore' && modal.entry && <BuyMoreModal entry={modal.entry} onBuy={buyMore} onClose={() => setModal(null)} />}
       {modal?.type === 'sell' && modal.entry && <SellModal entry={modal.entry} quote={quoteOf(modal.entry.ticker, modal.entry.market)} onSell={sellPosition} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onPurgePhotos={purgePhotos} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
