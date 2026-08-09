@@ -843,11 +843,11 @@ function App() {
     const heldCostUSD = out.filter(x => x.auto === '장기')
       .reduce((s, x) => s + TJ.toUSD((Number(x.buyPrice) || 0) * (Number(x.qty) || 0), sym(x.currency)), 0);
     const longCash = (balL.base || 0) + (balL.realized || 0) - heldCostUSD;
-    if (Math.abs(longCash) > 0.5) {
-      out.push({ id: 'auto-장기현금', auto: '장기', name: longCash >= 0 ? '장기 계좌 현금' : '장기 계좌 (시드 미입력)',
+    {
+      out.push({ id: 'auto-장기현금', auto: '장기', name: '장기 계좌 현금',
                  cat: '현금_예금', qty: 0, buyPrice: 0, amount: Math.max(0, longCash), currency: '$',
-                 note: longCash >= 0 ? '넣은 돈 + 번 돈 − 지금 들고 있는 종목 원가'
-                                     : '설정에서 장기 시드를 적으면 정확해집니다' });
+                 note: balL.base ? '넣은 돈 + 번 돈 − 지금 들고 있는 종목 원가'
+                                 : '설정에서 장기 시드를 적어주세요' });
     }
 
     // ③ 스윙·선물 — 종목이 곧 사라지는 계좌라 종목 대신 **돈**으로 얹는다.
@@ -856,12 +856,15 @@ function App() {
        **계좌는 계좌째로 자산에 잡고, 예금에는 증권계좌 밖의 돈만 적는다.**
        그러면 "본전을 어디에 적지?"를 고민할 일이 없다. 증권사 앱 잔고 = 자산. */
     const whole = true;
+    /* ★ 0원이어도 줄을 없애지 않는다(2026-08-09: "스윙계좌는 얼만지는 안보여줘?").
+       금액이 0이라 줄이 통째로 사라지면 '내 스윙 계좌가 어디 갔지?' 가 된다.
+       0이면 0이라고 보여주고 왜 0인지(시드 미입력) 알려주는 편이 낫다. */
     [['스윙', balW], ['선물', balF]].forEach(([nm, b]) => {
-      const amt = whole ? b.bal : b.realized;
-      if (!amt) return;
-      out.push({ id: 'auto-' + nm, auto: nm, name: whole ? nm + ' 계좌' : nm + '에서 번 돈',
+      const amt = b.bal;
+      out.push({ id: 'auto-' + nm, auto: nm, name: nm + ' 계좌',
                  cat: '현금_예금', qty: 0, buyPrice: 0, amount: amt, currency: '$',
-                 note: whole ? '시드 + 실현손익' : '실현손익 누계 (시드는 뺀 값)' });
+                 note: b.base ? ('넣은 돈 ' + Math.round(b.base).toLocaleString() + '$ + 번 돈')
+                              : '설정에서 ' + nm + ' 시드를 적어주세요' });
     });
     return out;
   }, [holdings, entries, balW.bal, balW.realized, balF.bal, balF.realized, balL.base, balL.realized, settings.swingInAssets]);
