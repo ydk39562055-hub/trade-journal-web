@@ -758,6 +758,7 @@ function SellModal({ entry: e, quote, onSell, onClose }) {
         <button className="btn" style={{ flex: 1 }} disabled={!ok} onClick={() => onSell(e.id, { qty: q, price: p, date, note })}>매도 기록</button>
         <button className="btn-ghost" onClick={onClose}>취소</button>
       </div>
+
     </Modal>
   );
 }
@@ -839,7 +840,7 @@ function BuyMoreModal({ entry: e, onBuy, onClose }) {
 }
 
 /* ───────────── 보유 현황 (스크린샷 자동입력 + 실시간 시세 + 일지로 보내기) ───────────── */
-function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHoldings, addPositions, defaultAccount, onClose }) {
+function HoldingsModal({ holdings, entries, assets = [], saveAsset, removeAsset, addHoldings, removeHolding, clearHoldings, addPositions, defaultAccount, onClose }) {
   const [acct, setAcct] = useStateM(defaultAccount === '장기' ? '장기' : '스윙');
   const [quotes, setQuotes] = useStateM({});
   const [loading, setLoading] = useStateM(false);
@@ -873,6 +874,8 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
 
   const valUSD = h => { const q = qOf(h); return q ? TJ.toUSD(q.price * h.qty, liveSym(q)) : null; };
   const totalUSD = list.reduce((a, h) => a + (valUSD(h) || 0), 0);
+  // 포트폴리오 합계에 넣을 값 — 지금 보는 계좌만이 아니라 **모든 계좌** 보유 평가액
+  const allHoldingsUSD = holdings.reduce((a, h) => a + (valUSD(h) || 0), 0);
   const costUSD = list.reduce((a, h) => { const a1 = avgUSD1(h); return a + (a1 != null ? a1 * h.qty : 0); }, 0);
   const anyPrice = list.some(h => priceOf(h) != null);
 
@@ -1032,6 +1035,11 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
             </>
           )}
       </div>
+      {/* ★ 전체 재산 포트폴리오 — 보유현황 바로 아래(2026-08-09 사용자 요청).
+          위(보유현황)는 증권계좌 종목이라 티커로 실시간 평가하고,
+          여기는 시세가 없는 자산(현금·예금·부동산·연금 등)을 직접 적는다. 둘을 합쳐 총 재산이 된다. */}
+      <PortfolioSection assets={assets} saveAsset={saveAsset} removeAsset={removeAsset}
+        holdingsUSD={allHoldingsUSD} />
     </Modal>
   );
 }

@@ -69,9 +69,17 @@ function mergeBlobs(a, b) {
     if (!prev || (h.updated_at || '') >= (prev.updated_at || '')) hm.set(h.id, h);
   }
   const holdings = [...hm.values()].filter(h => !deleted[h.id]);
+  // 전체 재산(현금·부동산 등 직접 적는 자산) — 보유종목과 같은 방식으로 합친다
+  const am = new Map();
+  for (const x of [...(a.assets || []), ...(b.assets || [])]) {
+    if (!x || !x.id) continue;
+    const prev = am.get(x.id);
+    if (!prev || (x.updated_at || '') >= (prev.updated_at || '')) am.set(x.id, x);
+  }
+  const assets = [...am.values()].filter(x => !deleted[x.id]);
   const settings = { ...(a.settings || {}), ...(b.settings || {}) };
   const principles = (b.principles && b.principles.trim()) ? b.principles : (a.principles || '');
-  return { v: 1, entries, settings, principles, memos, diary, holdings, deleted };
+  return { v: 1, entries, settings, principles, memos, diary, holdings, assets, deleted };
 }
 
 /* 레드폴더(ForexFactory 경제지표) 한글 표기 */
@@ -262,6 +270,9 @@ function App() {
     // 예전 버전이 만든 빈 일기(칸만 눌러도 생기던 것) 한 번 청소
     try { const a = JSON.parse(localStorage.getItem('tj_diary_v1') || '[]'); return Array.isArray(a) ? a.filter(x => x && ((x.text && x.text.trim()) || x.mood)) : []; } catch { return []; }
   });
+  /* ★ 전체 재산 포트폴리오(2026-08-09) — 시세가 없는 자산(현금·예금·부동산 등)은 금액을 직접 적는다.
+     주식·코인은 위 '보유 현황'이 티커로 실시간 평가하므로 여기 또 적지 않는다. */
+  const [assets, setAssets] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_assets_v1') || '[]'); } catch { return []; } });
   const [holdings, setHoldings] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_holdings_v1') || '[]'); } catch { return []; } });
   const [checks, setChecks] = useState(() => {
     try { const o = JSON.parse(localStorage.getItem('tj_checks_v2') || '{}'); if (o.d === todayStr()) return new Set(o.s || []); } catch {}
@@ -297,6 +308,7 @@ function App() {
   useEffect(() => { safeSet('tj_memos_v2', JSON.stringify(memos)); }, [memos]);
   useEffect(() => { safeSet('tj_diary_v1', JSON.stringify(diary)); }, [diary]);
   useEffect(() => { safeSet('tj_holdings_v1', JSON.stringify(holdings)); }, [holdings]);
+  useEffect(() => { safeSet('tj_assets_v1', JSON.stringify(assets)); }, [assets]);
   useEffect(() => { safeSet('tj_deleted_v1', JSON.stringify(deleted)); }, [deleted]);
 
   // 사진 비우기 — 공간이 찼을 때 글은 남기고 사진만 지워 즉시 확보
@@ -313,7 +325,7 @@ function App() {
     setModal(null); doFlash(n ? `사진 ${n}장 정리됨 ✓` : '지울 사진이 없어요');
   };
 
-  const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, diary, holdings, deleted });
+  const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, diary, holdings, assets, deleted });
   const applyBlob = (b) => {
     if (Array.isArray(b.entries)) setEntries(TJ.migrateEntries(b.entries));
     if (b.settings) setSettings(TJ.migrateSettings(b.settings));
@@ -321,6 +333,7 @@ function App() {
     if (Array.isArray(b.memos)) setMemos(b.memos);
     if (Array.isArray(b.diary)) setDiary(b.diary.filter(x => x && ((x.text && x.text.trim()) || x.mood)));   // 빈 껍데기는 어떤 경로로도 안 들어오게
     if (Array.isArray(b.holdings)) setHoldings(b.holdings);
+    if (Array.isArray(b.assets)) setAssets(b.assets);
     if (b.deleted) setDeleted(b.deleted);
   };
 
@@ -361,7 +374,7 @@ function App() {
       catch (e) { setSyncStatus('err'); }
     }, 1400);
     return () => clearTimeout(debRef.current);
-  }, [entries, settings, principles, memos, diary, holdings, deleted, syncId, syncReady]);
+  }, [entries, settings, principles, memos, diary, holdings, assets, deleted, syncId, syncReady]);
 
   const enableSync = () => { const c = TJSync.genCode(); localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('동기화 켜짐 ☁'); return c; };
   const joinSync = (raw) => { const c = TJSync.clean(raw); if (c.length < 12) { alert('코드가 너무 짧아요. 다시 확인해주세요.'); return false; } localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('연결 중… ☁'); return true; };
@@ -379,7 +392,6 @@ function App() {
   }, []);
 
   // 보유중 일지에 현재가·평가손익을 보여주려면 시세가 필요 — 앱 차원에서 한 번 받아 카드에 전달
-  const [quotes, setQuotes] = useState({});
   const holdTickers = useMemo(() => {
     const s = new Set();
     entries.forEach(e => { if (e.result === 'holding' && e.ticker) s.add(e.ticker.toUpperCase()); });
@@ -393,34 +405,11 @@ function App() {
      (조회 모듈 TJPortfolio 는 그 화면이 쓰므로 그대로 둔다.) */
   // 일지에서는 시세를 쓰지 않는다(위 주석). 카드·모달이 부르던 자리는 남겨 두고 늘 null 을 준다.
   const quoteOf = () => null;
-  // 계좌별 보유 평가금액(현재가 × 수량) — 참고용 표시. 시드는 사용자가 직접 적음.
-  const holdValue = useMemo(() => {
-    const out = {};
-    ['스윙', '장기'].forEach(acct => {
-      let total = 0, n = 0, missing = 0;
-      const seen = new Set();
-      const add = (ticker, qty) => {
-        const q = quoteOf(ticker);
-        if (!q || !(Number(qty) > 0)) { missing++; return; }
-        total += TJ.toUSD(q.price, q.currency === 'KRW' ? '₩' : '$') * Number(qty); n++;
-      };
-      entries.filter(e => e.result === 'holding' && e.market === acct).forEach(e => {
-        const t = (e.ticker || '').toUpperCase(); if (t) seen.add(t);
-        add(e.ticker, e.shares);
-      });
-      holdings.filter(h => h.account === acct && !seen.has((h.ticker || '').toUpperCase())).forEach(h => add(h.ticker, h.qty));
-      out[acct] = { total, n, missing };
-    });
-    return out;
-  }, [entries, holdings, quotes, fx.rate]);
+  // 계좌별 보유 평가금액은 더 이상 내지 않는다 — 실시간 시세를 안 쓰기로 했다(2026-08-09).
+  // 시드 추천에 쓰던 자리는 빈 값을 준다.
+  const holdValue = {};
 
-  // "이 시세가 언제 값인지" 한 줄 — 장중인지 마감가인지 사용자에게 알려줌
-  const quoteAgeLabel = useMemo(() => {
-    const qs = Object.values(quotes).filter(Boolean);
-    if (!qs.length || !window.TJPortfolio || !TJPortfolio.quoteAge) return '';
-    const live = qs.find(q => q.state === 'REGULAR');
-    return TJPortfolio.quoteAge(live || qs[0]);
-  }, [quotes]);
+
 
   // 원화로 들어간 미국주식 '보유중' 기록을 달러로 정리 — 실시간 환율 잡히면 1회만
   useEffect(() => {
@@ -605,6 +594,18 @@ function App() {
     setModal(null); doFlash('추가 매수 기록됨 ✓');
   };
 
+  /* 전체 재산 자산 한 건 저장/삭제 — 보유종목과 같은 규칙(id·updated_at·deleted)으로 동기화된다 */
+  const saveAsset = (a) => {
+    const now = new Date().toISOString();
+    if (a.id) setAssets(prev => prev.map(x => (x.id === a.id ? { ...x, ...a, updated_at: now } : x)));
+    else setAssets(prev => [{ ...a, id: 'as-' + Math.random().toString(36).slice(2, 10), created_at: now, updated_at: now }, ...prev]);
+  };
+  const removeAsset = (id) => {
+    const now = new Date().toISOString();
+    setAssets(prev => prev.filter(x => x.id !== id));
+    setDeleted(p => ({ ...p, [id]: now }));
+  };
+
   const clearHoldings = (account) => {
     const rm = holdings.filter(h => h.account === account).map(h => h.id);
     if (!rm.length) return;
@@ -672,7 +673,7 @@ function App() {
     if (!obj || typeof obj !== 'object') { alert('가져올 데이터가 없어요.'); return; }
     const ec = Array.isArray(obj.entries) ? obj.entries.length : 0;
     if (!confirm(`백업을 복원합니다.\n일지 ${ec}건 + 회고·일기·설정을 현재 데이터에 병합해요 (같은 건 최신 우선). 계속할까요?`)) return;
-    const merged = mergeBlobs(gatherBlob(), { entries: obj.entries, memos: obj.memos, diary: obj.diary, holdings: obj.holdings, settings: obj.settings, principles: obj.principles, deleted: obj.deleted });
+    const merged = mergeBlobs(gatherBlob(), { entries: obj.entries, memos: obj.memos, diary: obj.diary, holdings: obj.holdings, assets: obj.assets, settings: obj.settings, principles: obj.principles, deleted: obj.deleted });
     applyBlob(merged);
     setModal(null); doFlash('백업 복원됨 ✓');
   };
@@ -743,11 +744,6 @@ function App() {
   const closed = list.filter(e => e.result !== 'holding');
   const shownList = status === 'held' ? held : status === 'closed' ? closed : list;
   // 보유중 평가손익 합계 — 시세 있는 것만
-  const heldPnl = held.reduce((a, e) => {
-    const q = quoteOf(e.ticker); if (!q || e.entry_price == null || !e.shares) return a;
-    const cur = TJ.toUSD(q.price, q.currency === 'KRW' ? '₩' : '$');
-    return a + (cur - TJ.toUSD(e.entry_price, e.currency)) * e.shares;
-  }, 0);
 
   TJ.setCurrency(settings.currency); TJ.setRate(fx.rate);   // 전역 통화($/₩)+실시간환율 — 렌더 전 동기 반영(자식 포매터가 읽음)
   const balF = TJStats.balanceOf(entries, '선물', settings.futuresSeed, settings.futuresDeposit);
@@ -867,7 +863,7 @@ function App() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
         {saveBanner}
         {riskBanner}
-        <BalanceBand market={filter} bal={bal} holdVal={holdValue[filter]} onSeed={() => setModal({ type: 'settings' })} />
+        <BalanceBand market={filter} bal={bal} onSeed={() => setModal({ type: 'settings' })} />
         <RedFolderCard items={redfolder} />
         <PerfCard stats={heroStats} onStats={() => setTab('stats')} height={150} />
         {recentBlock}
@@ -883,7 +879,7 @@ function App() {
       {saveBanner}
       {riskBanner}
       <DiaryHome diary={diary} upsert={upsertDiary} remove={removeDiary} />
-      <BalanceBand market={filter} bal={bal} holdVal={holdValue[filter]} onSeed={() => setModal({ type: 'settings' })} />
+      <BalanceBand market={filter} bal={bal} onSeed={() => setModal({ type: 'settings' })} />
       <RedFolderCard items={redfolder} />
       <PerfCard stats={heroStats} onStats={() => setTab('stats')} height={96} />
       <RoutineCard routine={{ ...routineProps, open: routineOpen, setOpen: setRoutineOpen }} />
@@ -926,8 +922,9 @@ function App() {
             <>
               <div className="seclabel" style={{ paddingLeft: 2 }}>
                 보유중
-                {holdValue[filter] && holdValue[filter].total > 0 && <span className="mono"> · 평가금액 {TJ.money(holdValue[filter].total)}</span>}
-                {heldPnl !== 0 && <span className="mono"> · 평가손익 {TJ.moneyS(heldPnl)}</span>}
+                {/* ★ 2026-08-09: 평가금액·평가손익을 뺐다. 실시간 시세를 안 쓰기로 했으니
+                    낼 수 없는 값이다. 이익/손해는 팔 때 내가 적는다. */}
+                <span className="mono" style={{ fontWeight: 600, color: 'var(--ink-4)' }}> · {held.length}건</span>
 
               </div>
               {cardsOf(held)}
@@ -1059,7 +1056,7 @@ function App() {
       {modal?.type === 'stats' && <DashboardModal entries={entries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} seedSuggest={holdValue} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}
-      {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
+      {modal?.type === 'holdings' && <HoldingsModal holdings={holdings} assets={assets} saveAsset={saveAsset} removeAsset={removeAsset} entries={entries} addHoldings={addHoldings} removeHolding={removeHolding} clearHoldings={clearHoldings} addPositions={addPositions} defaultAccount={filter === '장기' ? '장기' : '스윙'} onClose={() => setModal(null)} />}
       {modal?.type === 'buymore' && modal.entry && <BuyMoreModal entry={modal.entry} onBuy={buyMore} onClose={() => setModal(null)} />}
       {modal?.type === 'sell' && modal.entry && <SellModal entry={modal.entry} quote={quoteOf(modal.entry.ticker)} onSell={sellPosition} onClose={() => setModal(null)} />}
       {modal?.type === 'menu' && <MenuModal entries={entries} blob={gatherBlob()} syncId={syncId} onImport={importBlob} onPurgePhotos={purgePhotos} onReset={() => setModal({ type: 'reset' })} onSync={() => setModal({ type: 'sync' })} onClose={() => setModal(null)} />}
