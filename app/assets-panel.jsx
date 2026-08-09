@@ -47,6 +47,46 @@ function livePrice(a, priceOf) {
 function AssetsTab({ assets = [], saveAsset, removeAsset, loans = [], quotes = {}, asOf, onRefresh }) {
   const [cat, setCat] = React.useState('전체');
   const [edit, setEdit] = React.useState(null);
+  // ★ 스크린샷으로 자산 추가(2026-08-09 요청) — 보유현황이 쓰던 추출기를 그대로 쓴다.
+  const [busy, setBusy] = React.useState(false);      // AI가 읽는 중
+  const [shot, setShot] = React.useState(null);       // 읽어낸 결과(확인 전)
+  const [shotErr, setShotErr] = React.useState('');
+  const fileRef = React.useRef(null);
+
+  // 심볼만 보고 분류를 짐작한다 — 틀리면 확인 화면에서 바꾸면 된다
+  const guessCat = (tk) => {
+    const s = String(tk || '').toUpperCase();
+    if (/BTC|ETH|XRP|SOL|DOGE|-USD$|USDT/.test(s)) return '암호화폐';
+    return '주식_ETF';
+  };
+  const onFiles = async (ev) => {
+    const files = [...ev.target.files]; ev.target.value = '';
+    if (!files.length) return;
+    setBusy(true); setShotErr(''); setShot(null);
+    try {
+      const parts = [];
+      for (const f of files) { const durl = await compressImage(f); if (durl) parts.push({ mime: 'image/jpeg', data: durl.split(',')[1] }); }
+      if (!parts.length) throw new Error('이미지를 못 읽었어요');
+      const j = await TJPortfolio.extract(parts);
+      const hs = (Array.isArray(j.holdings) ? j.holdings : []).filter((h) => h && (h.name || h.ticker) && Number(h.qty) > 0);
+      if (!hs.length) throw new Error('종목을 못 읽었어요. 목록이 잘 보이게 다시 찍어주세요.');
+      setShot(hs.map((h, i) => ({
+        _i: i, on: true,
+        name: h.name || h.ticker, symbol: (h.ticker || '').toUpperCase(),
+        cat: guessCat(h.ticker), qty: Number(h.qty) || 0,
+        buyPrice: Number(h.avgPrice) || 0,
+        currency: h.currency === 'USD' || h.currency === '$' ? '$' : '₩',
+      })));
+    } catch (e) { setShotErr('스크린샷 분석 실패: ' + e.message); }
+    setBusy(false);
+  };
+  const addShots = () => {
+    (shot || []).filter((s) => s.on).forEach((s) => {
+      saveAsset({ name: s.name, cat: s.cat, symbol: s.symbol, qty: s.qty,
+                  buyPrice: s.buyPrice, price: 0, amount: 0, currency: s.currency, note: '스크린샷으로 추가' });
+    });
+    setShot(null);
+  };
 
   // 심볼 → 실시간 가격(야후). 심볼 통화가 달라도 자산 통화 기준으로 적어둔 값을 쓴다.
   const priceOf = (sym) => {
@@ -173,11 +213,61 @@ function AssetsTab({ assets = [], saveAsset, removeAsset, loans = [], quotes = {
         </div>
       )}
 
-      {!edit && (
-        <button className="btn-ghost" onClick={() => setEdit(Object.assign({}, blank))}
-          style={{ width: '100%', justifyContent: 'center', borderStyle: 'dashed', color: 'var(--ink-3)' }}>
-          ＋ 자산 추가
-        </button>
+      {!edit && !shot && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn-ghost" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}
+            style={{ flex: '1 1 190px', justifyContent: 'center', borderStyle: 'dashed', color: 'var(--ink-3)' }}>
+            {busy ? 'AI가 읽는 중…' : '📷 스크린샷으로 추가'}
+          </button>
+          <button className="btn-ghost" onClick={() => setEdit(Object.assign({}, blank))}
+            style={{ flex: '1 1 190px', justifyContent: 'center', borderStyle: 'dashed', color: 'var(--ink-3)' }}>
+            ＋ 직접 추가
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
+        </div>
+      )}
+      {shotErr && <div style={{ fontSize: 12, color: 'var(--loss)', lineHeight: 1.6 }}>{shotErr}</div>}
+      {!edit && !shot && (
+        <div style={{ fontSize: 11, color: 'var(--ink-4)', lineHeight: 1.55 }}>
+          증권사·거래소 보유목록을 찍어 올리면 종목·수량·평단을 읽어 자산으로 넣습니다.
+          예금·부동산은 시세가 없으니 <b>직접 추가</b>로 금액만 적으세요.
+        </div>
+      )}
+
+      {/* ── 스크린샷에서 읽어낸 것 확인 ── */}
+      {shot && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: '13px 14px', background: 'var(--surface)' }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 3 }}>읽어낸 {shot.length}개 — 맞는지 확인해 주세요</div>
+          <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 9, lineHeight: 1.5 }}>
+            분류가 틀렸으면 눌러서 바꾸고, 뺄 것은 체크를 풀어주세요. 넣은 뒤에도 수정할 수 있습니다.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {shot.map((s) => (
+              <div key={s._i} style={{ display: 'flex', alignItems: 'center', gap: 9, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 11px', opacity: s.on ? 1 : 0.45 }}>
+                <input type="checkbox" checked={s.on} onChange={() => setShot(shot.map((x) => (x._i === s._i ? Object.assign({}, x, { on: !x.on }) : x)))} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {s.name}{s.symbol ? <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-4)', marginLeft: 5 }}>{s.symbol}</span> : null}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-4)' }}>{s.qty}주 · 평단 {TJ.fmt(s.buyPrice, s.currency)}</div>
+                  <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
+                    {['주식_ETF', '암호화폐', '채권', '원자재', '기타'].map((k) => (
+                      <button key={k} className={'chip' + (s.cat === k ? ' on' : '')}
+                        onClick={() => setShot(shot.map((x) => (x._i === s._i ? Object.assign({}, x, { cat: k }) : x)))}
+                        style={{ fontSize: 11, padding: '3px 9px' }}>{CAT(k).label}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button className="btn" style={{ flex: 1 }} disabled={!shot.some((s) => s.on)} onClick={addShots}>
+              {shot.filter((s) => s.on).length}개 자산으로 넣기
+            </button>
+            <button className="btn-ghost" onClick={() => setShot(null)}>취소</button>
+          </div>
+        </div>
       )}
 
       {/* ── 추가 · 수정 ── */}
