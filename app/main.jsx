@@ -819,6 +819,16 @@ function App() {
     }
     return out;
   }, [holdings, entries, balW.bal, balW.realized, settings.swingInAssets]);
+
+  // 홈과 자산 탭이 **같은 총자산**을 보여야 한다 — 계산은 한 군데(assetsTotal)에서만 한다.
+  const netWorth = useMemo(() => (window.assetsTotal
+    ? assetsTotal(autoAssets.concat(assets), quotes)
+    : { total: 0, cost: 0, pl: 0, count: 0 }), [autoAssets, assets, quotes]);
+  const netWorthCard = (
+    <NetWorthCard total={netWorth.total} pl={netWorth.pl} cost={netWorth.cost}
+      count={netWorth.count} autoCount={autoAssets.length}
+      onOpen={() => setTab('assets')} onQuickAdd={saveAsset} />
+  );
   // 선물/스윙/장기 완전 분리 — 활성 시장만 표시(합산 없음)
   const bal = filter === '스윙' ? balW : filter === '장기' ? balL : balF;
 
@@ -932,6 +942,7 @@ function App() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
         {saveBanner}
         {riskBanner}
+        {netWorthCard}
         <BalanceBand market={filter} bal={bal} onSeed={() => setModal({ type: 'settings' })} />
         <RedFolderCard items={redfolder} />
         <PerfCard stats={heroStats} onStats={() => setTab('stats')} height={150} />
@@ -947,6 +958,7 @@ function App() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       {saveBanner}
       {riskBanner}
+      {netWorthCard}
       <DiaryHome diary={diary} upsert={upsertDiary} remove={removeDiary} />
       <BalanceBand market={filter} bal={bal} onSeed={() => setModal({ type: 'settings' })} />
       <RedFolderCard items={redfolder} />

@@ -237,10 +237,11 @@ function AssetsTab({ assets = [], autoAssets = [], saveAsset, removeAsset, loans
         </div>
       )}
       {shotErr && <div style={{ fontSize: 12, color: 'var(--loss)', lineHeight: 1.6 }}>{shotErr}</div>}
-      {/* 스윙을 자산에 어떻게 얹을지 — 시드를 예금에 이미 적어뒀다면 '번 돈만'이 맞다 */}
+      {/* 스윙을 자산에 어떻게 얹을지 — 기본은 '번 돈만'. 평소엔 접어 둔다(2026-08-09: 복잡하다는 지적). */}
       {onSwingMode && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--ink-4)' }}>
-          <span>스윙 계좌를 자산에 넣는 방식</span>
+        <details style={{ fontSize: 11.5, color: 'var(--ink-4)' }}>
+        <summary style={{ cursor: 'pointer' }}>스윙 계좌를 자산에 넣는 방식 바꾸기</summary>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 7 }}>
           {[['profit', '번 돈만'], ['account', '계좌 전체(시드 포함)']].map(([k, l]) => (
             <button key={k} className={'chip' + (swingMode === k ? ' on' : '')} onClick={() => onSwingMode(k)}
               style={{ fontSize: 11.5, padding: '4px 10px' }}>{l}</button>
@@ -249,6 +250,7 @@ function AssetsTab({ assets = [], autoAssets = [], saveAsset, removeAsset, loans
             스윙 시드를 이미 예금 자산으로 적어뒀다면 <b>번 돈만</b>이 맞습니다(두 번 세지 않게).
           </span>
         </div>
+        </details>
       )}
 
       {!edit && !shot && (
@@ -386,4 +388,16 @@ function AssetsTab({ assets = [], autoAssets = [], saveAsset, removeAsset, loans
   );
 }
 
-Object.assign(window, { AssetsTab, ASSET_CATS });
+/** 자산 합계 — 홈 화면도 같은 값을 써야 해서 밖으로 뺀다(두 곳이 다른 값을 보이면 안 된다). */
+function assetsTotal(list, quotes) {
+  const priceOf = (sym) => {
+    const s = String(sym || '').toUpperCase();
+    const q = (quotes || {})[s] || (quotes || {})[s + '.KS'];
+    return q ? Number(q.price) : null;
+  };
+  const total = (list || []).reduce((s, a) => s + assetValueUSD(a, priceOf), 0);
+  const cost = (list || []).reduce((s, a) => s + assetCostUSD(a), 0);
+  return { total, cost, pl: total - cost, count: (list || []).length };
+}
+
+Object.assign(window, { AssetsTab, ASSET_CATS, assetsTotal });
