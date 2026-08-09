@@ -11,15 +11,18 @@
 
    ⚠ 거래일지(스윙)와는 별개다. 일지는 '내가 사고판 기록', 여기는 '지금 내가 가진 전부'. */
 
+/* 색은 앱 테마(코코아 브라운)에 맞춘 부드러운 흙색 계열.
+   ★ 2026-08-09 사용자 요청: "화면과 비슷한 부드러운 색으로, 파란색 쓰지 말고".
+   원색·형광은 쓰지 않는다 — 비중 막대가 화면에서 튀면 정작 숫자가 안 읽힌다. */
 const ASSET_CATS = [
-  { key: '주식_ETF', label: '주식·ETF', color: '#3B82F6', live: true },
-  { key: '암호화폐', label: '암호화폐', color: '#8B5CF6', live: true },
-  { key: '채권', label: '채권', color: '#0EA5E9', live: false },
-  { key: '원자재', label: '원자재·금', color: '#D97706', live: false },
-  { key: '현금_예금', label: '현금·예금', color: '#F59E0B', live: false },
-  { key: '부동산', label: '부동산', color: '#10B981', live: false },
-  { key: '연금_보험', label: '연금·보험', color: '#6366F1', live: false },
-  { key: '기타', label: '기타', color: '#94A3B8', live: false },
+  { key: '주식_ETF', label: '주식·ETF', color: '#97633b', live: true },   // 브랜드 코코아
+  { key: '암호화폐', label: '암호화폐', color: '#b58963', live: true },   // 밝은 카라멜
+  { key: '채권', label: '채권', color: '#8d8475', live: false },          // 웜 그레이
+  { key: '원자재', label: '원자재·금', color: '#c2a05a', live: false },   // 바랜 금색
+  { key: '현금_예금', label: '현금·예금', color: '#d0b48a', live: false },// 모래
+  { key: '부동산', label: '부동산', color: '#7f8b6c', live: false },      // 올리브 세이지
+  { key: '연금_보험', label: '연금·보험', color: '#9c7f8b', live: false },// 더스티 로즈
+  { key: '기타', label: '기타', color: '#bab2a6', live: false },          // 옅은 웜 그레이
 ];
 const CAT = (k) => ASSET_CATS.find((c) => c.key === k) || ASSET_CATS[ASSET_CATS.length - 1];
 

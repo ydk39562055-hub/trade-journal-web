@@ -375,10 +375,21 @@ function SettingsModal({ settings, onSave, seedSuggest, onClose }) {
     { key: '스윙', seedK: 'swingSeed', depK: 'swingDeposit', c: 'var(--swing)', seedPh: '5000', depPh: '예: 500' },
     { key: '장기', seedK: 'longSeed', depK: 'longDeposit', c: 'var(--long)', seedPh: '5000', depPh: '예: 500' },
   ];
-  const [seeds, setSeeds] = useStateM(() => { const o = {}; MK.forEach(m => o[m.key] = settings[m.seedK] ?? ''); return o; });
+  // 저장은 달러 기준 — 화면에는 고른 입력 단위로 보여준다(원화면 환산해서)
+  const _seedInit = (unit) => { const o = {}; MK.forEach(m => {
+    const v = settings[m.seedK];
+    o[m.key] = (v == null || v === '') ? '' : (unit === '₩' ? String(Math.round(v * TJ.rateKRW())) : String(v));
+  }); return o; };
+  const [seeds, setSeeds] = useStateM(() => _seedInit(settings.currency === '₩' ? '₩' : '$'));
   const [deps, setDeps] = useStateM(() => { const o = {}; MK.forEach(m => o[m.key] = settings[m.depK] || 0); return o; });
   const [addv, setAddv] = useStateM({ '선물': '', '스윙': '', '장기': '' });
   const [cur, setCur] = useStateM(settings.currency === '₩' ? '₩' : '$');
+  /* ★ 2026-08-09 함정 수정: 시드·입금 입력이 늘 '달러'였다. 화면은 원화로 보면서
+     시드 칸에 1,000만(원 생각)을 적으면 $1,000만 = ₩135억으로 저장돼 자산이 통째로 틀어졌다.
+     이제 입력 단위를 고를 수 있고, 저장할 때만 달러로 환산한다(저장 기준은 그대로 달러). */
+  const [inCur, setInCur] = useStateM(settings.currency === '₩' ? '₩' : '$');
+  const toUsdIn = v => (v === '' || v == null) ? v : (inCur === '₩' ? (Number(v) / TJ.rateKRW()) : Number(v));
+  const fromUsdIn = v => (v == null || v === '') ? '' : (inCur === '₩' ? Math.round(Number(v) * TJ.rateKRW()) : Number(v));
   const [fRiskMode, setFRiskMode] = useStateM(settings.futuresRiskMode === '%' ? '%' : '$');   // 선물 기본 리스크 단위
   const [fRiskVal, setFRiskVal] = useStateM(settings.futuresRiskVal ?? '');                     // 선물 기본 리스크 값
   const fld = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
@@ -386,10 +397,10 @@ function SettingsModal({ settings, onSave, seedSuggest, onClose }) {
   const setSeed = (k, v) => setSeeds(p => ({ ...p, [k]: v }));
   const setDep = (k, v) => setDeps(p => ({ ...p, [k]: v }));
   const setAdd = (k, v) => setAddv(p => ({ ...p, [k]: v }));
-  const doAdd = (k) => { const v = parseFloat(addv[k]); if (!isNaN(v) && v !== 0) { setDep(k, (deps[k] || 0) + v); setAdd(k, ''); } };
+  const doAdd = (k) => { const v = parseFloat(addv[k]); if (!isNaN(v) && v !== 0) { setDep(k, (deps[k] || 0) + Number(toUsdIn(v))); setAdd(k, ''); } };
   const save = () => {
     const out = { currency: cur };
-    MK.forEach(m => { out[m.seedK] = seeds[m.key] === '' ? null : +seeds[m.key]; out[m.depK] = +deps[m.key] || 0; });
+    MK.forEach(m => { out[m.seedK] = seeds[m.key] === '' ? null : +toUsdIn(seeds[m.key]); out[m.depK] = +deps[m.key] || 0; });
     out.futuresRiskMode = fRiskMode;
     out.futuresRiskVal = (fRiskVal === '' || +fRiskVal <= 0) ? null : +fRiskVal;
     onSave(out);
@@ -409,14 +420,40 @@ function SettingsModal({ settings, onSave, seedSuggest, onClose }) {
           <span style={{ color: 'var(--ink-4)' }}> 입력(시드·손익)은 달러 기준으로 넣어주세요.</span>
         </div>
       )}
+      {/* 입력 단위 — 화면 통화와 따로 고를 수 있다(원화로 적는 게 보통이라 기본을 맞춰 둔다) */}
+      <label style={fld}>시드·입금을 어느 단위로 넣을까요</label>
+      <div className="seg" style={{ width: '100%' }}>
+        {['₩', '$'].map(x => (
+          <button key={x} className={inCur === x ? 'on' : ''} onClick={() => {
+            if (x === inCur) return;
+            // 칸에 적힌 숫자도 새 단위로 바꿔준다 — 안 바꾸면 1,350배 틀린 값이 그대로 저장된다
+            setSeeds(p => { const o = {}; MK.forEach(m => {
+              const v = p[m.key];
+              o[m.key] = (v === '' || v == null) ? ''
+                : String(x === '₩' ? Math.round(Number(v) * TJ.rateKRW()) : Math.round(Number(v) / TJ.rateKRW()));
+            }); return o; });
+            setInCur(x);
+          }}>{x === '₩' ? '₩ 원화로 입력' : '$ 달러로 입력'}</button>
+        ))}
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6, lineHeight: 1.5 }}>
+        원화로 넣으면 저장할 때 환율($1 = ₩{Math.round(TJ.rateKRW()).toLocaleString('en-US')})로 바꿔 담습니다.
+      </div>
+
       {MK.map((m, i) => (
         <div key={m.key} style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 800, fontSize: 13.5 }}>
             <span style={{ width: 9, height: 9, borderRadius: 3, background: m.c }} />
             <span style={{ color: m.c }}>{m.key}</span>
           </div>
-          <label style={fld}>{m.key} 시드 ($)</label>
-          <input type="number" inputMode="decimal" value={seeds[m.key]} onChange={e => setSeed(m.key, e.target.value)} placeholder={m.seedPh} />
+          <label style={fld}>{m.key} 시드 ({inCur})</label>
+          <input type="number" inputMode="decimal" value={seeds[m.key]} onChange={e => setSeed(m.key, e.target.value)} placeholder={inCur === '₩' ? '10000000' : m.seedPh} />
+          {seeds[m.key] !== '' && +seeds[m.key] > 0 && (
+            <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 5 }}>
+              = {inCur === '₩' ? '$' + Math.round(Number(seeds[m.key]) / TJ.rateKRW()).toLocaleString('en-US')
+                               : '₩' + Math.round(Number(seeds[m.key]) * TJ.rateKRW() / 1000) * 1000}
+            </div>
+          )}
           {/* 참고용 — 지금 보유 종목의 평가금액. 시드는 사용자가 직접 적음(예수금은 앱이 알 수 없음) */}
           {seedSuggest && seedSuggest[m.key] && seedSuggest[m.key].total > 0 && (
             <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6 }}>
@@ -424,7 +461,7 @@ function SettingsModal({ settings, onSave, seedSuggest, onClose }) {
               <span style={{ color: 'var(--ink-4)' }}> ({seedSuggest[m.key].n}종목)</span>
             </div>
           )}
-          <label style={fld}>{m.key} 추가 입금 — 금액 넣고 ＋입금</label>
+          <label style={fld}>{m.key} 추가 입금 ({inCur}) — 금액 넣고 ＋입금</label>
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="number" inputMode="decimal" value={addv[m.key]} onChange={e => setAdd(m.key, e.target.value)} placeholder={m.depPh}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); doAdd(m.key); } }} style={{ flex: 1 }} />
@@ -432,6 +469,7 @@ function SettingsModal({ settings, onSave, seedSuggest, onClose }) {
           </div>
           <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
             누적 입금 <b style={{ color: 'var(--ink)' }}>{usd(deps[m.key])}</b>
+            {inCur === '₩' && deps[m.key] ? <span className="mono" style={{ color: 'var(--ink-4)' }}>(₩{(Math.round(deps[m.key] * TJ.rateKRW() / 1000) * 1000).toLocaleString('en-US')})</span> : null}
             {deps[m.key] !== 0 && <button onClick={() => setDep(m.key, 0)} style={{ fontSize: 11.5, color: 'var(--ink-4)' }}>초기화</button>}
           </div>
           {m.key === '선물' && (
