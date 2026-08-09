@@ -809,16 +809,18 @@ function App() {
                  cat: isCoin(k) ? '암호화폐' : '주식_ETF', qty: Number(e.shares) || 0,
                  buyPrice: Number(e.entry_price) || 0, currency: e.currency || '₩' });
     });
-    // ② 스윙 — 번 돈만(기본). 계좌째 넣고 싶으면 설정에서 바꾼다.
-    const swingWhole = settings.swingInAssets === 'account';
-    const amt = swingWhole ? balW.bal : balW.realized;
-    if (amt) {
-      out.push({ id: 'auto-swing', auto: '스윙', name: swingWhole ? '스윙 계좌' : '스윙에서 번 돈',
+    // ② 스윙·선물 — 종목이 곧 사라지는 계좌라 종목 대신 **돈**으로 얹는다.
+    //    기본은 '번 돈만'(시드를 예금에 이미 적어뒀을 테니 이중계상 방지). 설정에서 계좌째로 바꿀 수 있다.
+    const whole = settings.swingInAssets === 'account';
+    [['스윙', balW], ['선물', balF]].forEach(([nm, b]) => {
+      const amt = whole ? b.bal : b.realized;
+      if (!amt) return;
+      out.push({ id: 'auto-' + nm, auto: nm, name: whole ? nm + ' 계좌' : nm + '에서 번 돈',
                  cat: '현금_예금', qty: 0, buyPrice: 0, amount: amt, currency: '$',
-                 note: swingWhole ? '시드 + 실현손익' : '실현손익 누계 (시드는 뺀 값)' });
-    }
+                 note: whole ? '시드 + 실현손익' : '실현손익 누계 (시드는 뺀 값)' });
+    });
     return out;
-  }, [holdings, entries, balW.bal, balW.realized, settings.swingInAssets]);
+  }, [holdings, entries, balW.bal, balW.realized, balF.bal, balF.realized, settings.swingInAssets]);
 
   // 홈과 자산 탭이 **같은 총자산**을 보여야 한다 — 계산은 한 군데(assetsTotal)에서만 한다.
   const netWorth = useMemo(() => (window.assetsTotal
@@ -1024,7 +1026,7 @@ function App() {
 
   const body = tab === 'home' ? homeView
     : tab === 'journal' ? journalView
-      : tab === 'assets' ? <AssetsTab assets={assets} autoAssets={autoAssets} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} swingMode={settings.swingInAssets || 'profit'} onSwingMode={m => setSettings(p => ({ ...p, swingInAssets: m }))} />
+      : tab === 'assets' ? <AssetsTab assets={assets} autoAssets={autoAssets} accounts={[['선물', balF], ['스윙', balW], ['장기', balL]]} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} swingMode={settings.swingInAssets || 'profit'} onSwingMode={m => setSettings(p => ({ ...p, swingInAssets: m }))} />
       : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} remove={removeDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
         : <DashboardModal entries={entries} market={filter} asPage onClose={() => setTab('home')} />;
 

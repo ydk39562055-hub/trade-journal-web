@@ -44,7 +44,7 @@ function livePrice(a, priceOf) {
   return Number(a.price) || Number(a.buyPrice) || 0;
 }
 
-function AssetsTab({ assets = [], autoAssets = [], saveAsset, removeAsset, loans = [], quotes = {}, asOf, onRefresh, swingMode = 'profit', onSwingMode }) {
+function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, removeAsset, loans = [], quotes = {}, asOf, onRefresh, swingMode = 'profit', onSwingMode }) {
   const [cat, setCat] = React.useState('전체');
   const [edit, setEdit] = React.useState(null);
   // ★ 스크린샷으로 자산 추가(2026-08-09 요청) — 보유현황이 쓰던 추출기를 그대로 쓴다.
@@ -152,6 +152,64 @@ function AssetsTab({ assets = [], autoAssets = [], saveAsset, removeAsset, loans
           </React.Fragment>
         )}
       </div>
+
+      {/* ── 계좌별 성과 ──
+          ★ 2026-08-09 사용자 요청: "스윙 장기 선물로 돈을 얼마나 수익이 났는지 다 확인이 되어야".
+          자산은 '지금 얼마 있나', 여기는 '어디서 얼마나 벌었나'. 둘은 다른 질문이라 나눠 놓는다. */}
+      {accounts.length > 0 && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '14px 16px' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 9 }}>계좌별로 얼마나 벌었나</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ color: 'var(--ink-4)', fontSize: 11 }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px' }}>계좌</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>넣은 돈</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>번 돈</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>수익률</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>지금 잔고</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accounts.map(([nm, b]) => (
+                  <tr key={nm} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '7px 6px', fontWeight: 700 }}>{nm}</td>
+                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: 'var(--ink-3)' }}>{b.base ? TJ.money(b.base) : '—'}</td>
+                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800, color: b.pnl > 0 ? 'var(--win)' : b.pnl < 0 ? 'var(--loss)' : 'inherit' }}>
+                      {b.pnl ? TJ.moneyS(b.pnl) : '—'}
+                    </td>
+                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: b.ret == null ? 'var(--ink-4)' : b.ret >= 0 ? 'var(--win)' : 'var(--loss)' }}>
+                      {b.ret == null ? '—' : (b.ret >= 0 ? '+' : '') + b.ret.toFixed(1) + '%'}
+                    </td>
+                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 700 }}>{b.base || b.pnl ? TJ.money(b.bal) : '—'}</td>
+                  </tr>
+                ))}
+                {(() => {
+                  const base = accounts.reduce((s, [, b]) => s + (b.base || 0), 0);
+                  const pnl = accounts.reduce((s, [, b]) => s + (b.pnl || 0), 0);
+                  const bal = accounts.reduce((s, [, b]) => s + (b.bal || 0), 0);
+                  if (!base && !pnl) return null;
+                  return (
+                    <tr style={{ borderTop: '2px solid var(--border)' }}>
+                      <td style={{ padding: '7px 6px', fontWeight: 800 }}>합계</td>
+                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: 'var(--ink-3)' }}>{TJ.money(base)}</td>
+                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800, color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{TJ.moneyS(pnl)}</td>
+                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>
+                        {base ? (pnl >= 0 ? '+' : '') + (pnl / base * 100).toFixed(1) + '%' : '—'}
+                      </td>
+                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800 }}>{TJ.money(bal)}</td>
+                    </tr>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--ink-4)', marginTop: 7, lineHeight: 1.55 }}>
+            넣은 돈 = 시드 + 추가 입금 · 번 돈 = 실현손익(장기는 보유 평가손익 포함).
+            시드가 비어 있으면 설정에서 계좌별 시드를 적어주세요.
+          </div>
+        </div>
+      )}
 
       {/* ── 분류 칩 ── */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
