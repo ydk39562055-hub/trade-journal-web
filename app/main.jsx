@@ -786,6 +786,39 @@ function App() {
   // 스윙·장기는 자금이 보유중에 묶여 있어 미실현 평가손익까지 잔고에 반영 (시드는 사용자가 직접 입력)
   const balW = TJStats.balanceOf(entries, '스윙', settings.swingSeed, settings.swingDeposit);
   const balL = TJStats.balanceOf(entries, '장기', settings.longSeed, settings.longDeposit, { quoteOf: (tk) => quoteOf(tk, '장기') });
+
+  /* ★ 일지 ↔ 자산을 유기적으로 잇는다(2026-08-09 사용자 결정).
+       · 장기 = 오래 들고 갈 종목이라 **그 자체가 재산**이다 → 보유종목을 자산 목록에 자동으로 얹는다.
+       · 스윙 = 사고파는 계좌라 종목은 곧 사라진다 → 종목이 아니라 **번 돈(실현손익)** 만 얹는다.
+     한 벌만 적는다 — 자산 탭에 베껴 넣지 않고 일지·보유현황을 그대로 비춰 보여준다.
+     그래서 일지에서 고치면 자산도 곧바로 따라 움직이고, 두 곳이 어긋날 일이 없다. */
+  const autoAssets = useMemo(() => {
+    const out = [];
+    const seen = new Set();
+    const isCoin = (s) => /BTC|ETH|XRP|SOL|DOGE|-USD$|USDT/.test(String(s || '').toUpperCase());
+    // ① 장기 보유종목 — 보유현황이 1순위, 거기 없는 건 일지(보유중)로 채운다
+    holdings.filter(h => h.account === '장기' && h.ticker).forEach(h => {
+      const k = String(h.ticker).toUpperCase(); if (seen.has(k)) return; seen.add(k);
+      out.push({ id: 'auto-h-' + h.id, auto: '장기', name: h.name || k, symbol: k,
+                 cat: isCoin(k) ? '암호화폐' : '주식_ETF', qty: Number(h.qty) || 0,
+                 buyPrice: Number(h.avgPrice) || 0, currency: h.currency === 'USD' ? '$' : (h.currency || '₩') });
+    });
+    entries.filter(e => e.market === '장기' && e.result === 'holding' && e.ticker).forEach(e => {
+      const k = String(e.ticker).toUpperCase(); if (seen.has(k)) return; seen.add(k);
+      out.push({ id: 'auto-e-' + e.id, auto: '장기', name: e.ticker, symbol: k,
+                 cat: isCoin(k) ? '암호화폐' : '주식_ETF', qty: Number(e.shares) || 0,
+                 buyPrice: Number(e.entry_price) || 0, currency: e.currency || '₩' });
+    });
+    // ② 스윙 — 번 돈만(기본). 계좌째 넣고 싶으면 설정에서 바꾼다.
+    const swingWhole = settings.swingInAssets === 'account';
+    const amt = swingWhole ? balW.bal : balW.realized;
+    if (amt) {
+      out.push({ id: 'auto-swing', auto: '스윙', name: swingWhole ? '스윙 계좌' : '스윙에서 번 돈',
+                 cat: '현금_예금', qty: 0, buyPrice: 0, amount: amt, currency: '$',
+                 note: swingWhole ? '시드 + 실현손익' : '실현손익 누계 (시드는 뺀 값)' });
+    }
+    return out;
+  }, [holdings, entries, balW.bal, balW.realized, settings.swingInAssets]);
   // 선물/스윙/장기 완전 분리 — 활성 시장만 표시(합산 없음)
   const bal = filter === '스윙' ? balW : filter === '장기' ? balL : balF;
 
@@ -979,7 +1012,7 @@ function App() {
 
   const body = tab === 'home' ? homeView
     : tab === 'journal' ? journalView
-      : tab === 'assets' ? <AssetsTab assets={assets} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} />
+      : tab === 'assets' ? <AssetsTab assets={assets} autoAssets={autoAssets} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} swingMode={settings.swingInAssets || 'profit'} onSwingMode={m => setSettings(p => ({ ...p, swingInAssets: m }))} />
       : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} remove={removeDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
         : <DashboardModal entries={entries} market={filter} asPage onClose={() => setTab('home')} />;
 

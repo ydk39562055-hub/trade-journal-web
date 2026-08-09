@@ -44,7 +44,7 @@ function livePrice(a, priceOf) {
   return Number(a.price) || Number(a.buyPrice) || 0;
 }
 
-function AssetsTab({ assets = [], saveAsset, removeAsset, loans = [], quotes = {}, asOf, onRefresh }) {
+function AssetsTab({ assets = [], autoAssets = [], saveAsset, removeAsset, loans = [], quotes = {}, asOf, onRefresh, swingMode = 'profit', onSwingMode }) {
   const [cat, setCat] = React.useState('전체');
   const [edit, setEdit] = React.useState(null);
   // ★ 스크린샷으로 자산 추가(2026-08-09 요청) — 보유현황이 쓰던 추출기를 그대로 쓴다.
@@ -95,18 +95,21 @@ function AssetsTab({ assets = [], saveAsset, removeAsset, loans = [], quotes = {
     return q ? Number(q.price) : null;
   };
 
-  const totalUSD = assets.reduce((s, a) => s + assetValueUSD(a, priceOf), 0);
-  const costUSD = assets.reduce((s, a) => s + assetCostUSD(a), 0);
+  // 자동으로 딸려오는 자산(장기 보유·스윙 번 돈)을 앞에 두고 함께 센다.
+  // 편집은 못 한다 — 원본은 일지·보유현황이고 여기는 비춰 보여주는 자리다.
+  const all = autoAssets.concat(assets);
+  const totalUSD = all.reduce((s, a) => s + assetValueUSD(a, priceOf), 0);
+  const costUSD = all.reduce((s, a) => s + assetCostUSD(a), 0);
   const loanUSD = loans.reduce((s, l) => s + TJ.toUSD(Number(l.amount) || 0, l.currency || '₩'), 0);
   const netUSD = totalUSD - loanUSD;
   const plUSD = totalUSD - costUSD;
 
   const byCat = ASSET_CATS
-    .map((c) => ({ ...c, sum: assets.filter((a) => a.cat === c.key).reduce((s, a) => s + assetValueUSD(a, priceOf), 0) }))
+    .map((c) => ({ ...c, sum: all.filter((a) => a.cat === c.key).reduce((s, a) => s + assetValueUSD(a, priceOf), 0) }))
     .filter((c) => c.sum > 0)
     .sort((a, b) => b.sum - a.sum);
 
-  const shown = cat === '전체' ? assets : assets.filter((a) => a.cat === cat);
+  const shown = cat === '전체' ? all : all.filter((a) => a.cat === cat);
   const blank = { name: '', cat: '주식_ETF', symbol: '', qty: '', buyPrice: '', price: '', amount: '', currency: '₩', note: '' };
   const isCash = edit && (edit.cat === '현금_예금' || edit.cat === '부동산' || edit.cat === '연금_보험');
   const canSave = edit && edit.name.trim() && (isCash ? Number(edit.amount) > 0 : Number(edit.qty) > 0);
@@ -124,7 +127,7 @@ function AssetsTab({ assets = [], saveAsset, removeAsset, loans = [], quotes = {
               {TJ.moneyS(plUSD)} · {(costUSD ? (plUSD / costUSD) * 100 : 0).toFixed(1)}%
             </span>
           )}
-          <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>{assets.length}개 자산</span>
+          <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>{all.length}개 자산{autoAssets.length ? ' (일지에서 ' + autoAssets.length + '개 자동)' : ''}</span>
           {loanUSD > 0 && <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>· 대출 {TJ.money(loanUSD)} → 순자산 <b className="mono">{TJ.money(netUSD)}</b></span>}
           {onRefresh && (
             <button onClick={onRefresh} style={{ fontSize: 11.5, color: 'var(--ink-4)', marginLeft: 'auto' }}>
@@ -153,7 +156,7 @@ function AssetsTab({ assets = [], saveAsset, removeAsset, loans = [], quotes = {
       {/* ── 분류 칩 ── */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {['전체'].concat(ASSET_CATS.map((c) => c.key)).map((k) => {
-          const n = k === '전체' ? assets.length : assets.filter((a) => a.cat === k).length;
+          const n = k === '전체' ? all.length : all.filter((a) => a.cat === k).length;
           if (k !== '전체' && !n) return null;
           return (
             <button key={k} className={'chip' + (cat === k ? ' on' : '')} onClick={() => setCat(k)} style={{ fontSize: 12.5, padding: '6px 12px' }}>
@@ -184,6 +187,7 @@ function AssetsTab({ assets = [], saveAsset, removeAsset, loans = [], quotes = {
                   <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {a.name}
                     {a.symbol ? <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-4)', marginLeft: 5 }}>{a.symbol}</span> : null}
+                    {a.auto ? <span style={{ fontSize: 9.5, fontWeight: 800, color: '#fff', background: 'var(--violet)', borderRadius: 5, padding: '1px 5px', marginLeft: 5 }}>{a.auto}</span> : null}
                     {isLive ? <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--win)', marginLeft: 5 }}>실시간</span> : null}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--ink-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -201,12 +205,18 @@ function AssetsTab({ assets = [], saveAsset, removeAsset, loans = [], quotes = {
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 'none' }}>
-                  <button onClick={() => setEdit(Object.assign({}, a, { qty: String(a.qty || ''), buyPrice: String(a.buyPrice || ''), price: String(a.price || ''), amount: String(a.amount || '') }))}
-                    style={{ fontSize: 11, color: 'var(--ink-4)' }}>수정</button>
-                  <button onClick={() => { if (confirm(a.name + ' 을(를) 지울까요?')) removeAsset(a.id); }}
-                    style={{ fontSize: 11, color: 'var(--loss)' }}>삭제</button>
-                </div>
+                {a.auto ? (
+                  <div style={{ fontSize: 10, color: 'var(--ink-4)', textAlign: 'right', flex: 'none', lineHeight: 1.4 }}>
+                    일지<br />연동
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 'none' }}>
+                    <button onClick={() => setEdit(Object.assign({}, a, { qty: String(a.qty || ''), buyPrice: String(a.buyPrice || ''), price: String(a.price || ''), amount: String(a.amount || '') }))}
+                      style={{ fontSize: 11, color: 'var(--ink-4)' }}>수정</button>
+                    <button onClick={() => { if (confirm(a.name + ' 을(를) 지울까요?')) removeAsset(a.id); }}
+                      style={{ fontSize: 11, color: 'var(--loss)' }}>삭제</button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -227,10 +237,24 @@ function AssetsTab({ assets = [], saveAsset, removeAsset, loans = [], quotes = {
         </div>
       )}
       {shotErr && <div style={{ fontSize: 12, color: 'var(--loss)', lineHeight: 1.6 }}>{shotErr}</div>}
+      {/* 스윙을 자산에 어떻게 얹을지 — 시드를 예금에 이미 적어뒀다면 '번 돈만'이 맞다 */}
+      {onSwingMode && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--ink-4)' }}>
+          <span>스윙 계좌를 자산에 넣는 방식</span>
+          {[['profit', '번 돈만'], ['account', '계좌 전체(시드 포함)']].map(([k, l]) => (
+            <button key={k} className={'chip' + (swingMode === k ? ' on' : '')} onClick={() => onSwingMode(k)}
+              style={{ fontSize: 11.5, padding: '4px 10px' }}>{l}</button>
+          ))}
+          <span style={{ flexBasis: '100%', lineHeight: 1.5 }}>
+            스윙 시드를 이미 예금 자산으로 적어뒀다면 <b>번 돈만</b>이 맞습니다(두 번 세지 않게).
+          </span>
+        </div>
+      )}
+
       {!edit && !shot && (
         <div style={{ fontSize: 11, color: 'var(--ink-4)', lineHeight: 1.55 }}>
           증권사·거래소 보유목록을 찍어 올리면 종목·수량·평단을 읽어 자산으로 넣습니다.
-          예금·부동산은 시세가 없으니 <b>직접 추가</b>로 금액만 적으세요.
+          예금·부동산은 시세가 없으니 <b>직접 추가</b>로 금액만 적으세요.<br />장기 계좌 종목과 스윙 손익은 <b>일지에서 자동으로</b> 올라옵니다 — 여기 또 적지 마세요.
         </div>
       )}
 
