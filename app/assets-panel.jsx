@@ -182,30 +182,30 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
           자산은 '지금 얼마 있나', 여기는 '어디서 얼마나 벌었나'. 둘은 다른 질문이라 나눠 놓는다. */}
       {accounts.length > 0 && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '14px 16px' }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 9 }}>계좌별로 얼마나 벌었나</div>
+          <div style={{ fontSize: 14.5, fontWeight: 800, marginBottom: 11 }}>계좌별로 얼마나 벌었나</div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14.5 }}>
               <thead>
-                <tr style={{ color: 'var(--ink-4)', fontSize: 11 }}>
-                  <th style={{ textAlign: 'left', padding: '4px 6px' }}>계좌</th>
-                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>넣은 돈</th>
-                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>번 돈</th>
-                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>수익률</th>
-                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>지금 잔고</th>
+                <tr style={{ color: 'var(--ink-4)', fontSize: 12.5 }}>
+                  <th style={{ textAlign: 'left', padding: '6px 8px' }}>계좌</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px' }}>넣은 돈</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px' }}>번 돈</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px' }}>수익률</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px' }}>지금 잔고</th>
                 </tr>
               </thead>
               <tbody>
                 {accounts.map(([nm, b]) => (
                   <tr key={nm} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '7px 6px', fontWeight: 700 }}>{nm}</td>
-                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: 'var(--ink-3)' }}>{b.base ? TJ.won(b.base) : '—'}</td>
-                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800, color: b.pnl > 0 ? 'var(--win)' : b.pnl < 0 ? 'var(--loss)' : 'inherit' }}>
+                    <td style={{ padding: '11px 8px', fontWeight: 800, fontSize: 15 }}>{nm}</td>
+                    <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: 'var(--ink-3)' }}>{b.base ? TJ.won(b.base) : '—'}</td>
+                    <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 800, color: b.pnl > 0 ? 'var(--win)' : b.pnl < 0 ? 'var(--loss)' : 'inherit' }}>
                       {b.pnl ? TJ.wonS(b.pnl) : '—'}
                     </td>
-                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: b.ret == null ? 'var(--ink-4)' : b.ret >= 0 ? 'var(--win)' : 'var(--loss)' }}>
+                    <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: b.ret == null ? 'var(--ink-4)' : b.ret >= 0 ? 'var(--win)' : 'var(--loss)' }}>
                       {b.ret == null ? '—' : (b.ret >= 0 ? '+' : '') + b.ret.toFixed(1) + '%'}
                     </td>
-                    <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 700 }}>{b.base || b.pnl ? TJ.won(b.bal) : '—'}</td>
+                    <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 700 }}>{b.base || b.pnl ? TJ.won(b.bal) : '—'}</td>
                   </tr>
                 ))}
                 {(() => {
@@ -215,13 +215,13 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
                   if (!base && !pnl) return null;
                   return (
                     <tr style={{ borderTop: '2px solid var(--border)' }}>
-                      <td style={{ padding: '7px 6px', fontWeight: 800 }}>합계</td>
-                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: 'var(--ink-3)' }}>{TJ.won(base)}</td>
-                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800, color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{TJ.wonS(pnl)}</td>
-                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>
+                      <td style={{ padding: '11px 8px', fontWeight: 800 }}>합계</td>
+                      <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: 'var(--ink-3)' }}>{TJ.won(base)}</td>
+                      <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 800, color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{TJ.wonS(pnl)}</td>
+                      <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>
                         {base ? (pnl >= 0 ? '+' : '') + (pnl / base * 100).toFixed(1) + '%' : '—'}
                       </td>
-                      <td className="mono" style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 800 }}>{TJ.won(bal)}</td>
+                      <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 800 }}>{TJ.won(bal)}</td>
                     </tr>
                   );
                 })()}

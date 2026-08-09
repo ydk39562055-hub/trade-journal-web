@@ -292,7 +292,6 @@ function App() {
   /* 내 PC 파일에 자동 저장 — 파일을 한 번 정해두면 하루 한 번 조용히 덮어쓴다.
      OneDrive 폴더에 두면 PC가 고장나도 클라우드에 남는다. */
   const [localBk, setLocalBk] = useState({ state: 'none', name: '' });
-  const localDoneRef = useRef(false);
   const [deleted, setDeleted] = useState(() => {   // 180일 지난 삭제기록(무덤)은 정리 — 무한 증식 방지
     try {
       const raw = JSON.parse(localStorage.getItem('tj_deleted_v1') || '{}');
@@ -391,29 +390,44 @@ function App() {
     if (!window.TJLocalBackup) return;
     TJLocalBackup.status().then(setLocalBk).catch(() => {});
   }, []);
+  /* ★ 2026-08-09 사용자 요청: "뭐 등록하거나 수정하면 바로 내 PC에 자동 저장".
+     하루 한 번이 아니라 **바뀔 때마다** 저장한다. 다만 글자를 칠 때마다 파일을 쓰면
+     디스크를 계속 두드리므로 1.5초 쉬면 그때 한 번 쓴다(마지막 입력 기준).
+     내용이 그대로면 건너뛴다. */
+  const lastSavedRef = useRef('');
+  const saveTimerRef = useRef();
+  const [bkAt, setBkAt] = useState('');            // 마지막으로 저장한 시각(화면 표시용)
+
   useEffect(() => {
-    if (!window.TJLocalBackup || localDoneRef.current) return;
-    if (localBk.state !== 'granted') return;
+    if (!window.TJLocalBackup || localBk.state !== 'granted') return;
     if (!entries.length && !assets.length && !holdings.length) return;
-    if (localStorage.getItem('tj_local_bk_day') === todayStr()) return;   // 하루 한 번
-    localDoneRef.current = true;
-    TJLocalBackup.save(gatherBlob())
-      .then(okv => { if (okv) { safeSet('tj_local_bk_day', todayStr()); setLastBackup(todayStr()); safeSet('tj_last_backup', todayStr()); } })
-      .catch(() => { localDoneRef.current = false; });
-  }, [localBk.state, entries.length, assets.length, holdings.length]);   // eslint-disable-line react-hooks/exhaustive-deps
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const blob = gatherBlob();
+      const sig = JSON.stringify(blob).length + ':' + entries.length + ':' + assets.length + ':' + holdings.length;
+      if (sig === lastSavedRef.current) return;     // 바뀐 게 없으면 안 쓴다
+      TJLocalBackup.save(blob).then(okv => {
+        if (!okv) { setLocalBk(p => ({ ...p, state: 'prompt' })); return; }   // 권한 끊김 → 배너로 알림
+        lastSavedRef.current = sig;
+        setBkAt(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
+        safeSet('tj_last_backup', todayStr()); setLastBackup(todayStr());
+      }).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(saveTimerRef.current);
+  }, [localBk.state, entries, settings, principles, memos, diary, holdings, assets, deleted]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const pickLocalBackup = async () => {
     try {
       const name = await TJLocalBackup.choose();
       await TJLocalBackup.save(gatherBlob());
-      safeSet('tj_local_bk_day', todayStr()); safeSet('tj_last_backup', todayStr()); setLastBackup(todayStr());
+      safeSet('tj_last_backup', todayStr()); setLastBackup(todayStr());
       setLocalBk({ state: 'granted', name });
       doFlash('내 PC 자동 백업 켜짐 ✓');
     } catch (e) { if (e && e.name !== 'AbortError') doFlash('백업 파일을 못 정했어요'); }
   };
   const regrantLocal = async () => {
     const okv = await TJLocalBackup.regrant();
-    if (okv) { setLocalBk(p => ({ ...p, state: 'granted' })); localDoneRef.current = false; doFlash('다시 이어졌어요 ✓'); }
+    if (okv) { setLocalBk(p => ({ ...p, state: 'granted' })); lastSavedRef.current = ''; doFlash('다시 이어졌어요 ✓'); }
   };
 
   useEffect(() => {
@@ -1236,6 +1250,10 @@ function App() {
             )}
             {!wide && <button className="btn-ghost btn-sm" onClick={() => setModal({ type: 'holdings' })} style={{ padding: '6px 10px', fontSize: 12 }}>보유</button>}
             {!wide && <button className="btn-ghost btn-sm" onClick={() => setModal({ type: 'menu' })} style={{ padding: '6px 10px', fontSize: 12 }}>더보기</button>}
+            {localBk.state === 'granted' && bkAt && (
+              <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontWeight: 600, whiteSpace: 'nowrap' }}
+                title={'내 PC 파일(' + localBk.name + ')에 자동 저장됩니다'}>💾 {bkAt} 저장</span>
+            )}
             {wide && <button className="btn" onClick={() => setModal({ type: 'editor', entry: null })} style={{ padding: '8px 14px', fontSize: 12.5 }}>＋ 새 일지</button>}
           </div>
           {/* 계좌 탭 — 모든 숫자의 전제라 최상단 고정 (일기는 계좌와 무관 · 넓은 화면은 좌측 내비가 대신함) */}
