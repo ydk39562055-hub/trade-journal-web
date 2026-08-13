@@ -1,5 +1,28 @@
 /* 거래일지 — 홈 HERO (대시보드 / 레저 / 포커스) + 루틴 카드 */
-const { useState: useStateH } = React;
+const { useState: useStateH, useRef: useRefH, useEffect: useEffectH, useLayoutEffect: useLayoutEffectH } = React;
+
+/* 카드가 "자기 폭"을 재서 알려준다.
+   ⚠ window.matchMedia 로 화면 폭을 보면 안 된다 — 넓은 화면 홈에서는 카드가
+   320px 짜리 오른쪽 좁은 칸에 들어가는데, 화면만 보고 '넓다'고 판단하면
+   달력을 억지로 좌우로 나눠 칸이 16px 로 찌그러진다(2026-08-13 회고 달력 깨짐). */
+function useBoxWidth() {
+  const ref = useRefH(null);
+  const [w, setW] = useStateH(0);
+  useLayoutEffectH(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setW(el.getBoundingClientRect().width);
+    read();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', read);
+      return () => window.removeEventListener('resize', read);
+    }
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w];
+}
 
 const usdH = n => TJ.money(n);   // 통화 기호는 전역 토글($/₩)을 따름
 const fnumH = n => (n === Infinity ? '∞' : Math.round(n * 100) / 100);
@@ -267,7 +290,9 @@ function CalendarMemoCard({ memo }) {
   const selMemos = byDate[sel] || [];
   const submit = () => { const t = text.trim(); if (!t) return; addOn(sel, t); setText(''); };
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
-  const wide = window.matchMedia('(min-width:760px)').matches;
+  // 화면 폭이 아니라 이 카드 자신의 폭으로 판단한다(좁은 칸에 들어가도 안 깨지게).
+  const [boxRef, boxW] = useBoxWidth();
+  const wide = boxW >= 520;
 
   const calendar = (
     <div>
@@ -311,7 +336,7 @@ function CalendarMemoCard({ memo }) {
           : selMemos.map(m => (
             <div key={m.id} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600, flex: 1 }}>{(m.at || '').slice(11)}</span>
+                <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600, flex: 1 }}>{(m.at || '').slice(11, 16)}</span>
                 <button onClick={() => remove(m.id)} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)' }}
                   onMouseEnter={e => { e.currentTarget.style.color = 'var(--loss)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--ink-4)'; }}>삭제</button>
               </div>
@@ -359,7 +384,7 @@ function CalendarMemoCard({ memo }) {
   );
 
   return (
-    <div className="card" style={{ padding: open ? 18 : '14px 18px' }}>
+    <div className="card" ref={boxRef} style={{ padding: open ? 18 : '14px 18px' }}>
       <button onClick={toggleOpen} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', marginBottom: open ? 14 : 0 }}>
         <div style={{ flex: 1, fontSize: 14.5, fontWeight: 700 }}>회고 메모 <span style={{ color: 'var(--ink-4)', fontWeight: 500, fontSize: 12.5 }}>실수 복기 · 전체를 쭉 읽거나 날짜별로</span></div>
         {items.length > 0 && <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 700 }}>{items.length}개</span>}
