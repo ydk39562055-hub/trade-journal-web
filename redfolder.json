@@ -1,65 +1,107 @@
 [
 {
-"title": "CPI m/m",
-"country": "AUD",
-"date": "2026-08-25T21:30:00-04:00",
-"forecast": "0.9%",
-"previous": "-0.1%"
+"title": "ISM Manufacturing PMI",
+"country": "USD",
+"date": "2026-09-01T10:00:00-04:00",
+"forecast": "55.2",
+"previous": "55.6"
 },
 {
-"title": "CPI y/y",
+"title": "GDP q/q",
 "country": "AUD",
-"date": "2026-08-25T21:30:00-04:00",
-"forecast": "3.3%",
-"previous": "3.8%"
-},
-{
-"title": "Trimmed Mean CPI m/m",
-"country": "AUD",
-"date": "2026-08-25T21:30:00-04:00",
-"forecast": "0.4%",
+"date": "2026-09-01T21:30:00-04:00",
+"forecast": "0.3%",
 "previous": "0.3%"
 },
 {
-"title": "Core PCE Price Index m/m",
+"title": "Official Cash Rate",
+"country": "NZD",
+"date": "2026-09-01T22:00:00-04:00",
+"forecast": "2.75%",
+"previous": "2.50%"
+},
+{
+"title": "RBNZ Monetary Policy Statement",
+"country": "NZD",
+"date": "2026-09-01T22:00:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "RBNZ Rate Statement",
+"country": "NZD",
+"date": "2026-09-01T22:00:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "RBNZ Press Conference",
+"country": "NZD",
+"date": "2026-09-01T23:00:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "BOC Rate Statement",
+"country": "CAD",
+"date": "2026-09-02T09:45:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "Overnight Rate",
+"country": "CAD",
+"date": "2026-09-02T09:45:00-04:00",
+"forecast": "2.25%",
+"previous": "2.25%"
+},
+{
+"title": "BOC Press Conference",
+"country": "CAD",
+"date": "2026-09-02T10:30:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "BOE Gov Bailey Speaks",
+"country": "GBP",
+"date": "2026-09-04T04:50:00-04:00",
+"forecast": "",
+"previous": ""
+},
+{
+"title": "Employment Change",
+"country": "CAD",
+"date": "2026-09-04T08:30:00-04:00",
+"forecast": "15.8K",
+"previous": "75.1K"
+},
+{
+"title": "Unemployment Rate",
+"country": "CAD",
+"date": "2026-09-04T08:30:00-04:00",
+"forecast": "6.4%",
+"previous": "6.4%"
+},
+{
+"title": "Average Hourly Earnings m/m",
 "country": "USD",
-"date": "2026-08-26T08:30:00-04:00",
-"forecast": "0.2%",
+"date": "2026-09-04T08:30:00-04:00",
+"forecast": "0.3%",
 "previous": "0.1%"
 },
 {
-"title": "Prelim GDP q/q",
+"title": "Non-Farm Employment Change",
 "country": "USD",
-"date": "2026-08-26T08:30:00-04:00",
-"forecast": "1.5%",
-"previous": "1.5%"
+"date": "2026-09-04T08:30:00-04:00",
+"forecast": "58K",
+"previous": "-23K"
 },
 {
-"title": "GDP m/m",
-"country": "CAD",
-"date": "2026-08-28T08:30:00-04:00",
-"forecast": "0.2%",
-"previous": "0.3%"
-},
-{
-"title": "Fed Chairman Warsh Speaks",
+"title": "Unemployment Rate",
 "country": "USD",
-"date": "2026-08-28T10:00:00-04:00",
-"forecast": "",
-"previous": ""
-},
-{
-"title": "Prelim Benchmark Payrolls Revision",
-"country": "USD",
-"date": "2026-08-28T10:00:00-04:00",
-"forecast": "",
-"previous": "-911K"
-},
-{
-"title": "Jackson Hole Symposium",
-"country": "All",
-"date": "2026-08-28T12:15:00-04:00",
-"forecast": "",
-"previous": ""
+"date": "2026-09-04T08:30:00-04:00",
+"forecast": "4.1%",
+"previous": "4.1%"
 }
 ]
