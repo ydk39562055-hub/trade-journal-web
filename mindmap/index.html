@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 폰에서 두 번 톡 하면 브라우저가 제멋대로 확대해 버려서, 우리가 만든 '두 번 톡 = 새 생각'과
+     싸운다. user-scalable=no 로 브라우저 확대는 끄고, 확대·축소는 두 손가락으로 우리가 처리한다. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>마인드맵 · 넓은 공부판</title>
+<style>
+  :root{
+    --bg:#faf8f4;
+    --grid:#e2ddd3;
+    --ink:#2c2a26;
+    --line:#b9b2a6;
+    --panel:#fffdf9;
+    --edge:#a9a294;
+    --bar-h:46px;
+    --top:calc(var(--bar-h) + env(safe-area-inset-top, 0px));
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:"Pretendard","맑은 고딕","Malgun Gothic",system-ui,sans-serif;
+    color:var(--ink); background:var(--bg); overflow:hidden;
+    -webkit-text-size-adjust:100%;
+    -webkit-tap-highlight-color:transparent;
+  }
+  @supports (height:100dvh){ html,body{height:100dvh} }
+
+  /* ── 위쪽 도구줄 ───────────────────────────── */
+  #bar{
+    position:fixed; inset:0 0 auto 0; height:var(--top); z-index:30;
+    padding-top:env(safe-area-inset-top, 0px);
+    display:flex; align-items:center; gap:6px; padding-left:10px; padding-right:10px;
+    background:rgba(255,253,249,.92); backdrop-filter:blur(6px);
+    border-bottom:1px solid #e6e0d5;
+  }
+  #title{
+    font-size:15px; font-weight:700; border:none; background:transparent;
+    padding:6px 8px; width:230px; color:var(--ink); border-radius:6px;
+    font-family:inherit;
+  }
+  #title:hover{background:#f1ece2}
+  #title:focus{outline:2px solid #cdbfa4; background:#fff}
+  .btn{
+    border:1px solid #ddd5c8; background:#fff; color:#4a453c;
+    padding:6px 10px; border-radius:7px; font-size:13px; cursor:pointer;
+    white-space:nowrap; font-family:inherit;
+  }
+  .btn:hover{background:#f5efe4}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.4; cursor:default}
+  .sep{width:1px;height:22px;background:#e2dbcf;margin:0 4px}
+  .spacer{flex:1}
+  #find{
+    border:1px solid #ddd5c8; border-radius:7px; padding:6px 9px; width:150px;
+    font-size:13px; font-family:inherit; background:#fff;
+  }
+  #zoomLbl{font-size:12px;color:#8a8377;width:44px;text-align:center}
+  #saveTag{font-size:12px;color:#a49b8b;min-width:70px;text-align:right}
+  #bMore{display:none}
+
+  /* ── 판(캔버스) ───────────────────────────── */
+  #canvas{
+    position:fixed; inset:var(--top) 0 0 0; overflow:hidden;
+    cursor:grab; touch-action:none;
+    background-image:
+      radial-gradient(circle, var(--grid) 1.2px, transparent 1.2px);
+  }
+  #canvas.panning{cursor:grabbing}
+  #svg{position:absolute; inset:0; width:100%; height:100%; pointer-events:none}
+  #layer{position:absolute; left:0; top:0; transform-origin:0 0}
+
+  /* ── 생각 상자 ───────────────────────────── */
+  .node{
+    position:absolute; min-height:38px;
+    background:var(--panel);
+    border:2px solid var(--c,#b9b2a6);
+    border-radius:10px;
+    box-shadow:0 1px 3px rgba(80,70,50,.10);
+    padding:8px 11px;
+    cursor:default;
+    touch-action:none;                    /* 상자를 끌 때 화면이 같이 스크롤되지 않게 */
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none;           /* 길게 눌러도 iOS 복사 메뉴가 안 뜨게 */
+  }
+  .node.root{
+    border-width:3px; border-radius:14px;
+    background:#fff;
+    box-shadow:0 2px 8px rgba(80,70,50,.14);
+  }
+  .node.sel{box-shadow:0 0 0 3px rgba(120,150,220,.45), 0 2px 8px rgba(80,70,50,.14)}
+  .node.hit{box-shadow:0 0 0 3px rgba(90,175,120,.55)}
+  .node.found{animation:blink 1.1s ease 2}
+  .node.editing{border-style:dashed; touch-action:auto}
+  .node.editing .txt{-webkit-user-select:text; user-select:text}
+  @keyframes blink{0%,100%{background:var(--panel)}50%{background:#fff3bf}}
+  .txt{
+    font-size:15px; line-height:1.55; white-space:pre-wrap; word-break:break-word;
+    outline:none; min-width:20px; min-height:20px; cursor:text;
+  }
+  .node.root .txt{font-size:17px; font-weight:700}
+  .grip{
+    position:absolute; right:-9px; top:50%; transform:translateY(-50%);
+    width:16px; height:16px; border-radius:50%;
+    background:#fff; border:2px solid var(--c,#b9b2a6);
+    cursor:crosshair; opacity:0; transition:opacity .12s;
+    touch-action:none;
+  }
+  .node:hover .grip,.node.sel .grip{opacity:1}
+  .grip:hover{background:var(--c,#b9b2a6)}
+  .rsz{
+    position:absolute; right:-3px; bottom:-3px; width:14px; height:14px;
+    cursor:ew-resize; opacity:0; touch-action:none;
+  }
+  .rsz::after{
+    content:""; position:absolute; right:3px; bottom:3px; width:7px; height:7px;
+    border-right:2px solid #b0a898; border-bottom:2px solid #b0a898;
+  }
+  .node:hover .rsz{opacity:1}
+  /* 손가락으로 쓰는 화면 — 손잡이는 '골랐을 때 항상 보이게' + 누를 자리를 크게 */
+  @media (pointer:coarse){
+    .grip{width:26px; height:26px; right:-14px; border-width:2.5px}
+    .rsz{width:28px; height:28px; right:-8px; bottom:-8px}
+    .rsz::after{right:8px; bottom:8px; width:9px; height:9px}
+    .node.sel .rsz{opacity:1}
+    .txt{font-size:16px}                 /* iOS 는 16px 미만이면 글 쓸 때 화면을 확대해 버린다 */
+    .node.root .txt{font-size:18px}
+  }
+
+  /* ── 아래쪽 안내 ───────────────────────────── */
+  #hint{
+    position:fixed; left:12px; bottom:12px; z-index:20;
+    background:rgba(255,253,249,.94); border:1px solid #e6e0d5; border-radius:9px;
+    padding:9px 12px; font-size:12.5px; color:#6d675c; line-height:1.75;
+    max-width:min(560px,92vw); box-shadow:0 2px 10px rgba(80,70,50,.08);
+  }
+  #hint b{color:#3d382f}
+  kbd{
+    background:#f2ece1; border:1px solid #ddd5c8; border-bottom-width:2px;
+    border-radius:5px; padding:1px 5px; font-size:11.5px; font-family:inherit; color:#4a453c;
+  }
+  #hintToggle{
+    position:fixed; left:12px; bottom:12px; z-index:21; display:none;
+  }
+  #help{
+    position:fixed; inset:0; z-index:50; background:rgba(45,40,32,.45);
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  #help.on{display:flex}
+  #helpBox{
+    background:#fffdf9; border-radius:14px; padding:26px 30px; max-width:640px;
+    max-height:82vh; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,.3); line-height:1.85;
+    font-size:14px; -webkit-overflow-scrolling:touch;
+  }
+  #helpBox h2{margin:0 0 14px; font-size:19px}
+  #helpBox h3{margin:20px 0 6px; font-size:15px; color:#7a6f5c}
+  #helpBox table{border-collapse:collapse; width:100%}
+  #helpBox td{padding:3px 8px 3px 0; vertical-align:top}
+  #helpBox td:first-child{white-space:nowrap; width:150px}
+
+  /* ── 폰: 아래쪽 손 닿는 곳에 두는 조작줄 ─────────────
+     키보드 단축키(Tab·Enter·Del·1~6)가 폰엔 없으니, 같은 일을 하는 단추를
+     엄지가 닿는 화면 아래에 둔다. 고른 게 있냐 없냐 / 글 쓰는 중이냐에 따라 바뀐다. */
+  #dock{
+    position:fixed; left:0; right:0; bottom:0; z-index:28; display:none;
+    padding:8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    gap:6px; align-items:center;
+    background:rgba(255,253,249,.95); backdrop-filter:blur(6px);
+    border-top:1px solid #e6e0d5;
+  }
+  .dockrow{display:none; flex:1; gap:6px; min-width:0}
+  .dockrow.on{display:flex}
+  .dbtn{
+    flex:1; min-width:0; border:1px solid #ddd5c8; background:#fff; color:#4a453c;
+    padding:11px 4px; border-radius:9px; font-size:13.5px; font-family:inherit;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;
+  }
+  .dbtn:active{background:#f5efe4; transform:translateY(1px)}
+  .dbtn.primary{background:#3d382f; color:#fff; border-color:#3d382f}
+  .dbtn.warn{color:#a8503f}
+  /* 360px 짜리 폰에서도 글자가 잘리지 않게 — 짧은 단추는 폭을 고정하고 나머지가 나눠 갖는다 */
+  .dbtn[data-act="color"]{flex:0 0 40px}
+  .dbtn[data-act="del"]{flex:0 0 56px}
+  .dbtn[data-act="write"]{flex:1.25}
+  #colorPop{
+    position:fixed; left:0; right:0; z-index:29; display:none;
+    justify-content:center; gap:10px; padding:10px;
+    background:rgba(255,253,249,.97); border-top:1px solid #e6e0d5;
+  }
+  #colorPop.on{display:flex}
+  .swatch{width:34px;height:34px;border-radius:50%;border:2px solid #fff;
+          box-shadow:0 0 0 1px #ddd5c8; cursor:pointer}
+  /* 첫 방문 안내 쪽지 */
+  #tip{
+    position:fixed; left:10px; right:10px; z-index:27; display:none;
+    background:rgba(45,40,32,.92); color:#fdfbf6; border-radius:11px;
+    padding:11px 14px; font-size:13px; line-height:1.7;
+    box-shadow:0 6px 20px rgba(0,0,0,.2);
+  }
+  #tip.on{display:block}
+
+  /* ── 좁은 화면: 도구줄을 접고 ⋯ 안으로 넣는다 ───────── */
+  @media (max-width:760px){
+    .wide-only{display:none !important}
+    #bMore{display:inline-block}
+    #title{width:auto; flex:1; min-width:0; font-size:14.5px}
+    #dock{display:flex}
+    #hint{display:none !important}
+    #hintToggle{display:none !important}
+    #helpBox{padding:20px 18px; font-size:14.5px; max-height:78vh; border-radius:12px}
+    #help{padding:12px}
+    /* 좁은 화면에선 두 칸짜리 표가 낱말 단위로 쪼개져 읽기 나쁘다 → 위아래로 쌓는다 */
+    #helpBox table,#helpBox tbody,#helpBox tr,#helpBox td{display:block}
+    #helpBox tr{padding:7px 0; border-bottom:1px solid #f1ece2}
+    #helpBox td{padding:0; width:auto; white-space:normal}
+    #helpBox td:first-child{font-weight:700; color:#5c5346; width:auto; white-space:normal}
+  }
+
+  /* ⋯ 를 누르면 올라오는 서랍 */
+  #sheet{
+    position:fixed; inset:0; z-index:45; background:rgba(45,40,32,.4);
+    display:none; align-items:flex-end;
+  }
+  #sheet.on{display:flex}
+  #sheetBox{
+    width:100%; background:#fffdf9; border-radius:16px 16px 0 0;
+    padding:14px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    box-shadow:0 -8px 30px rgba(0,0,0,.18);
+    display:grid; grid-template-columns:1fr 1fr; gap:8px;
+  }
+  #sheetBox .full{grid-column:1 / -1}
+  #sheetBox .sbtn{
+    border:1px solid #ddd5c8; background:#fff; color:#4a453c; font-family:inherit;
+    padding:13px 10px; border-radius:10px; font-size:14px; cursor:pointer; text-align:center;
+  }
+  #sheetBox .sbtn:active{background:#f5efe4}
+  #find2{
+    border:1px solid #ddd5c8; border-radius:10px; padding:12px 12px; width:100%;
+    font-size:16px; font-family:inherit; background:#fff;
+  }
+  #sheetTag{font-size:12.5px; color:#a49b8b; text-align:center; padding-top:2px}
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <input id="title" value="새 마인드맵" spellcheck="false">
+  <span class="sep wide-only"></span>
+  <button class="btn wide-only" id="bAdd">+ 새 생각</button>
+  <button class="btn wide-only" id="bTidy">자동 정리</button>
+  <button class="btn wide-only" id="bFit">전체 보기</button>
+  <span class="sep wide-only"></span>
+  <button class="btn wide-only" id="bZo">−</button>
+  <span id="zoomLbl" class="wide-only">100%</span>
+  <button class="btn wide-only" id="bZi">+</button>
+  <span class="spacer"></span>
+  <input id="find" class="wide-only" placeholder="찾기 (Enter)" spellcheck="false">
+  <span class="sep wide-only"></span>
+  <button class="btn" id="bUndo" title="되돌리기">↶</button>
+  <button class="btn wide-only" id="bRedo" title="다시하기">↷</button>
+  <button class="btn wide-only" id="bSave">파일로 저장</button>
+  <button class="btn wide-only" id="bOpen">열기</button>
+  <button class="btn wide-only" id="bText">글로 복사</button>
+  <button class="btn wide-only" id="bNew">새 지도</button>
+  <button class="btn wide-only" id="bHelp">?</button>
+  <button class="btn" id="bMore" title="더보기">⋯</button>
+  <span id="saveTag" class="wide-only"></span>
+</div>
+
+<div id="canvas">
+  <svg id="svg"><g id="edges"></g></svg>
+  <div id="layer"></div>
+</div>
+
+<!-- 폰 조작줄 -->
+<div id="colorPop"></div>
+<div id="dock">
+  <div class="dockrow on" data-mode="none">
+    <button class="dbtn" data-act="add">＋ 새 생각</button>
+    <button class="dbtn" data-act="tidy">자동 정리</button>
+    <button class="dbtn" data-act="fit">전체 보기</button>
+  </div>
+  <div class="dockrow" data-mode="sel">
+    <button class="dbtn" data-act="child">+ 가지</button>
+    <button class="dbtn" data-act="sib">+ 아래</button>
+    <button class="dbtn primary" data-act="write">글쓰기</button>
+    <button class="dbtn" data-act="color">색</button>
+    <button class="dbtn warn" data-act="del">지우기</button>
+  </div>
+  <div class="dockrow" data-mode="edit">
+    <button class="dbtn primary" data-act="done">✓ 완료</button>
+    <button class="dbtn" data-act="childNext">+ 가지</button>
+    <button class="dbtn" data-act="sibNext">+ 아래</button>
+  </div>
+</div>
+
+<div id="tip"></div>
+
+<!-- ⋯ 서랍 -->
+<div id="sheet"><div id="sheetBox">
+  <div class="full"><input id="find2" placeholder="찾기 — 적고 확인" spellcheck="false"></div>
+  <button class="sbtn" data-go="bTidy">자동 정리</button>
+  <button class="sbtn" data-go="bFit">전체 보기</button>
+  <button class="sbtn" data-go="bSave">파일로 저장</button>
+  <button class="sbtn" data-go="bOpen">파일 열기</button>
+  <button class="sbtn" data-go="bText">글로 복사</button>
+  <button class="sbtn" data-go="bNew">새 지도</button>
+  <button class="sbtn full" data-go="bHelp">사용법 보기</button>
+  <div class="full" id="sheetTag"></div>
+</div></div>
+
+<div id="hint">
+  <b>빈 곳 두 번 누르기</b> = 새 생각 &nbsp;·&nbsp;
+  <b>상자 두 번 누르기</b> = 글쓰기 &nbsp;·&nbsp;
+  <b>오른쪽 동그라미를 끌면</b> = 선 그어 옆으로 확장<br>
+  <kbd>Tab</kbd> 옆가지 &nbsp; <kbd>Enter</kbd> 같은 줄 아래 &nbsp; <kbd>Space</kbd> 글쓰기 &nbsp;
+  <kbd>Del</kbd> 지우기 &nbsp; <kbd>Ctrl</kbd>+<kbd>Z</kbd> 되돌리기 &nbsp;
+  빈 곳 끌기=이동 &nbsp; <kbd>Ctrl</kbd>+휠=확대
+  <button class="btn" id="hintX" style="padding:1px 7px;margin-left:6px">닫기</button>
+</div>
+<button class="btn" id="hintToggle">도움말 보기</button>
+
+<div id="help"><div id="helpBox">
+  <h2>넓은 공부판 사용법</h2>
+  <p>가운데에 큰 주제를 하나 두고, 오른쪽으로 계속 가지를 뻗으며 공부한 내용을 적어 나가는 판입니다.
+     화면 밖으로 얼마든지 넓힐 수 있고, 적은 내용은 <b>이 기기에 자동으로 저장</b>됩니다.</p>
+
+  <h3>폰·태블릿에서 (손가락)</h3>
+  <table>
+    <tr><td>빈 바탕 <b>두 번 톡</b></td><td>그 자리에 새 생각 상자 만들기</td></tr>
+    <tr><td>상자 <b>두 번 톡</b></td><td>글쓰기 시작</td></tr>
+    <tr><td>상자 한 번 톡</td><td>고르기 — 화면 <b>아래 단추줄</b>이 그 상자용으로 바뀝니다</td></tr>
+    <tr><td>아래 <b>＋ 가지</b></td><td>고른 상자의 오른쪽으로 가지 뻗기</td></tr>
+    <tr><td>아래 <b>＋ 아래</b></td><td>같은 줄기의 아래에 형제 상자 만들기</td></tr>
+    <tr><td>손가락 <b>두 개</b></td><td>벌리면 확대 · 오므리면 축소 · 같이 밀면 판 이동</td></tr>
+    <tr><td>빈 바탕 끌기</td><td>판 옮기기</td></tr>
+    <tr><td>상자 끌기</td><td>가지 전체가 함께 따라옴</td></tr>
+    <tr><td>상자를 고르면 나오는<br>오른쪽 동그라미 끌기</td><td>빈 곳에 놓으면 새 가지, 다른 상자에 놓으면 그 상자를 가지로 붙이기</td></tr>
+    <tr><td>오른쪽 아래 모서리 끌기</td><td>상자 너비 늘리기</td></tr>
+    <tr><td>위쪽 <b>⋯</b></td><td>찾기 · 정리 · 저장 · 열기 · 새 지도</td></tr>
+  </table>
+
+  <h3>생각 만들기 (컴퓨터)</h3>
+  <table>
+    <tr><td>빈 바탕 두 번 누르기</td><td>그 자리에 새 생각 상자 만들기</td></tr>
+    <tr><td><kbd>Tab</kbd></td><td>고른 상자의 <b>오른쪽</b>에 가지 뻗기 (선이 저절로 그어짐)</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>같은 줄기의 <b>아래</b>에 형제 상자 만들기</td></tr>
+    <tr><td>오른쪽 동그라미 끌기</td><td>빈 곳에 놓으면 새 가지, 다른 상자에 놓으면 그 상자를 가지로 붙이기</td></tr>
+    <tr><td><kbd>Shift</kbd>+동그라미 끌기</td><td>줄기와 상관없이 <b>참고선</b>(점선) 잇기</td></tr>
+  </table>
+
+  <h3>글쓰기</h3>
+  <table>
+    <tr><td>상자 두 번 누르기 / <kbd>Space</kbd></td><td>글쓰기 시작</td></tr>
+    <tr><td><kbd>Enter</kbd> (글쓰는 중)</td><td>줄 바꾸기 — 길게 써도 됩니다</td></tr>
+    <tr><td><kbd>Esc</kbd> 또는 바깥 누르기</td><td>글쓰기 끝 (폰은 <b>✓ 다 썼어요</b>)</td></tr>
+    <tr><td>오른쪽 아래 모서리 끌기</td><td>상자 너비 늘리기 (글이 길 때)</td></tr>
+  </table>
+
+  <h3>옮기고 지우기</h3>
+  <table>
+    <tr><td>상자 끌기</td><td>가지 전체가 함께 따라옴</td></tr>
+    <tr><td><kbd>Alt</kbd>+상자 끌기</td><td>그 상자 하나만 옮기기</td></tr>
+    <tr><td>화살표 <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></td><td>이웃 상자로 골라 옮겨가기</td></tr>
+    <tr><td><kbd>Delete</kbd></td><td>고른 상자와 그 아래 가지 모두 지우기</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>되돌리기 / 다시하기 (폰은 위쪽 ↶)</td></tr>
+    <tr><td><kbd>1</kbd>~<kbd>6</kbd></td><td>고른 가지 색 바꾸기 (폰은 아래 <b>색</b>)</td></tr>
+  </table>
+
+  <h3>화면 다루기</h3>
+  <table>
+    <tr><td>빈 바탕 끌기</td><td>판 옮기기</td></tr>
+    <tr><td>휠</td><td>위아래로 옮기기 (<kbd>Shift</kbd>+휠 = 좌우)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+휠 / 손가락 두 개</td><td>확대·축소</td></tr>
+    <tr><td>자동 정리</td><td>흐트러진 가지를 왼쪽→오른쪽으로 가지런히 배치</td></tr>
+    <tr><td>전체 보기</td><td>넓게 퍼진 내용을 한 화면에 모아 보기</td></tr>
+  </table>
+
+  <h3>저장</h3>
+  <p>적는 즉시 이 기기(브라우저)에 자동 저장됩니다. 다른 기기로 옮기거나 백업하려면
+     <b>파일로 저장</b>을 눌러 파일을 받아 두었다가 <b>열기</b>로 불러오면 됩니다.
+     <b>글로 복사</b>는 지도 전체를 들여쓴 글머리표 글로 바꿔 복사해 줍니다(복습 노트에 붙여넣기용).</p>
+  <p style="color:#8a7f6c">※ 폰과 컴퓨터는 저장 공간이 서로 다릅니다. 오가며 쓰려면 <b>파일로 저장 → 열기</b>로 옮겨 주세요.</p>
+  <p style="text-align:right;margin-top:18px"><button class="btn" id="helpX">닫기</button></p>
+</div></div>
+
+<input type="file" id="file" accept=".json,application/json" style="display:none">
+
+<script>
+"use strict";
+
+/* ══════════ 밑바탕 ══════════ */
+const PALETTE = ["#c2703f","#3f7fa8","#5b8c4a","#8a5fa8","#b8963f","#a84f6b"];
+const GAP_X = 90;      // 부모와 자식 사이 가로 간격
+const GAP_Y = 22;      // 형제 사이 세로 간격
+const DEF_W = 210;
+
+const $ = s => document.querySelector(s);
+const canvas = $("#canvas"), layer = $("#layer"), svg = $("#svg"), edges = $("#edges");
+
+/* 손가락으로 쓰는 기기인가 — 마우스와 처리 방식을 갈라야 하는 곳이 몇 군데 있다 */
+const COARSE = matchMedia("(pointer: coarse)").matches;
+const narrow = () => innerWidth <= 760;
+
+let state = null;                 // {title, nodes:[], links:[], view:{x,y,k}, seq}
+let els = new Map();              // id -> DOM
+let selId = null;
+let editing = false;
+let undoStack = [], redoStack = [];
+
+/* ══════════ 상태 만들기 / 불러오기 ══════════ */
+function blank(){
+  const s = {title:"새 마인드맵", nodes:[], links:[], view:{x:0,y:0,k:1}, seq:1};
+  s.nodes.push({id:"n0", text:"가운데 주제", x:0, y:0, w:DEF_W, parent:null, color:PALETTE[0]});
+  s.seq = 1;
+  return s;
+}
+function load(){
+  try{
+    const raw = localStorage.getItem("mindmap.v1");
+    if(raw){ const s = JSON.parse(raw); if(s && Array.isArray(s.nodes)) return s; }
+  }catch(e){}
+  return blank();
+}
+let saveTimer = null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 400);
+}
+function saveNow(){
+  clearTimeout(saveTimer);
+  try{
+    localStorage.setItem("mindmap.v1", JSON.stringify(state));
+    const t = new Date();
+    setTag("저장됨 " + String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"));
+  }catch(e){ setTag("저장 실패"); }
+}
+function setTag(s){ $("#saveTag").textContent = s; $("#sheetTag").textContent = s; }
+
+/* ══════════ 되돌리기 ══════════ */
+function snap(){
+  undoStack.push(JSON.stringify({nodes:state.nodes, links:state.links, title:state.title}));
+  if(undoStack.length > 80) undoStack.shift();
+  redoStack.length = 0;
+  syncUndoBtns();
+}
+function undo(){
+  if(!undoStack.length) return;
+  redoStack.push(JSON.stringify({nodes:state.nodes, links:state.links, title:state.title}));
+  apply(JSON.parse(undoStack.pop()));
+}
+function redo(){
+  if(!redoStack.length) return;
+  undoStack.push(JSON.stringify({nodes:state.nodes, links:state.links, title:state.title}));
+  apply(JSON.parse(redoStack.pop()));
+}
+function apply(o){
+  state.nodes = o.nodes; state.links = o.links; state.title = o.title;
+  $("#title").value = state.title;
+  if(!state.nodes.some(n=>n.id===selId)) selId = null;
+  render(); save(); syncUndoBtns();
+}
+function syncUndoBtns(){
+  $("#bUndo").disabled = !undoStack.length;
+  $("#bRedo").disabled = !redoStack.length;
+}
+
+/* ══════════ 조회 도우미 ══════════ */
+const byId = id => state.nodes.find(n=>n.id===id);
+const kids = id => state.nodes.filter(n=>n.parent===id);
+function descendants(id, out=[]){
+  for(const c of kids(id)){ out.push(c); descendants(c.id, out); }
+  return out;
+}
+function isAncestor(a, b){            // a 가 b 의 윗줄기인가
+  let cur = byId(b);
+  while(cur && cur.parent){ if(cur.parent===a) return true; cur = byId(cur.parent); }
+  return false;
+}
+function size(n){
+  const el = els.get(n.id);
+  return {w: n.w, h: el ? el.offsetHeight : 40};
+}
+
+/* ══════════ 생각 만들기 ══════════ */
+function newNode(o){
+  const n = Object.assign({
+    id: "n" + (state.seq++), text:"", x:0, y:0, w:DEF_W, parent:null,
+    color: PALETTE[state.nodes.filter(m=>!m.parent).length % PALETTE.length]
+  }, o);
+  state.nodes.push(n);
+  return n;
+}
+function addChild(pid){
+  const p = byId(pid); if(!p) return null;
+  snap();
+  const ps = size(p);
+  const sib = kids(pid);
+  let y = p.y;
+  if(sib.length){
+    const last = sib.reduce((a,b)=> (b.y > a.y ? b : a));
+    y = last.y + size(last).h + GAP_Y;
+  }
+  const n = newNode({parent:pid, x:p.x + ps.w + GAP_X, y, color:p.color, w:DEF_W});
+  avoidOverlap(n);
+  render(); select(n.id); edit(n.id); save();
+  return n;
+}
+function addSibling(id){
+  const n = byId(id); if(!n) return null;
+  if(!n.parent){                     // 뿌리면 아래에 새 뿌리
+    snap();
+    const m = newNode({x:n.x, y:n.y + size(n).h + GAP_Y*2, w:n.w});
+    avoidOverlap(m); render(); select(m.id); edit(m.id); save(); return m;
+  }
+  snap();
+  const m = newNode({parent:n.parent, x:n.x, y:n.y + size(n).h + GAP_Y, color:n.color, w:n.w});
+  // 아래 형제들을 밀어 내림
+  const push = size(m).h + GAP_Y;
+  for(const s of kids(n.parent)){
+    if(s.id!==m.id && s.y > n.y) moveTree(s, 0, push);
+  }
+  avoidOverlap(m);
+  render(); select(m.id); edit(m.id); save();
+  return m;
+}
+function moveTree(n, dx, dy){
+  n.x += dx; n.y += dy;
+  for(const c of descendants(n.id)){ c.x += dx; c.y += dy; }
+}
+function avoidOverlap(n){
+  let guard = 0;
+  while(guard++ < 400){
+    const a = rect(n);
+    const hit = state.nodes.find(m => m.id!==n.id && overlap(a, rect(m)));
+    if(!hit) break;
+    n.y = hit.y + size(hit).h + GAP_Y;
+  }
+}
+function rect(n){ const s = size(n); return {x:n.x, y:n.y, w:s.w, h:s.h}; }
+function overlap(a,b){
+  return a.x < b.x+b.w+16 && a.x+a.w+16 > b.x && a.y < b.y+b.h+8 && a.y+a.h+8 > b.y;
+}
+function remove(id){
+  const n = byId(id); if(!n) return;
+  snap();
+  const gone = new Set([id, ...descendants(id).map(d=>d.id)]);
+  state.nodes = state.nodes.filter(m=>!gone.has(m.id));
+  state.links = state.links.filter(l=>!gone.has(l.a) && !gone.has(l.b));
+  if(gone.has(selId)) selId = n.parent || (state.nodes[0] && state.nodes[0].id) || null;
+  render(); select(selId); save();
+}
+
+/* ══════════ 그리기 ══════════ */
+function render(){
+  const seen = new Set();
+  for(const n of state.nodes){
+    let el = els.get(n.id);
+    if(!el){ el = makeEl(n); layer.appendChild(el); els.set(n.id, el); }
+    el.style.left = n.x + "px";
+    el.style.top  = n.y + "px";
+    el.style.width = n.w + "px";
+    el.style.setProperty("--c", n.color);
+    const t = el.querySelector(".txt");
+    if(document.activeElement !== t && t.textContent !== n.text) t.textContent = n.text;
+    el.classList.toggle("sel", n.id === selId);
+    el.classList.toggle("root", !n.parent);
+    seen.add(n.id);
+  }
+  for(const [id, el] of [...els]){ if(!seen.has(id)){ el.remove(); els.delete(id); } }
+  applyView();
+  drawEdges();
+}
+
+function makeEl(n){
+  const el = document.createElement("div");
+  el.className = "node";
+  el.dataset.id = n.id;
+  el.innerHTML = '<div class="txt"></div><div class="grip"></div><div class="rsz"></div>';
+  const txt = el.querySelector(".txt");
+
+  el.addEventListener("pointerdown", e=>{
+    if(e.target.classList.contains("grip") || e.target.classList.contains("rsz")) return;
+    if(el.classList.contains("editing")) return;
+    e.stopPropagation();
+    // 손가락은 dblclick 이 안 오거나 늦게 온다 → 우리가 '두 번 톡'을 직접 센다
+    if(isDoubleTap(e, n.id)){ select(n.id); edit(n.id); return; }
+    select(n.id);
+    startDrag(e, n, e.altKey);
+  });
+  el.addEventListener("dblclick", e=>{ e.stopPropagation(); edit(n.id); });
+  el.querySelector(".grip").addEventListener("pointerdown", e=>{
+    e.stopPropagation(); startLink(e, n, e.shiftKey);
+  });
+  el.querySelector(".rsz").addEventListener("pointerdown", e=>{
+    e.stopPropagation(); startResize(e, n);
+  });
+  txt.addEventListener("blur", ()=>{
+    const v = txt.textContent.replace(/ /g," ");
+    if(v !== n.text){ n.text = v; save(); }
+    el.classList.remove("editing");
+    txt.contentEditable = "false";
+    editing = false;
+    setDock();
+    render();
+  });
+  txt.addEventListener("input", ()=>{ n.text = txt.textContent; drawEdges(); save(); });
+  txt.addEventListener("keydown", e=>{
+    if(e.key === "Escape"){ e.preventDefault(); txt.blur(); canvas.focus(); }
+    e.stopPropagation();          // 글 쓰는 동안엔 단축키를 막는다
+  });
+  return el;
+}
+
+function edit(id){
+  const el = els.get(id); if(!el) return;
+  const txt = el.querySelector(".txt");
+  el.classList.add("editing");
+  editing = true;
+  txt.contentEditable = "true";
+  txt.focus();
+  const r = document.createRange();
+  r.selectNodeContents(txt); r.collapse(false);
+  const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  setDock();
+  // 폰은 자판이 화면 아래 절반을 덮는다 → 쓰는 상자를 위쪽으로 끌어올려 준다
+  if(COARSE) setTimeout(()=>revealForKeyboard(byId(id)), 80);
+}
+function stopEdit(){
+  const el = selId && els.get(selId);
+  const t = el && el.querySelector(".txt");
+  if(t) t.blur();
+  else if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+function revealForKeyboard(n){
+  if(!n) return;
+  const vv = window.visualViewport;
+  const vh = vv ? vv.height : innerHeight;
+  const r = canvas.getBoundingClientRect(), v = state.view, s = size(n);
+  v.x = r.width/2 - (n.x + s.w/2)*v.k;
+  v.y = Math.max(20, (vh - r.top) * 0.26) - n.y*v.k;
+  applyView();
+}
+function select(id){
+  selId = id;
+  for(const [k,el] of els) el.classList.toggle("sel", k===id);
+  hideColorPop();
+  setDock();
+}
+
+function drawEdges(){
+  const parts = [];
+  for(const n of state.nodes){
+    if(!n.parent) continue;
+    const p = byId(n.parent); if(!p) continue;
+    parts.push(edgePath(p, n, n.color, false));
+  }
+  for(const l of state.links){
+    const a = byId(l.a), b = byId(l.b);
+    if(a && b) parts.push(edgePath(a, b, "#9a9384", true));
+  }
+  edges.innerHTML = parts.join("");
+}
+function edgePath(a, b, color, dashed){
+  const sa = size(a), sb = size(b);
+  const ac = a.x + sa.w/2, bc = b.x + sb.w/2;
+  let x1, x2;
+  if(bc >= ac){ x1 = a.x + sa.w; x2 = b.x; }
+  else        { x1 = a.x;        x2 = b.x + sb.w; }
+  const y1 = a.y + sa.h/2, y2 = b.y + sb.h/2;
+  const d = Math.max(30, Math.abs(x2-x1) * 0.5);
+  const s = bc >= ac ? 1 : -1;
+  const path = `M ${x1} ${y1} C ${x1 + s*d} ${y1}, ${x2 - s*d} ${y2}, ${x2} ${y2}`;
+  return `<path d="${path}" fill="none" stroke="${color}" stroke-width="${dashed?1.6:2.4}"
+     stroke-linecap="round" opacity="${dashed?.55:.8}" ${dashed?'stroke-dasharray="6 5"':''}/>`;
+}
+
+/* ══════════ 화면 이동·확대 ══════════ */
+function applyView(){
+  const v = state.view;
+  layer.style.transform = `translate(${v.x}px,${v.y}px) scale(${v.k})`;
+  edges.setAttribute("transform", `translate(${v.x},${v.y}) scale(${v.k})`);
+  const g = 28 * v.k;
+  canvas.style.backgroundSize = g + "px " + g + "px";
+  canvas.style.backgroundPosition = (v.x % g) + "px " + (v.y % g) + "px";
+  $("#zoomLbl").textContent = Math.round(v.k*100) + "%";
+}
+function toWorld(cx, cy){
+  const r = canvas.getBoundingClientRect(), v = state.view;
+  return {x:(cx - r.left - v.x)/v.k, y:(cy - r.top - v.y)/v.k};
+}
+function zoomAt(cx, cy, factor){
+  const v = state.view;
+  const k2 = Math.min(2.5, Math.max(0.15, v.k * factor));
+  const r = canvas.getBoundingClientRect();
+  const px = cx - r.left, py = cy - r.top;
+  v.x = px - (px - v.x) * (k2 / v.k);
+  v.y = py - (py - v.y) * (k2 / v.k);
+  v.k = k2;
+  applyView(); save();
+}
+function fit(){
+  if(!state.nodes.length) return;
+  let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;
+  for(const n of state.nodes){
+    const s = size(n);
+    x1 = Math.min(x1, n.x); y1 = Math.min(y1, n.y);
+    x2 = Math.max(x2, n.x+s.w); y2 = Math.max(y2, n.y+s.h);
+  }
+  // 폰은 화면이 좁아서 여백을 크게 두면 글씨가 개미만 해진다
+  const pad = narrow() ? 26 : 70;
+  const r = canvas.getBoundingClientRect();
+  const botPad = narrow() ? 76 : 0;         // 아래 조작줄에 가려지는 만큼 뺀다
+  const k = Math.min(1.4, Math.max(0.15,
+      Math.min((r.width-pad*2)/(x2-x1||1), (r.height-botPad-pad*2)/(y2-y1||1))));
+  state.view.k = k;
+  state.view.x = (r.width - (x2-x1)*k)/2 - x1*k;
+  state.view.y = (r.height - botPad - (y2-y1)*k)/2 - y1*k;
+  applyView(); save();
+}
+function centerOn(n){
+  const r = canvas.getBoundingClientRect(), s = size(n), v = state.view;
+  const botPad = narrow() ? 76 : 0;
+  v.x = r.width/2 - (n.x + s.w/2)*v.k;
+  v.y = (r.height - botPad)/2 - (n.y + s.h/2)*v.k;
+  applyView();
+}
+
+/* ══════════ 끌기 동작들 ══════════
+   cancelDrag: 진행 중인 끌기를 끊는 손잡이. 손가락이 두 개가 되는 순간(확대 시작)
+   끌던 걸 놓아야 상자가 손가락을 따라 튀지 않는다. */
+let cancelDrag = null;
+
+function startDrag(e, n, aloneOnly){
+  const targets = aloneOnly ? [n] : [n, ...descendants(n.id)];
+  const start = targets.map(t=>({t, x:t.x, y:t.y}));
+  const p0 = toWorld(e.clientX, e.clientY);
+  let moved = false;
+  const move = ev=>{
+    if(pinch) return;
+    const p = toWorld(ev.clientX, ev.clientY);
+    const dx = p.x - p0.x, dy = p.y - p0.y;
+    if(!moved && Math.hypot(dx,dy) > 3){ snap(); moved = true; }
+    if(!moved) return;
+    for(const s of start){ s.t.x = Math.round(s.x + dx); s.t.y = Math.round(s.y + dy); }
+    render();
+  };
+  const up = ()=>{
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    cancelDrag = null;
+    if(moved) save();
+  };
+  cancelDrag = up;
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+}
+
+function startResize(e, n){
+  const p0 = toWorld(e.clientX, e.clientY), w0 = n.w;
+  snap();
+  const move = ev=>{
+    if(pinch) return;
+    const p = toWorld(ev.clientX, ev.clientY);
+    n.w = Math.max(110, Math.round(w0 + (p.x - p0.x)));
+    render();
+  };
+  const up = ()=>{
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    cancelDrag = null;
+    save();
+  };
+  cancelDrag = up;
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+}
+
+function startLink(e, n, cross){
+  const s = size(n);
+  const from = {x:n.x + s.w, y:n.y + s.h/2};
+  const temp = document.createElementNS("http://www.w3.org/2000/svg","path");
+  temp.setAttribute("fill","none");
+  temp.setAttribute("stroke", cross ? "#9a9384" : n.color);
+  temp.setAttribute("stroke-width","2.4");
+  temp.setAttribute("stroke-dasharray","7 5");
+  edges.appendChild(temp);
+  let hover = null, last = null;
+
+  const move = ev=>{
+    if(pinch) return;
+    last = {x:ev.clientX, y:ev.clientY};
+    const p = toWorld(ev.clientX, ev.clientY);
+    const d = Math.max(30, Math.abs(p.x - from.x) * 0.5);
+    temp.setAttribute("d", `M ${from.x} ${from.y} C ${from.x+d} ${from.y}, ${p.x-d} ${p.y}, ${p.x} ${p.y}`);
+    temp.style.display = "";
+    // 손가락은 '지금 손끝 아래에 뭐가 있나'를 이 방법으로만 알 수 있다
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const box = el && el.closest ? el.closest(".node") : null;
+    const id = box && box.dataset.id !== n.id ? box.dataset.id : null;
+    if(hover !== id){
+      if(hover && els.get(hover)) els.get(hover).classList.remove("hit");
+      hover = id;
+      if(hover && els.get(hover)) els.get(hover).classList.add("hit");
+    }
+  };
+  const up = ev=>{
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    cancelDrag = null;
+    temp.remove();
+    if(hover && els.get(hover)) els.get(hover).classList.remove("hit");
+
+    if(hover){
+      const t = byId(hover);
+      if(cross){
+        snap();
+        if(!state.links.some(l=>(l.a===n.id&&l.b===t.id)||(l.a===t.id&&l.b===n.id)))
+          state.links.push({a:n.id, b:t.id});
+      }else if(!isAncestor(t.id, n.id) && t.id !== n.id){
+        snap();
+        t.parent = n.id;
+        t.color = n.color;
+        for(const d of descendants(t.id)) d.color = n.color;
+      }
+      render(); save();
+    }else if(last){                        // 빈 곳에 놓았을 때만 새 가지
+      const p = toWorld(last.x, last.y);
+      snap();
+      const m = newNode({parent:n.id, x:Math.round(p.x), y:Math.round(p.y-20), color:n.color});
+      render(); select(m.id); edit(m.id); save();
+    }
+  };
+  cancelDrag = ()=>up();
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+}
+
+/* ══════════ 손가락 제스처 ══════════
+   · 두 손가락 = 확대·축소 + 판 이동 (핀치). 브라우저 확대는 꺼 두었으니 우리가 직접 한다.
+   · 두 번 톡 = 새 생각 / 글쓰기. 터치에선 dblclick 이 안 오거나 300ms 늦게 와서 직접 센다.
+   포인터는 '가로채기 단계(capture)'에서 세어야 한다 — 상자가 stopPropagation 을 해도
+   두 번째 손가락을 놓치지 않기 위해서다. */
+const ptrs = new Map();
+let pinch = null;
+
+canvas.addEventListener("pointerdown", e=>{
+  ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if(ptrs.size === 2){
+    if(cancelDrag){ const c = cancelDrag; cancelDrag = null; c(); }
+    const [a,b] = [...ptrs.values()];
+    pinch = {d: Math.hypot(a.x-b.x, a.y-b.y), mx:(a.x+b.x)/2, my:(a.y+b.y)/2};
+    canvas.classList.remove("panning");
+  }
+}, true);
+
+window.addEventListener("pointermove", e=>{
+  if(!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if(!pinch || ptrs.size < 2) return;
+  const [a,b] = [...ptrs.values()];
+  const d = Math.hypot(a.x-b.x, a.y-b.y);
+  const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+  const v = state.view;
+  v.x += mx - pinch.mx; v.y += my - pinch.my;      // 두 손가락 한가운데가 움직인 만큼 판을 민다
+  applyView();
+  if(pinch.d > 4) zoomAt(mx, my, d / pinch.d);     // 벌어진 비율만큼 확대
+  pinch = {d, mx, my};
+}, {passive:false});
+
+function dropPtr(e){
+  ptrs.delete(e.pointerId);
+  if(ptrs.size < 2) pinch = null;
+}
+window.addEventListener("pointerup", dropPtr);
+window.addEventListener("pointercancel", dropPtr);
+
+let tapAt = 0, tapXY = null, tapId = "";
+function isDoubleTap(e, id){
+  if(e.pointerType === "mouse") return false;      // 마우스는 dblclick 이 맡는다
+  const now = Date.now();
+  const near = tapXY && Math.hypot(e.clientX-tapXY.x, e.clientY-tapXY.y) < 30;
+  const dbl = (now - tapAt < 340) && near && tapId === String(id);
+  tapAt = dbl ? 0 : now;
+  tapXY = {x:e.clientX, y:e.clientY};
+  tapId = String(id);
+  return dbl;
+}
+
+/* ══════════ 판 이동 · 확대 ══════════ */
+canvas.addEventListener("pointerdown", e=>{
+  if(e.target !== canvas && e.target !== layer && e.target !== svg) return;
+  if(editing) stopEdit();
+  hideColorPop();
+  if(isDoubleTap(e, "")){                          // 빈 곳 두 번 톡 = 새 생각
+    const p = toWorld(e.clientX, e.clientY);
+    snap();
+    const n = newNode({x:Math.round(p.x-DEF_W/2), y:Math.round(p.y-20)});
+    render(); select(n.id); edit(n.id); save();
+    return;
+  }
+  select(null);
+  const v = state.view, sx = e.clientX, sy = e.clientY, x0 = v.x, y0 = v.y;
+  canvas.classList.add("panning");
+  const move = ev=>{
+    if(pinch) return;
+    v.x = x0 + (ev.clientX - sx); v.y = y0 + (ev.clientY - sy); applyView();
+  };
+  const up = ()=>{
+    canvas.classList.remove("panning");
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    cancelDrag = null;
+    save();
+  };
+  cancelDrag = up;
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+});
+
+canvas.addEventListener("dblclick", e=>{
+  if(e.target !== canvas && e.target !== layer && e.target !== svg) return;
+  const p = toWorld(e.clientX, e.clientY);
+  snap();
+  const n = newNode({x:Math.round(p.x-DEF_W/2), y:Math.round(p.y-20)});
+  render(); select(n.id); edit(n.id); save();
+});
+
+canvas.addEventListener("wheel", e=>{
+  e.preventDefault();
+  if(e.ctrlKey || e.metaKey){
+    zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1/1.12);
+  }else{
+    const v = state.view;
+    if(e.shiftKey) v.x -= e.deltaY; else { v.x -= e.deltaX; v.y -= e.deltaY; }
+    applyView(); save();
+  }
+}, {passive:false});
+
+/* ══════════ 자동 정리 (왼쪽 → 오른쪽 나무 배치) ══════════ */
+function tidy(){
+  snap();
+  const roots = state.nodes.filter(n=>!n.parent);
+  let cursorY = 0;
+  for(const r of roots){
+    const h = place(r, r.x = 0, cursorY);
+    cursorY += h + GAP_Y*3;
+  }
+  render(); save(); fit();
+
+  function place(n, x, top){
+    n.x = x;
+    const ch = kids(n.id);
+    const s = size(n);
+    if(!ch.length){ n.y = top; return s.h; }
+    let y = top, total = 0;
+    for(const c of ch){
+      const ch2 = place(c, x + s.w + GAP_X, y);
+      y += ch2 + GAP_Y; total += ch2 + GAP_Y;
+    }
+    total -= GAP_Y;
+    n.y = Math.round(top + (total - s.h)/2);
+    return Math.max(total, s.h);
+  }
+}
+
+/* ══════════ 자판 단축키 ══════════ */
+window.addEventListener("keydown", e=>{
+  if(editing) return;
+  const tag = (e.target.tagName || "").toLowerCase();
+  if(tag === "input" || tag === "textarea"){
+    if(e.key === "Escape") e.target.blur();
+    return;
+  }
+  const mod = e.ctrlKey || e.metaKey;
+  if(mod && e.key.toLowerCase() === "z"){
+    e.preventDefault(); e.shiftKey ? redo() : undo(); return;
+  }
+  if(mod && e.key.toLowerCase() === "s"){ e.preventDefault(); download(); return; }
+  if(mod && (e.key === "0")){ e.preventDefault(); fit(); return; }
+  if(e.key === "Escape"){ $("#help").classList.remove("on"); $("#sheet").classList.remove("on"); return; }
+
+  const n = byId(selId);
+  if(e.key === "Tab"){
+    e.preventDefault();
+    if(n) addChild(n.id);
+    else if(state.nodes[0]) select(state.nodes[0].id);
+    return;
+  }
+  if(!n) return;
+  if(e.key === "Enter"){ e.preventDefault(); addSibling(n.id); return; }
+  if(e.key === " "  || e.key === "F2"){ e.preventDefault(); edit(n.id); return; }
+  if(e.key === "Delete" || e.key === "Backspace"){ e.preventDefault(); remove(n.id); return; }
+  if(e.key >= "1" && e.key <= "6"){ paint(PALETTE[+e.key - 1]); return; }
+  if(e.key.startsWith("Arrow")){
+    e.preventDefault();
+    if(e.ctrlKey || e.metaKey){
+      snap();
+      const step = e.shiftKey ? 40 : 10;
+      moveTree(n, e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0,
+                  e.key==="ArrowUp"?-step:e.key==="ArrowDown"?step:0);
+      render(); save(); return;
+    }
+    const s = size(n), cx = n.x + s.w/2, cy = n.y + s.h/2;
+    let best = null, bestD = Infinity;
+    for(const m of state.nodes){
+      if(m.id === n.id) continue;
+      const sm = size(m), mx = m.x + sm.w/2, my = m.y + sm.h/2;
+      const dx = mx - cx, dy = my - cy;
+      const ok = e.key==="ArrowRight" ? dx > 10 && Math.abs(dy) < Math.abs(dx)*1.6
+               : e.key==="ArrowLeft"  ? dx < -10 && Math.abs(dy) < Math.abs(dx)*1.6
+               : e.key==="ArrowDown"  ? dy > 10 && Math.abs(dx) < Math.abs(dy)*1.6
+               :                        dy < -10 && Math.abs(dx) < Math.abs(dy)*1.6;
+      if(!ok) continue;
+      const d = Math.hypot(dx,dy);
+      if(d < bestD){ bestD = d; best = m; }
+    }
+    if(best){ select(best.id); ensureVisible(best); }
+  }
+});
+function ensureVisible(n){
+  const r = canvas.getBoundingClientRect(), v = state.view, s = size(n);
+  const bot = r.height - (narrow() ? 76 : 40);
+  const sx = n.x*v.k + v.x, sy = n.y*v.k + v.y;
+  if(sx < 40 || sy < 40 || sx + s.w*v.k > r.width-40 || sy + s.h*v.k > bot) centerOn(n);
+}
+function paint(c){
+  const n = byId(selId); if(!n) return;
+  snap();
+  n.color = c; for(const d of descendants(n.id)) d.color = c;
+  render(); save();
+}
+
+/* ══════════ 파일 · 글 내보내기 ══════════ */
+function download(){
+  state.title = $("#title").value;
+  const blob = new Blob([JSON.stringify(state, null, 1)], {type:"application/json"});
+  const a = document.createElement("a");
+  const d = new Date();
+  const stamp = d.getFullYear() + String(d.getMonth()+1).padStart(2,"0") + String(d.getDate()).padStart(2,"0");
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.title || "마인드맵") + "_" + stamp + ".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 3000);
+}
+function outline(){
+  const lines = [];
+  const walk = (n, depth)=>{
+    const t = (n.text || "(빈 칸)").split("\n");
+    lines.push("  ".repeat(depth) + "- " + t[0]);
+    for(const extra of t.slice(1)) lines.push("  ".repeat(depth+1) + extra);
+    kids(n.id).slice().sort((a,b)=>a.y-b.y).forEach(c=>walk(c, depth+1));
+  };
+  state.nodes.filter(n=>!n.parent).sort((a,b)=>a.y-b.y).forEach(r=>walk(r,0));
+  return "# " + $("#title").value + "\n\n" + lines.join("\n");
+}
+function doFind(q){
+  q = (q||"").trim().toLowerCase();
+  if(!q) return;
+  const hits = state.nodes.filter(n => (n.text||"").toLowerCase().includes(q));
+  if(!hits.length){ setTag("못 찾음"); return; }
+  window._findIdx = ((window._findIdx || 0) + 1) % hits.length;
+  const n = hits[window._findIdx];
+  select(n.id); centerOn(n);
+  const el = els.get(n.id);
+  el.classList.remove("found"); void el.offsetWidth; el.classList.add("found");
+  setTag((window._findIdx+1) + " / " + hits.length);
+}
+
+/* ══════════ 단추 연결 ══════════ */
+function addFree(){
+  const r = canvas.getBoundingClientRect();
+  const p = toWorld(r.left + r.width/2, r.top + (r.height - (narrow()?76:0))/2);
+  snap();
+  const n = newNode({x:Math.round(p.x-DEF_W/2), y:Math.round(p.y-20)});
+  avoidOverlap(n); render(); select(n.id); edit(n.id); save();
+}
+$("#bAdd").onclick  = addFree;
+$("#bTidy").onclick = tidy;
+$("#bFit").onclick  = fit;
+$("#bZi").onclick   = ()=>{ const r=canvas.getBoundingClientRect(); zoomAt(r.left+r.width/2, r.top+r.height/2, 1.2); };
+$("#bZo").onclick   = ()=>{ const r=canvas.getBoundingClientRect(); zoomAt(r.left+r.width/2, r.top+r.height/2, 1/1.2); };
+$("#bUndo").onclick = undo;
+$("#bRedo").onclick = redo;
+$("#bSave").onclick = download;
+$("#bOpen").onclick = ()=> $("#file").click();
+$("#file").onchange = e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{
+    try{
+      const s = JSON.parse(rd.result);
+      if(!s || !Array.isArray(s.nodes)) throw 0;
+      snap();
+      state = s;
+      state.view = state.view || {x:0,y:0,k:1};
+      state.seq = state.seq || (state.nodes.length + 1);
+      state.links = state.links || [];
+      $("#title").value = state.title || "불러온 마인드맵";
+      els.forEach(el=>el.remove()); els.clear(); selId = null;
+      render(); fit(); save(); setDock();
+    }catch(err){ alert("이 파일은 마인드맵 파일이 아닌 것 같습니다."); }
+  };
+  rd.readAsText(f);
+  e.target.value = "";
+};
+$("#bText").onclick = ()=>{
+  const t = outline();
+  const done = ()=>{ setTag("글 복사됨"); setTimeout(save, 1500); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(done, ()=>showText(t));
+  }else showText(t);
+};
+function showText(t){
+  // 폰 브라우저는 클립보드를 막는 일이 잦다 → 골라서 복사할 수 있게 보여 준다
+  const w = open("", "_blank");
+  if(w) w.document.write("<meta name=viewport content='width=device-width,initial-scale=1'><pre style='font:14px/1.7 -apple-system,system-ui;white-space:pre-wrap;padding:14px'>"+t.replace(/</g,"&lt;")+"</pre>");
+  else alert(t);
+}
+$("#bNew").onclick = ()=>{
+  if(!confirm("지금 지도를 지우고 새로 시작할까요?\n(먼저 '파일로 저장'을 해 두면 나중에 다시 열 수 있습니다)")) return;
+  snap();
+  state = blank();
+  $("#title").value = state.title;
+  els.forEach(el=>el.remove()); els.clear(); selId = null;
+  render(); fit(); save(); setDock();
+};
+$("#title").oninput = ()=>{ state.title = $("#title").value; save(); };
+$("#bHelp").onclick = ()=> $("#help").classList.add("on");
+$("#helpX").onclick = ()=> $("#help").classList.remove("on");
+$("#help").onclick  = e=>{ if(e.target.id === "help") $("#help").classList.remove("on"); };
+$("#hintX").onclick = ()=>{
+  $("#hint").style.display = "none";
+  $("#hintToggle").style.display = "block";
+  localStorage.setItem("mindmap.hint", "off");
+};
+$("#hintToggle").onclick = ()=>{
+  $("#hint").style.display = "";
+  $("#hintToggle").style.display = "none";
+  localStorage.removeItem("mindmap.hint");
+};
+$("#find").addEventListener("keydown", e=>{
+  if(e.key === "Enter") doFind($("#find").value);
+});
+$("#find2").addEventListener("keydown", e=>{
+  if(e.key !== "Enter") return;
+  e.target.blur(); $("#sheet").classList.remove("on"); doFind($("#find2").value);
+});
+
+/* ── ⋯ 서랍: 이미 있는 단추를 그대로 눌러 준다(기능이 두 벌이 되지 않게) ── */
+$("#bMore").onclick = ()=> $("#sheet").classList.add("on");
+$("#sheet").onclick = e=>{ if(e.target.id === "sheet") $("#sheet").classList.remove("on"); };
+for(const b of document.querySelectorAll("#sheetBox [data-go]")){
+  b.onclick = ()=>{ $("#sheet").classList.remove("on"); $("#" + b.dataset.go).click(); };
+}
+
+/* ── 폰 아래 조작줄 ── */
+function setDock(){
+  const mode = editing ? "edit" : (selId ? "sel" : "none");
+  for(const row of document.querySelectorAll(".dockrow")) row.classList.toggle("on", row.dataset.mode === mode);
+}
+document.querySelector("#dock").addEventListener("click", e=>{
+  const b = e.target.closest("[data-act]"); if(!b) return;
+  const act = b.dataset.act;
+  const n = byId(selId);
+  if(act === "add")   return addFree();
+  if(act === "tidy")  return tidy();
+  if(act === "fit")   return fit();
+  if(act === "child") return n && addChild(n.id);
+  if(act === "sib")   return n && addSibling(n.id);
+  if(act === "write") return n && edit(n.id);
+  if(act === "color") return toggleColorPop();
+  if(act === "del"){
+    if(!n) return;
+    if(descendants(n.id).length && !confirm("이 상자와 아래 가지를 모두 지울까요?")) return;
+    return remove(n.id);
+  }
+  if(act === "done")  return stopEdit();
+  if(act === "childNext"){ const id = selId; stopEdit(); return id && addChild(id); }
+  if(act === "sibNext"){ const id = selId; stopEdit(); return id && addSibling(id); }
+});
+
+/* ── 색 고르기 쪽지 ── */
+const pop = $("#colorPop");
+for(const c of PALETTE){
+  const s = document.createElement("div");
+  s.className = "swatch"; s.style.background = c;
+  s.onclick = ()=>{ paint(c); hideColorPop(); };
+  pop.appendChild(s);
+}
+function toggleColorPop(){
+  if(pop.classList.contains("on")) return hideColorPop();
+  const dockH = $("#dock").getBoundingClientRect().height;
+  pop.style.bottom = dockH + "px";
+  pop.classList.add("on");
+}
+function hideColorPop(){ pop.classList.remove("on"); }
+
+/* ══════════ 시작 ══════════ */
+state = load();
+$("#title").value = state.title || "새 마인드맵";
+if(localStorage.getItem("mindmap.hint") === "off"){
+  $("#hint").style.display = "none";
+  $("#hintToggle").style.display = "block";
+}
+render();
+syncUndoBtns();
+setDock();
+if(!localStorage.getItem("mindmap.v1")){
+  // 처음 열었을 때: 가운데 주제를 화면 한복판에
+  const r = canvas.getBoundingClientRect();
+  const n = state.nodes[0];
+  n.x = Math.round(-DEF_W/2); n.y = -20;
+  state.view.x = r.width/2; state.view.y = (r.height - (narrow()?76:0))/2;
+  render(); select(n.id);
+}else{
+  applyView();
+}
+
+/* 폰에서 처음 열면 손가락 사용법을 한 번만 띄운다 */
+if(narrow() && !localStorage.getItem("mindmap.tip")){
+  const tip = $("#tip");
+  const dockH = $("#dock").getBoundingClientRect().height;
+  tip.style.bottom = (dockH + 10) + "px";
+  tip.innerHTML = "빈 곳 <b>두 번 톡</b> = 새 생각 &nbsp;·&nbsp; 상자 <b>두 번 톡</b> = 글쓰기<br>" +
+                  "손가락 <b>두 개</b>로 벌리면 확대 &nbsp;·&nbsp; 자세한 건 위쪽 <b>⋯ → 사용법</b>";
+  tip.classList.add("on");
+  localStorage.setItem("mindmap.tip", "1");
+  setTimeout(()=>tip.classList.remove("on"), 7000);
+  tip.onclick = ()=>tip.classList.remove("on");
+}
+
+window.addEventListener("resize", ()=>{ drawEdges(); setDock(); });
+if(window.visualViewport) window.visualViewport.addEventListener("resize", drawEdges);
+window.addEventListener("beforeunload", saveNow);
+// 폰은 앱을 내리면 beforeunload 가 안 오는 경우가 많다 — 화면을 벗어날 때 바로 저장
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden) saveNow(); });
+</script>
+</body>
+</html>
