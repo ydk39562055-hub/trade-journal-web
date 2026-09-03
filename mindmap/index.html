@@ -143,16 +143,36 @@
   #hintToggle{
     position:fixed; left:12px; bottom:12px; z-index:21; display:none;
   }
-  #help{
+  #help,#sync{
     position:fixed; inset:0; z-index:50; background:rgba(45,40,32,.45);
     display:none; align-items:center; justify-content:center; padding:20px;
   }
-  #help.on{display:flex}
-  #helpBox{
+  #help.on,#sync.on{display:flex}
+  #helpBox,#syncBox{
     background:#fffdf9; border-radius:14px; padding:26px 30px; max-width:640px;
     max-height:82vh; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,.3); line-height:1.85;
     font-size:14px; -webkit-overflow-scrolling:touch;
   }
+  /* ── 동기화 창 ───────────────────────────── */
+  #syncBox{max-width:460px; width:100%}
+  #syncBox h2{margin:0 0 10px; font-size:18px}
+  #syncBox p{margin:0 0 14px; color:#6d675c; font-size:13.5px; line-height:1.75}
+  #syncBox .code{
+    font-family:"Spline Sans Mono",ui-monospace,Consolas,monospace; font-size:16px; letter-spacing:.4px;
+    background:#f5efe4; border:1px solid #e2dbcf; border-radius:9px; padding:12px 13px;
+    word-break:break-all; -webkit-user-select:all; user-select:all; margin-bottom:10px;
+  }
+  #syncBox input{
+    border:1px solid #ddd5c8; border-radius:9px; padding:12px; width:100%;
+    font-size:16px; font-family:inherit; background:#fff; margin-bottom:8px;
+  }
+  #syncBox .row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px}
+  #syncBox .row .btn{flex:1; padding:11px 10px; font-size:13.5px}
+  #syncBox .btn.primary{background:#3d382f; color:#fff; border-color:#3d382f}
+  #syncBox .btn.warn{color:#a8503f}
+  #syncBox .note{font-size:12.5px; color:#8a8377; line-height:1.7; margin:2px 0 12px}
+  #syncBox .bad{color:#a8503f}
+  #syncBox hr{border:none; border-top:1px solid #eee7db; margin:16px 0}
   #helpBox h2{margin:0 0 14px; font-size:19px}
   #helpBox h3{margin:20px 0 6px; font-size:15px; color:#7a6f5c}
   #helpBox table{border-collapse:collapse; width:100%}
@@ -263,6 +283,7 @@
   <button class="btn wide-only" id="bOpen">열기</button>
   <button class="btn wide-only" id="bText">글로 복사</button>
   <button class="btn wide-only" id="bNew">새 지도</button>
+  <button class="btn wide-only" id="bSync" title="다른 기기와 맞추기">☁</button>
   <button class="btn wide-only" id="bHelp">?</button>
   <button class="btn" id="bMore" title="더보기">⋯</button>
   <span id="saveTag" class="wide-only"></span>
@@ -306,9 +327,12 @@
   <button class="sbtn" data-go="bOpen">파일 열기</button>
   <button class="sbtn" data-go="bText">글로 복사</button>
   <button class="sbtn" data-go="bNew">새 지도</button>
+  <button class="sbtn full" data-go="bSync">☁ 다른 기기와 맞추기</button>
   <button class="sbtn full" data-go="bHelp">사용법 보기</button>
   <div class="full" id="sheetTag"></div>
 </div></div>
+
+<div id="sync"><div id="syncBox"></div></div>
 
 <div id="hint">
   <b>빈 곳 두 번 누르기</b> = 새 생각 &nbsp;·&nbsp;
@@ -378,10 +402,22 @@
   </table>
 
   <h3>저장</h3>
-  <p>적는 즉시 이 기기(브라우저)에 자동 저장됩니다. 다른 기기로 옮기거나 백업하려면
-     <b>파일로 저장</b>을 눌러 파일을 받아 두었다가 <b>열기</b>로 불러오면 됩니다.
-     <b>글로 복사</b>는 지도 전체를 들여쓴 글머리표 글로 바꿔 복사해 줍니다(복습 노트에 붙여넣기용).</p>
-  <p style="color:#8a7f6c">※ 폰과 컴퓨터는 저장 공간이 서로 다릅니다. 오가며 쓰려면 <b>파일로 저장 → 열기</b>로 옮겨 주세요.</p>
+  <p>적는 즉시 이 기기(브라우저)에 자동 저장됩니다.
+     <b>글로 복사</b>는 지도 전체를 들여쓴 글머리표 글로 바꿔 복사해 줍니다(복습 노트에 붙여넣기용).
+     <b>파일로 저장 / 열기</b>는 통째로 내려받아 두거나 되살릴 때 씁니다.</p>
+
+  <h3>폰과 컴퓨터에서 같이 쓰기 (☁ 다른 기기와 맞추기)</h3>
+  <table>
+    <tr><td>켜기</td><td>한쪽에서 <b>이 기기에서 시작하기</b> → 나온 <b>코드</b>를 다른 기기에 넣기</td></tr>
+    <tr><td>그다음</td><td>적을 때마다 저절로 오갑니다. 위쪽에 <b>☁</b> 표시가 뜹니다</td></tr>
+    <tr><td>서로 다를 때</td><td>어느 쪽을 쓸지 물어봅니다 — 고르기 전에는 아무것도 오가지 않습니다</td></tr>
+    <tr><td>주의</td><td>거울입니다 — 한쪽에서 지우면 다른 쪽에서도 지워집니다.
+        중요한 지도는 가끔 <b>파일로 저장</b>해 두세요</td></tr>
+    <tr><td>코드</td><td>남에게 알려주지 마세요. 코드를 아는 사람은 이 지도를 봅니다.
+        거래일지 코드는 넣지 마세요 — 여기 코드는 <b>mm</b> 으로 시작합니다</td></tr>
+  </table>
+  <p style="color:#8a7f6c">※ 맞추기를 켜지 않으면 폰과 컴퓨터는 저장 공간이 서로 다릅니다.
+     그때는 <b>파일로 저장 → 열기</b>로 옮겨 주세요.</p>
   <p style="text-align:right;margin-top:18px"><button class="btn" id="helpX">닫기</button></p>
 </div></div>
 
@@ -431,12 +467,267 @@ function save(){
 function saveNow(){
   clearTimeout(saveTimer);
   try{
+    state.savedAt = new Date().toISOString();   // 어느 쪽이 더 최신인지 물어볼 때 쓴다
     localStorage.setItem("mindmap.v1", JSON.stringify(state));
     const t = new Date();
     setTag("저장됨 " + String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"));
   }catch(e){ setTag("저장 실패"); }
+  cloudSave();
 }
-function setTag(s){ $("#saveTag").textContent = s; $("#sheetTag").textContent = s; }
+let tagText = "";
+function setTag(s){ tagText = s; paintTag(); }
+function paintTag(){
+  const suf = !syncId ? ""
+    : cloudState === "sending" ? " · ☁…"
+    : cloudState === "err"     ? " · ☁ 못 보냄"
+    : " · ☁";
+  $("#saveTag").textContent  = tagText + suf;
+  $("#sheetTag").textContent = tagText + suf;
+}
+
+/* ══════════ 다른 기기와 맞추기(동기화) ══════════
+   거래일지가 쓰는 서버·표(journal_sync)를 그대로 빌려 쓴다 — 코드 하나가 지도 하나다.
+   로그인이 없다. 코드를 아는 기기끼리만 같은 지도를 본다(20자리 난수라 추측 불가).
+
+   ⚠ 같은 표를 쓰므로 거래일지 코드를 여기에 넣으면 일지가 지도로 덮일 수 있다. 그래서
+     · 여기서 만드는 코드는 반드시 mm 로 시작하고,
+     · 서버에서 받아온 게 마인드맵이 아니면 연결 자체를 취소한다(절대 덮어쓰지 않는다).
+
+   ⚠ 동기화는 '거울'이다. 여기서 지우면 다른 기기에서도 지워진다.
+     그래서 하루 한 번 서버에 그날 상태를 통째로 쌓아 둔다(snap_push, 최근 14개 유지). */
+const SUPA_URL = "https://oxogtsfxdjbctzehxvae.supabase.co";
+const SUPA_KEY = "sb_publishable_3vXShFC5dKvMqzUy1KkyGQ_sF0SzUY2";   // 공개용 키 — 보호는 코드 비밀성이 한다
+const CS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";  // 헷갈리는 0 O 1 l I 는 뺐다
+
+let syncId     = localStorage.getItem("mindmap.sync") || null;
+let syncReady  = false;      // 첫 맞춤이 끝나기 전엔 아무것도 올리지 않는다
+let cloudState = "";         // '' | 'sending' | 'err'
+let lastSent   = "";
+let cloudTimer = null;
+let conflictOn = false;      // 어느 쪽을 쓸지 고르는 중 — 창을 함부로 닫지 않는다
+let snapDone   = false;
+
+const cleanCode = c => (c || "").replace(/[^0-9A-Za-z]/g, "");
+const prettyCode = c => cleanCode(c).replace(/(.{6})(?=.)/g, "$1-");
+function genCode(){
+  const a = new Uint8Array(20); crypto.getRandomValues(a);
+  let s = ""; for(const b of a) s += CS[b % CS.length];
+  return "mm" + s;
+}
+async function rpc(fn, body){
+  const r = await fetch(SUPA_URL + "/rest/v1/rpc/" + fn, {
+    method:"POST",
+    headers:{apikey:SUPA_KEY, Authorization:"Bearer "+SUPA_KEY, "Content-Type":"application/json"},
+    body: JSON.stringify(body)
+  });
+  if(!r.ok) throw new Error(fn + " " + r.status);
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
+async function pullRow(code){
+  const rows = await rpc("sync_pull", {p_sync_id: cleanCode(code)});
+  return (Array.isArray(rows) && rows[0]) ? rows[0] : null;
+}
+
+function blob(){
+  return {app:"mindmap", v:1, title:state.title, nodes:state.nodes, links:state.links,
+          view:state.view, seq:state.seq, savedAt:new Date().toISOString()};
+}
+/* 판을 밀거나 확대한 건 '내용'이 아니다 — 화면만 움직여도 서버를 두드리지 않게 뺀다 */
+const keyOf = b => JSON.stringify({t:b.title || "", n:b.nodes || [], l:b.links || []});
+const contentKey = () => keyOf(state);
+
+function applyBlob(b){
+  state.title = b.title || "새 마인드맵";
+  state.nodes = Array.isArray(b.nodes) ? b.nodes : [];
+  state.links = Array.isArray(b.links) ? b.links : [];
+  state.view  = b.view || {x:0, y:0, k:1};
+  state.seq   = b.seq || (state.nodes.length + 1);
+  $("#title").value = state.title;
+  els.forEach(el=>el.remove()); els.clear(); selId = null;
+  render(); setDock();
+}
+function setCloud(s){ cloudState = s; paintTag(); }
+
+/* 내용이 바뀔 때마다 — 조금 모았다가 한 번에 올린다 */
+function cloudSave(){
+  if(!syncId || !syncReady) return;
+  if(contentKey() === lastSent) return;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(async ()=>{
+    const k = contentKey();
+    setCloud("sending");
+    try{
+      await rpc("sync_push", {p_sync_id: syncId, p_data: blob()});
+      lastSent = k; setCloud("");
+      /* 하루 한 번 통째로 쌓아 두기(되돌리기용). 서버에 snap_push 가 있어야 동작한다 —
+         supabase_snapshot_setup.sql 을 아직 안 돌렸다면 조용히 넘어간다(맞추기 자체엔 지장 없음). */
+      if(!snapDone){ snapDone = true; rpc("snap_push", {p_sync_id: syncId, p_data: blob()}).catch(()=>{}); }
+    }catch(e){ setCloud("err"); }
+  }, 1200);
+}
+
+/* 화면을 벗어날 때 — 모아 두었던 걸 기다리지 않고 바로 밀어 넣는다.
+   폰은 앱을 내리면 타이머가 그대로 죽는다. keepalive 라야 끝까지 간다. */
+function cloudFlush(){
+  if(!syncId || !syncReady) return;
+  if(contentKey() === lastSent) return;
+  clearTimeout(cloudTimer);
+  try{
+    fetch(SUPA_URL + "/rest/v1/rpc/sync_push", {
+      method:"POST", keepalive:true,
+      headers:{apikey:SUPA_KEY, Authorization:"Bearer "+SUPA_KEY, "Content-Type":"application/json"},
+      body: JSON.stringify({p_sync_id: syncId, p_data: blob()})
+    });
+  }catch(e){}
+}
+
+/* 켜 둔 코드로 처음 맞추기 — 여기서만 '어느 쪽을 쓸지'가 정해진다 */
+async function initSync(){
+  if(!syncId) return;
+  setCloud("sending");
+  let row = null;
+  try{ row = await pullRow(syncId); }
+  catch(e){ setCloud("err"); syncReady = true; return; }   // 서버가 안 되면 이 기기 것만 쓴다
+
+  if(!row){                                   // 서버에 아직 없다 → 이 기기 것이 첫 지도
+    syncReady = true; lastSent = ""; setCloud(""); cloudSave(); return;
+  }
+  const b = row.data;
+  if(!b || b.app !== "mindmap"){              // 마인드맵 자리가 아니다 — 손대지 않고 물러난다
+    syncId = null; localStorage.removeItem("mindmap.sync");
+    syncReady = false; setCloud("");
+    openSync("이 코드는 마인드맵 코드가 아닙니다. 거래일지 코드를 넣으면 일지가 지워질 수 있어 연결하지 않았어요.");
+    return;
+  }
+  if(keyOf(b) === contentKey()){              // 이미 같다
+    syncReady = true; lastSent = contentKey(); setCloud(""); return;
+  }
+  if(isUntouched()){                          // 이 기기엔 아직 아무것도 없다 → 서버 것을 그대로 받는다
+    takeCloud(b); return;
+  }
+  askConflict(b, row.updated_at);             // 둘 다 내용이 있다 → 사람이 고른다
+}
+/* '아직 손대지 않은 빈 판'인가. ★ 페이지를 처음 열었는지(FRESH)로 판단하면 안 된다 —
+   처음 연 그 자리에서 한참 적은 뒤에 코드를 넣는 경우가 있고, 그때 적은 게 조용히 덮인다.
+   그래서 '지금 이 순간의 내용'만 본다. */
+function isUntouched(){
+  if(!state.nodes.length) return true;
+  return state.nodes.length === 1 && !state.nodes[0].parent && !state.links.length
+      && (state.nodes[0].text || "") === "가운데 주제"
+      && (state.title || "") === "새 마인드맵";
+}
+function takeCloud(b){
+  applyBlob(b);
+  lastSent = contentKey(); syncReady = true; conflictOn = false;
+  saveNow(); setCloud(""); setTag("서버 지도를 받았어요");
+  closeSync();
+}
+function keepLocal(){
+  lastSent = ""; syncReady = true; conflictOn = false;
+  closeSync(); cloudSave(); setTag("이 기기 지도를 올립니다");
+}
+
+/* ══════════ 동기화 창 ══════════ */
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function closeSync(){ if(conflictOn) return; $("#sync").classList.remove("on"); }
+function openSync(msg){
+  const box = $("#syncBox");
+  conflictOn = false;
+  if(!syncId){
+    box.innerHTML =
+      '<h2>다른 기기와 맞추기</h2>' +
+      (msg ? '<p class="bad">' + esc(msg) + '</p>' : '') +
+      '<p>코드 하나가 지도 하나입니다. 한쪽에서 코드를 만들고 다른 기기에 그 코드를 넣으면, ' +
+      '두 기기가 같은 지도를 보고 적을 때마다 저절로 오갑니다.</p>' +
+      '<div class="row"><button class="btn primary" id="syOn">이 기기에서 시작하기</button></div>' +
+      '<hr><p>이미 코드가 있다면 여기에 넣으세요.</p>' +
+      '<input id="syCode" placeholder="mmXXXXXX-XXXXXX-…" spellcheck="false" autocapitalize="off" autocomplete="off">' +
+      '<div class="row"><button class="btn" id="syJoin">이 코드로 연결</button></div>' +
+      '<div class="note">※ 거래일지 코드는 넣지 마세요. 여기 코드는 <b>mm</b> 으로 시작합니다.</div>' +
+      '<div class="row"><button class="btn" id="syX">닫기</button></div>';
+  }else{
+    box.innerHTML =
+      '<h2>다른 기기와 맞추기 — 켜짐</h2>' +
+      (msg ? '<p class="bad">' + esc(msg) + '</p>' : '') +
+      '<p>다른 기기에서 이 코드를 넣으면 같은 지도를 봅니다.</p>' +
+      '<div class="code">' + esc(prettyCode(syncId)) + '</div>' +
+      '<div class="row"><button class="btn" id="syCopy">코드 복사</button>' +
+      '<button class="btn" id="syPull">지금 서버에서 받기</button></div>' +
+      '<div class="note">맞추기는 <b>거울</b>입니다 — 한쪽에서 지우면 다른 쪽에서도 지워집니다. ' +
+      '중요한 지도는 가끔 <b>파일로 저장</b>해 두세요.</div>' +
+      '<hr><div class="row"><button class="btn warn" id="syOff">이 기기에서 끄기</button>' +
+      '<button class="btn" id="syX">닫기</button></div>' +
+      '<div class="note">끄면 이 기기만 서버와 끊깁니다. 서버 지도와 다른 기기는 그대로예요.</div>';
+  }
+  wireSync();
+  $("#sync").classList.add("on");
+}
+function askConflict(b, at){
+  conflictOn = true;
+  const fmtT = v => v ? new Date(v).toLocaleString("ko-KR", {month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit"}) : "시각 모름";
+  const cloudAt = b.savedAt || at, mineAt = state.savedAt;
+  // 어느 쪽이 더 최신인지 짚어 준다 — 고르기 쉬우라고
+  const newer = (cloudAt && mineAt) ? (new Date(cloudAt) > new Date(mineAt) ? "cloud" : "mine") : "";
+  const mark = w => newer === w ? " · 더 최신" : "";
+  $("#syncBox").innerHTML =
+    '<h2>어느 쪽을 쓸까요?</h2>' +
+    '<p>이 기기와 서버의 지도가 서로 다릅니다. 고른 쪽으로 양쪽이 맞춰집니다 — 고르기 전에는 아무것도 오가지 않아요.</p>' +
+    '<div class="row">' +
+    '<button class="btn' + (newer === "cloud" ? " primary" : "") + '" id="syTakeCloud">서버 것 받기<br>' +
+    '<small>상자 ' + ((b.nodes||[]).length) + '개 · ' + esc(fmtT(cloudAt)) + esc(mark("cloud")) + '</small></button>' +
+    '<button class="btn' + (newer === "mine" ? " primary" : "") + '" id="syKeepLocal">이 기기 것 올리기<br>' +
+    '<small>상자 ' + state.nodes.length + '개 · ' + esc(fmtT(mineAt)) + esc(mark("mine")) + '</small></button>' +
+    '</div>' +
+    '<div class="note">고르기 전에 이 기기 것을 남겨 두려면 먼저 파일로 저장하세요.</div>' +
+    '<div class="row"><button class="btn" id="syDl">이 기기 것 파일로 저장</button></div>';
+  $("#syTakeCloud").onclick = ()=> takeCloud(b);
+  $("#syKeepLocal").onclick = keepLocal;
+  $("#syDl").onclick        = download;
+  $("#sync").classList.add("on");
+}
+function wireSync(){
+  const on = (id, fn)=>{ const el = $("#" + id); if(el) el.onclick = fn; };
+  on("syX", ()=>{ $("#sync").classList.remove("on"); });
+  on("syOn", ()=>{
+    syncId = genCode(); localStorage.setItem("mindmap.sync", syncId);
+    syncReady = true; lastSent = ""; paintTag(); cloudSave();
+    openSync("코드를 만들었어요. 다른 기기에 이 코드를 넣으세요.");
+  });
+  on("syJoin", async ()=>{
+    const raw = cleanCode($("#syCode").value);
+    if(raw.length < 12){ openSync("코드가 너무 짧아요. 다시 확인해 주세요."); return; }
+    if(raw.slice(0,2).toLowerCase() !== "mm"){
+      openSync("마인드맵 코드가 아닙니다 — 여기 코드는 mm 으로 시작합니다.");
+      return;
+    }
+    syncId = raw; localStorage.setItem("mindmap.sync", syncId);
+    syncReady = false; paintTag();
+    $("#sync").classList.remove("on");
+    await initSync();
+    if(syncId && syncReady && !conflictOn) openSync("연결됐어요.");
+  });
+  on("syCopy", ()=>{
+    const t = prettyCode(syncId);
+    if(navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(t).then(()=>openSync("코드를 복사했어요."), ()=>showText(t));
+    else showText(t);
+  });
+  on("syPull", async ()=>{
+    try{
+      const row = await pullRow(syncId);
+      if(!row || !row.data || row.data.app !== "mindmap"){ openSync("서버에 아직 지도가 없어요."); return; }
+      if(keyOf(row.data) === contentKey()){ openSync("이미 서버와 같습니다."); return; }
+      askConflict(row.data, row.updated_at);
+    }catch(e){ openSync("서버에 닿지 못했어요 — 인터넷을 확인해 주세요."); }
+  });
+  on("syOff", ()=>{
+    if(!confirm("이 기기만 서버와 끊습니다.\n서버의 지도와 다른 기기는 그대로예요. 계속할까요?")) return;
+    syncId = null; localStorage.removeItem("mindmap.sync");
+    syncReady = false; lastSent = ""; setCloud("");
+    openSync("이 기기 동기화를 껐어요.");
+  });
+}
 
 /* ══════════ 되돌리기 ══════════ */
 function snap(){
@@ -987,7 +1278,7 @@ window.addEventListener("keydown", e=>{
   }
   if(mod && e.key.toLowerCase() === "s"){ e.preventDefault(); download(); return; }
   if(mod && (e.key === "0")){ e.preventDefault(); fit(); return; }
-  if(e.key === "Escape"){ $("#help").classList.remove("on"); $("#sheet").classList.remove("on"); return; }
+  if(e.key === "Escape"){ $("#help").classList.remove("on"); $("#sheet").classList.remove("on"); closeSync(); return; }
 
   const n = byId(selId);
   if(e.key === "Tab"){
@@ -1140,6 +1431,8 @@ $("#title").oninput = ()=>{ state.title = $("#title").value; save(); };
 $("#bHelp").onclick = ()=> $("#help").classList.add("on");
 $("#helpX").onclick = ()=> $("#help").classList.remove("on");
 $("#help").onclick  = e=>{ if(e.target.id === "help") $("#help").classList.remove("on"); };
+$("#bSync").onclick = ()=> openSync();
+$("#sync").onclick  = e=>{ if(e.target.id === "sync") closeSync(); };
 $("#hintX").onclick = ()=>{
   $("#hint").style.display = "none";
   $("#hintToggle").style.display = "block";
@@ -1209,6 +1502,7 @@ function hideColorPop(){ pop.classList.remove("on"); }
 
 /* ══════════ 시작 ══════════ */
 state = load();
+const FRESH = !localStorage.getItem("mindmap.v1");   // 이 기기에서 처음 여는가 (동기화 첫 맞춤에 쓴다)
 $("#title").value = state.title || "새 마인드맵";
 if(localStorage.getItem("mindmap.hint") === "off"){
   $("#hint").style.display = "none";
@@ -1217,7 +1511,8 @@ if(localStorage.getItem("mindmap.hint") === "off"){
 render();
 syncUndoBtns();
 setDock();
-if(!localStorage.getItem("mindmap.v1")){
+paintTag();
+if(FRESH){
   // 처음 열었을 때: 가운데 주제를 화면 한복판에
   const r = canvas.getBoundingClientRect();
   const n = state.nodes[0];
@@ -1241,11 +1536,13 @@ if(narrow() && !localStorage.getItem("mindmap.tip")){
   tip.onclick = ()=>tip.classList.remove("on");
 }
 
+if(syncId) initSync();
+
 window.addEventListener("resize", ()=>{ drawEdges(); setDock(); });
 if(window.visualViewport) window.visualViewport.addEventListener("resize", drawEdges);
-window.addEventListener("beforeunload", saveNow);
+window.addEventListener("beforeunload", ()=>{ saveNow(); cloudFlush(); });
 // 폰은 앱을 내리면 beforeunload 가 안 오는 경우가 많다 — 화면을 벗어날 때 바로 저장
-document.addEventListener("visibilitychange", ()=>{ if(document.hidden) saveNow(); });
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden){ saveNow(); cloudFlush(); } });
 </script>
 </body>
 </html>
