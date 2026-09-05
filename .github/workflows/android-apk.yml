@@ -25,7 +25,9 @@ jobs:
           path: ~/.android/debug.keystore
           key: trade-journal-personal-debug-key-v1
       - name: Build personal APK
-        run: gradle -p android :app:assembleDebug --no-daemon
+        run: gradle -p android :app:assembleDebug :app:lintDebug --no-daemon
+      - name: Verify APK signature
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose android/app/build/outputs/apk/debug/app-debug.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: trade-journal-android

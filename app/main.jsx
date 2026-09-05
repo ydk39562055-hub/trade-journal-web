@@ -77,9 +77,15 @@ function mergeBlobs(a, b) {
     if (!prev || (x.updated_at || '') >= (prev.updated_at || '')) am.set(x.id, x);
   }
   const assets = [...am.values()].filter(x => !deleted[x.id]);
+  const bi = new Map();
+  for (const x of [...(a.brokerImports || []), ...(b.brokerImports || [])]) {
+    if (!x || !x.id) continue;
+    if (!bi.has(x.id) || _mtime(x) >= _mtime(bi.get(x.id))) bi.set(x.id, x);
+  }
+  const brokerImports = [...bi.values()].filter(x => !buried(x.id, _mtime(x)));
   const settings = { ...(a.settings || {}), ...(b.settings || {}) };
   const principles = (b.principles && b.principles.trim()) ? b.principles : (a.principles || '');
-  return { v: 1, entries, settings, principles, memos, diary, holdings, assets, deleted };
+  return { v: 1, entries, settings, principles, memos, diary, holdings, assets, brokerImports, deleted };
 }
 
 /* 레드폴더(ForexFactory 경제지표) 한글 표기 */
@@ -274,6 +280,7 @@ function App() {
      주식·코인은 위 '보유 현황'이 티커로 실시간 평가하므로 여기 또 적지 않는다. */
   const [assets, setAssets] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_assets_v1') || '[]'); } catch { return []; } });
   const [holdings, setHoldings] = useState(() => { try { return JSON.parse(localStorage.getItem('tj_holdings_v1') || '[]'); } catch { return []; } });
+  const [brokerImports, setBrokerImports] = useState(() => { try { const rows=JSON.parse(localStorage.getItem('tj_broker_imports_v1') || '[]'); return Array.isArray(rows)?rows:[]; } catch { return []; } });
   const [checks, setChecks] = useState(() => {
     try { const o = JSON.parse(localStorage.getItem('tj_checks_v2') || '{}'); if (o.d === todayStr()) return new Set(o.s || []); } catch {}
     return new Set();
@@ -320,6 +327,7 @@ function App() {
   useEffect(() => { safeSet('tj_holdings_v1', JSON.stringify(holdings)); }, [holdings]);
   useEffect(() => { safeSet('tj_assets_v1', JSON.stringify(assets)); }, [assets]);
   useEffect(() => { safeSet('tj_deleted_v1', JSON.stringify(deleted)); }, [deleted]);
+  useEffect(() => { safeSet('tj_broker_imports_v1', JSON.stringify(brokerImports)); }, [brokerImports]);
 
   // 사진 비우기 — 공간이 찼을 때 글은 남기고 사진만 지워 즉시 확보
   const purgePhotos = (days) => {
@@ -335,7 +343,7 @@ function App() {
     setModal(null); doFlash(n ? `사진 ${n}장 정리됨 ✓` : '지울 사진이 없어요');
   };
 
-  const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, diary, holdings, assets, deleted });
+  const gatherBlob = () => ({ v: 1, entries, settings, principles, memos, diary, holdings, assets, brokerImports, deleted });
   const applyBlob = (b) => {
     if (Array.isArray(b.entries)) setEntries(TJ.migrateEntries(b.entries));
     if (b.settings) setSettings(TJ.migrateSettings(b.settings));
@@ -344,6 +352,7 @@ function App() {
     if (Array.isArray(b.diary)) setDiary(b.diary.filter(x => x && ((x.text && x.text.trim()) || x.mood)));   // 빈 껍데기는 어떤 경로로도 안 들어오게
     if (Array.isArray(b.holdings)) setHoldings(b.holdings);
     if (Array.isArray(b.assets)) setAssets(b.assets);
+    if (Array.isArray(b.brokerImports)) setBrokerImports(b.brokerImports);
     if (b.deleted) setDeleted(b.deleted);
   };
 
@@ -384,7 +393,7 @@ function App() {
       catch (e) { setSyncStatus('err'); }
     }, 1400);
     return () => clearTimeout(debRef.current);
-  }, [entries, settings, principles, memos, diary, holdings, assets, deleted, syncId, syncReady]);
+  }, [entries, settings, principles, memos, diary, holdings, assets, brokerImports, deleted, syncId, syncReady]);
 
   useEffect(() => {
     if (!window.TJLocalBackup) return;
@@ -775,7 +784,7 @@ function App() {
     if (!obj || typeof obj !== 'object') { alert('가져올 데이터가 없어요.'); return; }
     const ec = Array.isArray(obj.entries) ? obj.entries.length : 0;
     if (!confirm(`백업을 복원합니다.\n일지 ${ec}건 + 회고·일기·설정을 현재 데이터에 병합해요 (같은 건 최신 우선). 계속할까요?`)) return;
-    const merged = mergeBlobs(gatherBlob(), { entries: obj.entries, memos: obj.memos, diary: obj.diary, holdings: obj.holdings, assets: obj.assets, settings: obj.settings, principles: obj.principles, deleted: obj.deleted });
+    const merged = mergeBlobs(gatherBlob(), { entries: obj.entries, memos: obj.memos, diary: obj.diary, holdings: obj.holdings, assets: obj.assets, brokerImports: obj.brokerImports, settings: obj.settings, principles: obj.principles, deleted: obj.deleted });
     applyBlob(merged);
     setModal(null); doFlash('백업 복원됨 ✓');
   };
@@ -811,6 +820,7 @@ function App() {
     const MSG = [
       '정말 전부 비웁니다.', '',
       '· 선물·스윙·장기 일지 전부',
+      '· 가져와서 저장한 메리츠 거래 기록',
       '· 계좌별 시드·입금',
       '· 보유 현황(종목)',
       '· 자산(예금·부동산 등)', '',
@@ -825,9 +835,10 @@ function App() {
       entries.forEach(x => { n[x.id] = ts; });
       holdings.forEach(x => { n[x.id] = ts; });
       assets.forEach(x => { n[x.id] = ts; });
+      brokerImports.forEach(x => { n[x.id] = ts; });
       return n;                                    // 동기화 시 다른 기기에서도 비워지도록
     });
-    setEntries([]); setHoldings([]); setAssets([]);
+    setEntries([]); setHoldings([]); setAssets([]); setBrokerImports([]);
     setSettings({ futuresSeed: null, swingSeed: null, longSeed: null, futuresDeposit: 0, swingDeposit: 0, longDeposit: 0 });
     setModal(null); doFlash('전체 초기화됨 — 새로 시작 ✓');
   };
@@ -1178,7 +1189,9 @@ function App() {
 
   const body = tab === 'home' ? homeView
     : tab === 'journal' ? journalView
-      : tab === 'broker' ? <BrokerPanel code={settings.brokerFeedCode || ''} onConnect={code => setSettings(s => ({ ...s, brokerFeedCode: code }))} memos={memos} onAddMemo={addBrokerMemo} onRemoveMemo={removeMemo} syncId={syncId} />
+      : tab === 'broker' ? <BrokerPanel code={settings.brokerFeedCode || ''} onConnect={code => setSettings(s => ({ ...s, brokerFeedCode: code }))} memos={memos} onAddMemo={addBrokerMemo} onRemoveMemo={removeMemo} syncId={syncId}
+        imports={brokerImports} onImport={item=>{setBrokerImports(rows=>[item,...rows]);doFlash('메리츠 기록 저장됨 ✓');}}
+        onRemoveImport={id=>{setBrokerImports(rows=>rows.filter(r=>r.id!==id));setDeleted(d=>({...d,[id]:new Date().toISOString()}));}} />
       : tab === 'assets' ? <AssetsTab assets={assets} autoAssets={autoAssets} addHoldings={addHoldings} addPositions={addPositions} accounts={[['선물', balF], ['스윙', balW], ['장기', balL]]} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} />
       : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} remove={removeDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
         : <DashboardModal entries={entries} market={filter} asPage onClose={() => setTab('home')} />;

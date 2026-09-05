@@ -11,7 +11,8 @@
 - Windows 예약 작업 `TradeJournal-Toss-Collector` 등록 및 실행 확인.
 - 설치형 웹앱(PWA), 휴대폰 화면, 이전에 열어본 앱 자원 캐시 추가.
 - FP Markets는 cTrader 앱 승인 및 실제 계좌 동의가 남음. 거래 API는 호출하지 않음.
-- 메리츠는 국내/미국 체결 알림과 화면 캡처 지원 요청을 받았으며 별도 작업 중.
+- 메리츠 국내/미국 체결 알림 텍스트, 캡처 OCR, 확인 후 가져오기와 기존 일지 동기화 구현.
+- Android 알림 수집 앱 APK 빌드 성공. 실제 메리츠 알림 서식과 휴대폰 권한/수신은 미검증.
 
 ## PC 설정과 유지 관리
 
@@ -53,11 +54,11 @@ PowerShell에서 `automation/install-windows.ps1 -PrivateDirectory <비공개폴
 ## 검증과 데이터 해석
 
 ```text
-node --test automation/toss/client.test.mjs automation/toss/history.test.mjs automation/private-store.test.mjs automation/ctrader/collector.test.mjs automation/feed.test.mjs automation/browser-feed.test.mjs
+node --test automation/toss/client.test.mjs automation/toss/history.test.mjs automation/private-store.test.mjs automation/ctrader/collector.test.mjs automation/feed.test.mjs automation/browser-feed.test.mjs automation/meritz.test.mjs
 node automation/audit-private.mjs <ap.txt> <자동기록_연결.json>
 ```
 
-한 행은 개별 틱 체결이 아니라 **한 주문의 누적 체결**이다. 시간은 마지막 체결시각이다.
+토스 한 행은 개별 틱 체결이 아니라 **한 주문의 누적 체결**이다. 시간은 마지막 체결시각이다.
 실현손익은 현재 null이며 매입 원가·분할·입출고 등을 대조하기 전 통계에 합산하지 않는다.
 진입 이유/복기 메모는 사용자 입력이며 수집 데이터와 분리하여 기존 메모 동기화를 사용한다.
 연도 제한은 주문 접수일이 아닌 마지막 체결 시각에 적용한다. 연도에 걸친 분할 체결 주문은
@@ -66,3 +67,19 @@ API가 누적 수량만 제공하므로 연도별 개별 체결량으로 분해�
 PWA 서비스 워커는 명시된 공개 코드·아이콘·런타임만 캐시한다. API 응답을 가로채지 않는다.
 브라우저의 거래내역 캐시는 연결코드별 IndexedDB에 따로 저장되어 마지막 기록을 보여준다.
 오프라인 상태에서는 최신 여부와 수집 대기를 표시한다.
+
+## 메리츠 가져오기
+
+자동 기록 → 메리츠 기록 가져오기에서 알림 문구를 붙여넣거나 이미지를 선택한다.
+Tesseract.js 6.0.1의 한국어/영어 OCR을 기기 내에서 실행하며 원본 캡처를 서버에 보내지 않는다.
+첫 실행에는 공개 OCR 프로그램과 언어 모델 다운로드가 필요하다.
+시장(KRW/USD), 한국 시간의 체결일/시간, 종목, 매수/매도, 수량, 가격을 확인 후 한 건씩 저장한다.
+확인된 기록은 brokerImports 배열로 기존 일지 백업·동기화·삭제 병합에 포함된다.
+체결 대금은 정확한 소수 연산을 사용하며 실현손익으로 간주하지 않는다.
+2026년 이전, 날짜 누락/불가능한 날짜, 시장/통화 불명, 0 이하 수량/가격은 저장하지 않는다.
+같은 체결 또는 같은 알림으로 보이면 중복 확인을 요구한다.
+
+알림 자동 수집 설치 및 사용법은 [Android 안내](../android/README.md)를 따른다.
+휴대폰에 새로 온 알림 원문은 자동 저장되지만, 최종 거래 행은 사용자 확인 후 저장한다.
+실제 메리츠 국내/미국 알림 샘플을 아직 받지 못했으므로 공식 서식 지원 완료라고 표시하지 않는다.
+합성 국내/미국 예시로 파싱·저장·재열기·삭제를 확인했고 미국 예시 PNG의 브라우저 OCR도 실행 확인했다.

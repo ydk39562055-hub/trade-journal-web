@@ -1,11 +1,11 @@
 /* Cache only public app assets. Broker/cloud API responses are never intercepted. */
-const CACHE = 'trade-journal-web-shell-v1';
+const CACHE = 'trade-journal-web-shell-v2';
 const BASE = new URL('./', self.location.href);
 const FILES = ['index.html', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
   'app/theme.css', 'app/data.js', 'app/stats.js', 'app/sync.js', 'app/portfolio.js', 'app/local-backup.js',
   'app/broker-feed.js', 'app/pwa.js', 'app/charts.jsx', 'app/components.jsx', 'app/assets-panel.jsx',
   'app/networth-card.jsx', 'app/modals.jsx', 'app/restore-modal.jsx', 'app/dashboard.jsx', 'app/hero.jsx',
-  'app/broker-panel.jsx', 'app/main.jsx'];
+  'app/broker-panel.jsx', 'app/meritz.js', 'app/meritz-modal.jsx', 'app/main.jsx'];
 const RUNTIME = ['https://unpkg.com/react@18.3.1/umd/react.development.js',
   'https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js',
   'https://unpkg.com/@babel/standalone@7.29.0/babel.min.js'];

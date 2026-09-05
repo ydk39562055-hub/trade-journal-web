@@ -45,8 +45,8 @@
 <script>
 (async function () {
   const bust = '?v=' + Date.now();
-  const plain = ['app/data.js', 'app/stats.js', 'app/sync.js', 'app/portfolio.js', 'app/local-backup.js', 'app/broker-feed.js'];
-  const babel = ['app/charts.jsx', 'app/components.jsx', 'app/assets-panel.jsx', 'app/networth-card.jsx', 'app/modals.jsx', 'app/restore-modal.jsx', 'app/dashboard.jsx', 'app/hero.jsx', 'app/broker-panel.jsx', 'app/main.jsx'];
+  const plain = ['app/data.js', 'app/stats.js', 'app/sync.js', 'app/portfolio.js', 'app/local-backup.js', 'app/broker-feed.js', 'app/meritz.js'];
+  const babel = ['app/charts.jsx', 'app/components.jsx', 'app/assets-panel.jsx', 'app/networth-card.jsx', 'app/modals.jsx', 'app/restore-modal.jsx', 'app/dashboard.jsx', 'app/hero.jsx', 'app/meritz-modal.jsx', 'app/broker-panel.jsx', 'app/main.jsx'];
   const fail = (m) => { document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#9a5a34;font-family:sans-serif">로딩 실패 — 인터넷 확인 후 새로고침<br><small>' + m + '</small></div>'; };
   try {
     for (const src of plain) {
