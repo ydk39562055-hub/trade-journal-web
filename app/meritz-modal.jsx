@@ -14,6 +14,7 @@ function MeritzModal({ code, imports, onSave, onClose }) {
     }catch(e){setError(e.message);}}
   return <Modal open onClose={onClose} title="메리츠 기록 가져오기" sub="국내·미국 주식 · 2026년 거래부터" maxWidth={680}>
     <p className="broker-explanation">체결 알림을 붙여넣거나 화면 캡처를 선택하세요. 읽힌 내용을 확인한 다음 저장해요. 캡처는 이 기기에서 문자로 읽으며, 원본 이미지는 서버에 올리지 않아요.</p>
+    <p className="broker-explanation"><a href="https://github.com/ydk39562055-hub/trade-journal-web/releases/tag/android-v0.1.1" target="_blank" rel="noopener noreferrer">안드로이드 알림 수집 앱 설치</a> · 처음 한 번 연결하고 알림 접근을 허용해 주세요.</p>
     <label className="meritz-file">화면 캡처 선택<input type="file" accept="image/*" aria-label="메리츠 화면 캡처" disabled={busy} onChange={async e=>{
       const f=e.target.files?.[0];if(!f)return;setBusy(true);setError('');setProgress(0);
       try{read(await TJMeritz.recognize(f,setProgress));}catch(err){setError(err.message);}finally{setBusy(false);e.target.value='';}

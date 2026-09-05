@@ -17,7 +17,14 @@ public final class MainActivity extends Activity {
     private static final String JOURNAL="https://ydk39562055-hub.github.io/trade-journal-web/";
     private LinearLayout layout; private EditText code; private TextView status; private WebView web;
     private ValueCallback<Uri[]> files;
+    private final android.os.Handler statusHandler=new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable refreshStatus=new Runnable(){public void run(){
+        if(web==null && status!=null) status.setText(JournalStore.prefs(MainActivity.this).getString("status","알림 수신 대기"));
+        statusHandler.postDelayed(this,2000);
+    }};
     @Override public void onCreate(Bundle state) { super.onCreate(state); showSettings(); }
+    @Override protected void onResume() { super.onResume();statusHandler.post(refreshStatus); }
+    @Override protected void onPause() { statusHandler.removeCallbacks(refreshStatus);super.onPause(); }
     private TextView text(String value,int size) { TextView t=new TextView(this); t.setText(value); t.setTextSize(size); t.setPadding(0,14,0,14); layout.addView(t); return t; }
     private void button(String label, View.OnClickListener action) { Button b=new Button(this); b.setText(label); b.setOnClickListener(action); layout.addView(b); }
     private void showSettings() {
