@@ -664,6 +664,7 @@ function MenuModal({ entries, syncId, onImport, onReset, onSync, onPurgePhotos, 
   const photoN = entries.reduce((a, e) => a + ((e.photos || []).length), 0);
   return (
     <Modal open onClose={onClose} title="더보기" maxWidth={440}>
+      <button className="btn-ghost" style={row} onClick={() => window.TJPWA?.install()}>휴대폰 · PC에 앱 설치</button>
       <button className="btn-ghost" style={{ ...row, color: syncId ? 'var(--win)' : 'var(--violet)' }} onClick={onSync}>
         ☁ 다른 기기와 동기화{syncId ? ' — 켜짐 ✓' : ''}
       </button>

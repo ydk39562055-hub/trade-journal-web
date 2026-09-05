@@ -1,0 +1,27 @@
+# Deployment template, NOT installed or enabled by committing this file.
+[Unit]
+Description=Trade journal Toss read-only collector
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=trade-journal
+Group=trade-journal
+WorkingDirectory=/opt/trade-journal
+EnvironmentFile=/etc/trade-journal/toss.env
+ExecStart=/usr/bin/node /opt/trade-journal/automation/toss/collect.mjs --watch
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=90
+StateDirectory=trade-journal
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/trade-journal
+
+[Install]
+WantedBy=multi-user.target

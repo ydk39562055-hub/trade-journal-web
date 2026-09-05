@@ -246,7 +246,7 @@ function App() {
   // 화면 탭 — 홈 / 일지 / 일기 / 통계 (모바일 하단 탭바 · 넓은 화면 좌측 내비)
   const [tab, setTab] = useState(() => {
     const t = localStorage.getItem('tj_tab');
-    return ['home', 'journal', 'diary', 'stats', 'assets'].includes(t) ? t : 'home';
+    return ['home', 'journal', 'diary', 'stats', 'assets', 'broker'].includes(t) ? t : 'home';
   });
   useEffect(() => { localStorage.setItem('tj_tab', tab); window.scrollTo(0, 0); }, [tab]);
   const [search, setSearch] = useState('');
@@ -438,7 +438,7 @@ function App() {
   }, [syncId, syncReady, entries.length, assets.length, holdings.length]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const enableSync = () => { const c = TJSync.genCode(); localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('동기화 켜짐 ☁'); return c; };
-  const joinSync = (raw) => { const c = TJSync.clean(raw); if (c.length < 12) { alert('코드가 너무 짧아요. 다시 확인해주세요.'); return false; } localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('연결 중… ☁'); return true; };
+  const joinSync = (raw) => { const c = TJSync.clean(raw); if (/^TJBF/i.test(c)) { alert('자동 기록 코드는 자동 기록 탭에서 연결해 주세요.'); return false; } if (c.length < 12) { alert('코드가 너무 짧아요. 다시 확인해주세요.'); return false; } localStorage.setItem('tj_sync_id', c); setSyncId(c); doFlash('연결 중… ☁'); return true; };
   const disableSync = () => { localStorage.removeItem('tj_sync_id'); setSyncId(null); lastSentRef.current = ''; setSyncStatus(''); doFlash('이 기기 동기화 꺼짐'); };
   // 레드폴더(ForexFactory 고임팩트) — 같은 주소 redfolder.json (GH Action이 갱신)
   useEffect(() => { fetch('redfolder.json?t=' + Date.now()).then(r => r.ok ? r.json() : []).then(j => { if (Array.isArray(j)) setRedfolder(j); }).catch(() => {}); }, []);
@@ -724,6 +724,11 @@ function App() {
     doFlash('메모 저장됨 ✓');
   };
   const removeMemo = (id) => { setMemos(prev => prev.filter(m => m.id !== id)); setDeleted(p => ({ ...p, [id]: new Date().toISOString() })); };
+  const addBrokerMemo = (trade, text) => {
+    const at = (trade.tradedAtKorea || todayStr()) + ' ' + new Date().toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    setMemos(prev => [{ id: 'bm-' + crypto.randomUUID(), at, text, brokerTradeId: trade.id, brokerSymbol: trade.symbol }, ...prev]);
+    doFlash('매매 메모 저장됨 ✓');
+  };
 
   // apply tweaks → CSS vars
   useEffect(() => {
@@ -1042,7 +1047,7 @@ function App() {
      (2026-08-09 지적). 화면이 넓으면 그만큼 더 쓰되, 너무 길어져 눈이 피로하지 않게 1520 에서 멈춘다. */
   const CONTENT_W = wide ? 1520 : 1080;
 
-  const TABS = [['home', '◧', '홈'], ['journal', '☰', '일지'], ['assets', '◈', '자산'], ['diary', '✎', '일기'], ['stats', '◍', '통계']];
+  const TABS = [['home', '◧', '홈'], ['journal', '☰', '일지'], ['broker', '↻', '자동 기록'], ['assets', '◈', '자산'], ['diary', '✎', '일기'], ['stats', '◍', '통계']];
   const MKT_C = { '선물': 'var(--futures)', '스윙': 'var(--swing)', '장기': 'var(--long)' };
   const balOf = m => (m === '스윙' ? balW : m === '장기' ? balL : balF);
 
@@ -1173,6 +1178,7 @@ function App() {
 
   const body = tab === 'home' ? homeView
     : tab === 'journal' ? journalView
+      : tab === 'broker' ? <BrokerPanel code={settings.brokerFeedCode || ''} onConnect={code => setSettings(s => ({ ...s, brokerFeedCode: code }))} memos={memos} onAddMemo={addBrokerMemo} onRemoveMemo={removeMemo} syncId={syncId} />
       : tab === 'assets' ? <AssetsTab assets={assets} autoAssets={autoAssets} addHoldings={addHoldings} addPositions={addPositions} accounts={[['선물', balF], ['스윙', balW], ['장기', balL]]} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} />
       : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} remove={removeDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
         : <DashboardModal entries={entries} market={filter} asPage onClose={() => setTab('home')} />;
@@ -1279,7 +1285,7 @@ function App() {
 
       {/* ── 하단 탭바 (모바일) ── */}
       {!wide && (
-        <nav className="tabbar">
+        <nav className="tabbar" style={{ gridTemplateColumns: `repeat(${TABS.length}, 1fr)` }}>
           {TABS.map(([v, ic, l]) => (
             <button key={v} className={tab === v ? 'on' : ''} onClick={() => setTab(v)}>
               <span className="ic">{ic}</span>{l}

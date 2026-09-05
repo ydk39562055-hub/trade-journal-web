@@ -2,3 +2,11 @@
 ff_raw.json
 *.bak
 supabase/.temp/
+
+# Account credentials and collected financial data never belong in GitHub Pages.
+.env
+.env.*
+!.env.example
+automation/**/private/
+automation/**/data/
+automation/**/*.tmp

@@ -9,6 +9,12 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>거래일지</title>
+<meta name="theme-color" content="#97633b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="거래일지">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script src="app/pwa.js"></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236655e0' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M3 17l5-5 4 4 8-9'/><path d='M21 7v5'/><path d='M16 7h5'/></svg>">
 
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -16,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spline+Sans+Mono:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="app/theme.css?v=20260809d">
+<link rel="stylesheet" href="app/theme.css?v=20260906a">
 
 <!-- React + Babel (pinned) -->
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -39,8 +45,8 @@
 <script>
 (async function () {
   const bust = '?v=' + Date.now();
-  const plain = ['app/data.js', 'app/stats.js', 'app/sync.js', 'app/portfolio.js', 'app/local-backup.js'];
-  const babel = ['app/charts.jsx', 'app/components.jsx', 'app/assets-panel.jsx', 'app/networth-card.jsx', 'app/modals.jsx', 'app/restore-modal.jsx', 'app/dashboard.jsx', 'app/hero.jsx', 'app/main.jsx'];
+  const plain = ['app/data.js', 'app/stats.js', 'app/sync.js', 'app/portfolio.js', 'app/local-backup.js', 'app/broker-feed.js'];
+  const babel = ['app/charts.jsx', 'app/components.jsx', 'app/assets-panel.jsx', 'app/networth-card.jsx', 'app/modals.jsx', 'app/restore-modal.jsx', 'app/dashboard.jsx', 'app/hero.jsx', 'app/broker-panel.jsx', 'app/main.jsx'];
   const fail = (m) => { document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#9a5a34;font-family:sans-serif">로딩 실패 — 인터넷 확인 후 새로고침<br><small>' + m + '</small></div>'; };
   try {
     for (const src of plain) {
