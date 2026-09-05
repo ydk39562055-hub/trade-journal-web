@@ -10,3 +10,7 @@ supabase/.temp/
 automation/**/private/
 automation/**/data/
 automation/**/*.tmp
+android/.gradle/
+android/**/build/
+android/local.properties
+*.keystore
