@@ -1,6 +1,7 @@
 param(
   [Parameter(Mandatory=$true)][string]$PrivateDirectory,
-  [Parameter(Mandatory=$true)][string]$NodePath
+  [Parameter(Mandatory=$true)][string]$NodePath,
+  [ValidateSet('Toss','FPMarkets')][string]$Broker = 'Toss'
 )
 $ErrorActionPreference = 'Stop'
 $tjRepository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -8,10 +9,11 @@ $tjDirectory = (Resolve-Path -LiteralPath $PrivateDirectory).Path
 $tjEnvironment = Join-Path $tjDirectory 'collector.env'
 if (-not (Test-Path -LiteralPath $tjEnvironment)) { throw 'collector.env is required' }
 if (-not (Test-Path -LiteralPath $NodePath)) { throw 'Node.js executable is required' }
-$tjTaskName = 'TradeJournal-Toss-Collector'
+$tjTaskName = 'TradeJournal-' + $Broker + '-Collector'
 function Quote-TjLiteral([string]$Value) { return "'" + $Value.Replace("'", "''") + "'" }
 # Only fixed executable/config paths appear in the action; no API credentials.
-$tjArguments = '--env-file="' + $tjEnvironment + '" "' + (Join-Path $tjRepository 'automation\toss\collect.mjs') + '" --watch'
+$tjScript = if ($Broker -eq 'FPMarkets') { 'automation\ctrader\watch.mjs' } else { 'automation\toss\collect.mjs' }
+$tjArguments = '--env-file="' + $tjEnvironment + '" "' + (Join-Path $tjRepository $tjScript) + '" --watch'
 $tjCommand = '$tjChild = Start-Process -FilePath ' + (Quote-TjLiteral $NodePath) +
   ' -ArgumentList ' + (Quote-TjLiteral $tjArguments) +
   ' -WorkingDirectory ' + (Quote-TjLiteral $tjRepository) +
@@ -31,6 +33,6 @@ if ($tjExisting -and $tjExisting.Description -notlike 'Trade journal PC collecto
 }
 if ($tjExisting -and $tjExisting.State -eq 'Running') { throw 'Collector is already running; stop it before reinstalling.' }
 Register-ScheduledTask -TaskName $tjTaskName -Action $tjAction -Trigger $tjTrigger -Principal $tjPrincipal `
-  -Settings $tjSettings -Description 'Trade journal PC collector: read-only Toss history and private cloud sync every five minutes.' -Force | Out-Null
+  -Settings $tjSettings -Description ('Trade journal PC collector: read-only ' + $Broker + ' history and private cloud sync every five minutes.') -Force | Out-Null
 Start-ScheduledTask -TaskName $tjTaskName
 Get-ScheduledTask -TaskName $tjTaskName | Select-Object TaskName,State

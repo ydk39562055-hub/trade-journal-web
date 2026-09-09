@@ -13,17 +13,17 @@
   async function pull(code, type) {
     const row = await TJSync.pull(await recordId(code, type));
     const data = row?.data;
-    const kind = type === 'data' ? 'broker-feed' : type === 'meritz-notifications' ? 'broker-notifications' : 'broker-status';
+    const kind = ['data', 'fp-data'].includes(type) ? 'broker-feed' : type === 'meritz-notifications' ? 'broker-notifications' : 'broker-status';
     if (!data || data.version !== 1 || data.kind !== kind) {
       throw new Error('수집된 내역을 아직 찾지 못했어요. PC 수집 상태와 연결코드를 확인해 주세요.');
     }
-    if (type !== 'status' && (!Array.isArray(data.rows) || data.rows.some(r => !r || typeof r.id !== 'string'))) {
+    if (kind !== 'broker-status' && (!Array.isArray(data.rows) || data.rows.some(r => !r || typeof r.id !== 'string'))) {
       throw new Error('기록을 읽을 수 없어요. 잠시 후 다시 확인해 주세요.');
     }
     return data;
   }
-  async function cache(code, value, remove = false) {
-    const key = await recordId(code, 'data');
+  async function cache(code, value, remove = false, type = 'data') {
+    const key = await recordId(code, type);
     return new Promise((resolve, reject) => {
       const request = indexedDB.open('tj-broker-cache-v1', 1);
       request.onupgradeneeded = () => request.result.createObjectStore('feeds');

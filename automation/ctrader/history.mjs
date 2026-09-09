@@ -140,7 +140,7 @@ export function makeInbox(snapshot) {
   });
 }
 
-export async function collectSnapshot(client, { clientId, clientSecret, accessToken, accountId, environment, from, to, previous = null }) {
+export async function collectSnapshot(client, { clientId, clientSecret, accessToken, accountId, environment, from, to, previous = null, forceFull = false }) {
   if (!['live', 'demo'].includes(environment)) throw new Error('INVALID_ENVIRONMENT');
   if (previous && (id(previous.accountId) !== id(accountId) || previous.environment !== environment)) throw new Error('LEDGER_ACCOUNT_MISMATCH');
   await client.request(2100, { clientId, clientSecret });
@@ -165,14 +165,14 @@ export async function collectSnapshot(client, { clientId, clientSecret, accessTo
   if (previous && timestamp(previous.from) !== initial) throw new Error('LEDGER_START_CHANGED');
   if (previous && timestamp(previous.through) > end) throw new Error('CLOCK_MOVED_BACKWARD');
   // Re-fetch a week to capture delayed updates. Failed collection returns no advanced checkpoint.
-  const start = previous ? Math.max(initial, timestamp(previous.through) - 7 * DAY) : initial;
+  const start = previous && !forceFull ? Math.max(initial, timestamp(previous.through) - 7 * DAY) : initial;
   const deals = mergeDeals(previous?.deals || [], await fetchDeals(client, accountId, start, end));
   const positions = (await query(2124)).position || [];
   const snapshot = {
     version: 1, accountId: id(accountId), environment,
     from: initial, through: end, collectedAt: new Date().toISOString(),
     currency: assets.find(a => id(a.assetId) === id(trader.depositAssetId))?.name || null,
-    symbols, deals, positions,
+    symbols, assets, deals, positions,
   };
   // Authentication responses (which echo accessToken) never enter the output.
   return { snapshot, inbox: makeInbox(snapshot) };
