@@ -1,5 +1,5 @@
 /* Cache only public app assets. Broker/cloud API responses are never intercepted. */
-const CACHE = 'trade-journal-web-shell-v4';
+const CACHE = 'trade-journal-web-shell-v5';
 const BASE = new URL('./', self.location.href);
 const FILES = ['index.html', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
   'app/theme.css', 'app/data.js', 'app/stats.js', 'app/sync.js', 'app/portfolio.js', 'app/local-backup.js',
