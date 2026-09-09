@@ -1,4 +1,5 @@
 import { canonical,digest,recordId,cleanFeedCode } from '../feed.mjs';
+import {reviewId} from './review.mjs';
 const RPC='https://oxogtsfxdjbctzehxvae.supabase.co/rest/v1/rpc/';
 const KEY='sb_publishable_3vXShFC5dKvMqzUy1KkyGQ_sF0SzUY2';
 export function makeFpFeed(result){
@@ -15,10 +16,11 @@ export function makeFpFeed(result){
       direction:position.direction,commission:execution.commission,tax:null,settlementDate:null,
       grossProfit:execution.close?.grossProfit??null,swap:execution.close?.swap??null,
       realisedCommission:execution.close?.realisedCommission??null,conversionFee:execution.close?.conversionFee??null,
-      pnl:null,pnlStatus:'unreconciled',issues:position.issues,status:position.status,environment:snapshot.environment});
+      reviewId:reviewId(position),pnl:null,pnlStatus:'unreconciled',issues:position.issues,status:position.status,environment:snapshot.environment});
   }
   rows.sort((a,b)=>b.executedAt.localeCompare(a.executedAt)||a.id.localeCompare(b.id));
-  return {kind:'broker-feed',version:1,source:'fpmarkets',periodStart:'2026-01-01T00:00:00+09:00',rows};
+  return {kind:'broker-feed',version:1,source:'fpmarkets',periodStart:'2026-01-01T00:00:00+09:00',rows,
+    account:snapshot.account?{...snapshot.account,currency:snapshot.currency,checkedAt:snapshot.collectedAt}:null,reviews:result.reviews||{}};
 }
 export class FpPublisher{
   constructor(code,fetchImpl=fetch){this.code=cleanFeedCode(code);this.fetch=fetchImpl;}

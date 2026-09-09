@@ -6,6 +6,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 const REQUESTS = new Map([
   [2100, 2101], [2102, 2103], [2112, 2113], [2114, 2115],
   [2121, 2122], [2124, 2125], [2133, 2134], [2149, 2150],
+  [2181, 2182], // Order details (read-only); no order creation or modification.
+  [2137, 2138], // Historical candles.
 ]);
 
 export function integer(value) {

@@ -186,6 +186,22 @@ class FakeSocket extends EventTarget {
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 5));
 
+test('order details inspection accepts only the matching read response and still rejects order placement', async () => {
+  const client = new ReadOnlyClient({ spacingMs: 0 });
+  await client.connect('demo', FakeSocket);
+  const ws = FakeSocket.instances.at(-1);
+  try {
+    const response = client.request(2181, {ctidTraderAccountId:42,orderId:101});
+    await tick();
+    const sent = ws.sent.at(-1);
+    assert.equal(sent.payloadType,2181);
+    ws.reply({clientMsgId:sent.clientMsgId,payloadType:2182,payload:{ctidTraderAccountId:42,order:{orderId:101,relativeStopLoss:100000}}});
+    assert.equal((await response).order.relativeStopLoss,100000);
+    await assert.rejects(client.request(2106,{}),/READ_ONLY/);
+    await assert.rejects(client.request(2110,{}),/READ_ONLY/);
+  }finally{client.close();}
+});
+
 test('wire client rejects order APIs locally and matches response types', async () => {
   const client = new ReadOnlyClient({ spacingMs: 0 });
   await client.connect('demo', FakeSocket);

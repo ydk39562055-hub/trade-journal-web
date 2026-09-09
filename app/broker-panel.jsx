@@ -106,7 +106,8 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
     <div className="broker-connections">
       <div className="broker-connection"><strong>토스증권</strong><span className={'broker-health ' + (!stale && !view.error && view.status?.state === 'ok' ? 'good' : '')}>{health}</span>
         <small>마지막 수집 {stamp(last)} · 5분 간격</small></div>
-      <div className="broker-connection"><strong>FP Markets</strong><span className={'broker-health ' + (!fpStale && !fp.error && fp.status?.state === 'ok' ? 'good' : '')}>{fpHealth}</span><small>마지막 수집 {stamp(fpLast)} · 5분 간격</small></div>
+      <div className="broker-connection"><strong>FP Markets</strong><span className={'broker-health ' + (!fpStale && !fp.error && fp.status?.state === 'ok' ? 'good' : '')}>{fpHealth}</span><small>마지막 수집 {stamp(fpLast)} · 5분 간격</small>
+        {fp.feed?.account&&<div className="fp-account"><small>확정 잔액</small><b>{fp.feed.account.currency==='USD'?'$':fp.feed.account.currency+' '}{TJBroker.decimal(fp.feed.account.balance)}</b><small>보유 포지션 {fp.feed.account.openPositions}개 · 미실현손익 별도</small></div>}</div>
     </div>
     <div className="meritz-summary"><div><strong>메리츠증권</strong><small>국내·미국 · 체결 알림 / 화면 캡처</small></div><button className="btn-ghost" onClick={()=>setMeritzOpen(true)}>기록 가져오기</button></div>
     {(!code || manage) && <div className="broker-setup">
@@ -139,7 +140,7 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
       <div className="broker-count"><strong>{selected.length.toLocaleString()}건</strong><span>{view.feed?.periodStart?.slice(0,10) || '2026-01-01'}부터 · 한국 시간</span><button className="btn-ghost" style={{marginLeft:'auto',whiteSpace:'nowrap'}} onClick={() => setRefresh(n => n + 1)}>새로고침</button></div>
       <p className="broker-explanation">토스 분할 체결은 주문별로 합쳐 보여줘요. FP Markets는 체결별로 기록하며 수량은 계약 단위예요. 메리츠는 확인해 저장한 거래를 보여줘요. 자동 기록은 실현손익 통계에 아직 합산하지 않아요.</p>
       {code && (fp.error || fp.status?.state === 'error') && <p className="broker-notice" role="status">{fp.error || 'FP Markets 최근 수집을 완료하지 못했어요. 마지막 기록을 보관하고 있어요.'}</p>}
-      <div className="broker-list">{selected.slice(0, limit).map(row => <BrokerTrade key={row.id} row={row}
+      <div className="broker-list">{selected.slice(0, limit).map(row => <BrokerTrade key={row.id} row={row} review={fp.feed?.reviews?.[row.reviewId]}
         memos={memos.filter(m => m.brokerTradeId === row.id)} onAddMemo={onAddMemo} onRemoveMemo={onRemoveMemo} onRemoveImport={onRemoveImport} />)}</div>
       {!view.loading && selected.length === 0 && <div className="broker-empty">{rows.length ? '조건에 맞는 거래가 없어요.' : '수집된 체결 기록이 아직 없어요.'}</div>}
       {limit < selected.length && <button className="btn-ghost broker-more" onClick={() => setLimit(n => n + 40)}>기록 더 보기 ({Math.min(limit, selected.length)} / {selected.length})</button>}
@@ -148,8 +149,16 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
   </section>;
 }
 
-function BrokerTrade({ row, memos, onAddMemo, onRemoveMemo, onRemoveImport }) {
+function BrokerTrade({ row, review, memos, onAddMemo, onRemoveMemo, onRemoveImport }) {
   const [text, setText] = React.useState('');
+  const [photos,setPhotos]=React.useState([]),[chartLink,setChartLink]=React.useState(''),[attachmentError,setAttachmentError]=React.useState(''),[processing,setProcessing]=React.useState(false),[expandedPhoto,setExpandedPhoto]=React.useState(null);
+  async function attach(files){
+    setAttachmentError('');setProcessing(true);
+    try{const room=3-photos.length;if(files.length>room)throw new Error('한 메모에는 캡처를 최대 3장까지 넣을 수 있어요.');
+      const added=[];for(const file of files)added.push(await TJAttachments.image(file));setPhotos(p=>[...p,...added]);
+    }catch(e){setAttachmentError(e.message);}finally{setProcessing(false);}
+  }
+  function save(){try{const link=TJAttachments.link(chartLink);if(onAddMemo(row,text.trim()||'차트 복기',{photos,chartLink:link})===false){setAttachmentError('저장하지 못했어요. 저장 공간을 확인해 주세요.');return;}setText('');setPhotos([]);setChartLink('');setAttachmentError('');}catch(e){setAttachmentError(e.message);}}
   const fp = row.source === 'fpmarkets';
   const money = (value, currency=row.currency) => value == null ? '미확정' : (currency === 'USD' ? '$' : currency === 'KRW' ? '₩' : currency ? currency + ' ' : '') + TJBroker.decimal(value);
   const time = row.executedAt ? new Date(row.executedAt).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false }) : '시각 미확정';
@@ -158,15 +167,24 @@ function BrokerTrade({ row, memos, onAddMemo, onRemoveMemo, onRemoveImport }) {
       <b className={'broker-side ' + (row.side === 'BUY' ? 'buy' : 'sell')}>{row.side === 'BUY' ? '매수' : row.side === 'SELL' ? '매도' : '확인 필요'}</b></div>
     <div className="broker-trade-date">{row.tradedAtKorea || '날짜 미확정'} · {time} · {fp?'FP Markets':row.source==='meritz'?'메리츠증권':'토스증권'} · {fp?(row.action==='close'?'청산':'진입'):(row.currency==='KRW'?'국내':'미국')}</div>
     <div className="broker-numbers"><div><small>체결 수량</small><b>{TJBroker.decimal(row.quantity)}{fp?' 단위':'주'}</b></div><div><small>{fp?'체결가':'평균 체결가'}</small><b>{money(row.averagePrice,fp?row.priceCurrency:row.currency)}</b></div><div><small>{fp?'브로커 총손익':'체결 대금'}</small><b>{money(fp?row.grossProfit:row.filledAmount)}</b></div></div>
-    <details><summary>수수료·매매 메모{memos.length ? ` (${memos.length})` : ''}</summary>
+    {fp&&<FpReview review={review}/>}
+    <details><summary>수수료·매매 메모·캡처{memos.length ? ` (${memos.length})` : ''}</summary>
       <div className="broker-fees"><span>수수료 {money(row.commission)}</span>{fp?<><span>스왑 {money(row.swap)}</span><span>청산 수수료 {money(row.realisedCommission)}</span><span>환전 비용 {money(row.conversionFee)}</span></>:<><span>세금 {money(row.tax)}</span><span>결제일 {row.settlementDate || '미확정'}</span></>}</div>
-      {fp&&<p className="broker-explanation">총손익은 브로커가 제공한 비용 차감 전 값이에요. 수수료·스왑을 반영한 순손익은 아직 확정하지 않았어요. 수량은 랏으로 환산하기 전 단위예요.</p>}
+      {fp&&<p className="broker-explanation">수수료 $0은 브로커 원본의 값이에요. 스프레드는 체결가에 반영돼요. 체결 수수료와 청산 수수료를 중복 차감하지 않도록 순손익은 아직 합산하지 않아요.</p>}
       {(row.historyUnavailable || row.issues?.length > 0) && <p className="broker-explanation">{row.historyUnavailable ? '최근 조회에서 확인되지 않은 과거 기록을 보관하고 있어요.' : '일부 정보가 미확정이에요. 다음 수집 때 다시 확인해요.'}</p>}
-      {memos.map(m => <div className="broker-memo" key={m.id}><p>{m.text}</p><button aria-label="매매 메모 삭제" onClick={() => onRemoveMemo(m.id)}>삭제</button></div>)}
+      {memos.map(m => <div className="broker-memo" key={m.id}><p>{m.text}</p><div className="fp-photo-list">{(m.photos||[]).filter(TJAttachments.safeImage).map((p,i)=><button key={i} aria-label={`저장한 차트 캡처 ${i+1} 확대`} onClick={()=>setExpandedPhoto(p)}><img src={p} alt={`차트 캡처 ${i+1}`}/></button>)}</div>{(()=>{try{const link=TJAttachments.link(m.chartLink);return link?<a href={link} target="_blank" rel="noopener noreferrer">트레이딩뷰 차트 열기 ↗</a>:null;}catch{return null;}})()}<button aria-label="매매 메모 삭제" onClick={() => onRemoveMemo(m.id)}>삭제</button></div>)}
       <textarea aria-label={`${row.symbol} 매매 메모`} placeholder="진입 이유, 잘한 점, 다음에 바꿀 점…" maxLength={4000} value={text} onChange={e => setText(e.target.value)} />
-      <button className="btn-ghost" disabled={!text.trim()} onClick={() => { onAddMemo(row, text.trim()); setText(''); }}>메모 저장</button>
+      <div className="fp-attachments" onPaste={e=>{const files=[...e.clipboardData.files];if(files.length&&!processing){e.preventDefault();attach(files);}}}>
+        <label>트레이딩뷰 캡처 추가<input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={processing} aria-label={`${row.symbol} 차트 캡처 추가`} onChange={e=>{attach([...e.target.files]);e.target.value='';}}/></label>
+        <input type="url" aria-label={`${row.symbol} 트레이딩뷰 링크`} placeholder="트레이딩뷰 스냅샷 또는 차트 링크" value={chartLink} onChange={e=>setChartLink(e.target.value)}/>
+        <small>이미지 파일 선택 또는 이 입력칸에서 이미지 붙여넣기 · 메모당 3장. 다른 기기에도 보려면 일지 동기화를 켜 주세요.</small>
+        <div className="fp-photo-list">{photos.map((p,i)=><div key={i}><img src={p} alt={`첨부 예정 캡처 ${i+1}`}/><button onClick={()=>setPhotos(ps=>ps.filter((_,j)=>j!==i))}>첨부 취소</button></div>)}</div>
+      </div>
+      {attachmentError&&<p role="alert">{attachmentError}</p>}
+      <button className="btn-ghost" disabled={processing||(!text.trim()&&!photos.length&&!chartLink.trim())} onClick={save}>{processing?'이미지 준비 중…':'메모·캡처 저장'}</button>
       {row.source==='meritz'&&<button className="btn-ghost" style={{marginLeft:8}} onClick={()=>onRemoveImport(row.id)}>가져온 기록 삭제</button>}
     </details>
+    {expandedPhoto&&<div className="fp-lightbox" role="dialog" aria-modal="true" aria-label="차트 캡처 확대" onClick={()=>setExpandedPhoto(null)}><button autoFocus onClick={()=>setExpandedPhoto(null)} onKeyDown={e=>{if(e.key==='Escape')setExpandedPhoto(null);}}>닫기</button><img src={expandedPhoto} alt="저장한 차트 캡처 확대"/></div>}
   </article>;
 }
 window.BrokerPanel = BrokerPanel;

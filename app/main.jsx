@@ -733,10 +733,15 @@ function App() {
     doFlash('메모 저장됨 ✓');
   };
   const removeMemo = (id) => { setMemos(prev => prev.filter(m => m.id !== id)); setDeleted(p => ({ ...p, [id]: new Date().toISOString() })); };
-  const addBrokerMemo = (trade, text) => {
+  const addBrokerMemo = (trade, text, attachments = {}) => {
     const at = (trade.tradedAtKorea || todayStr()) + ' ' + new Date().toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' });
-    setMemos(prev => [{ id: 'bm-' + crypto.randomUUID(), at, text, brokerTradeId: trade.id, brokerSymbol: trade.symbol }, ...prev]);
+    const photos=(attachments.photos||[]).filter(TJAttachments.safeImage).slice(0,3);
+    let chartLink;try{chartLink=TJAttachments.link(attachments.chartLink||'');}catch{doFlash('차트 링크를 확인해 주세요.');return false;}
+    const next=[{id:'bm-'+crypto.randomUUID(),at,text,brokerTradeId:trade.id,brokerSymbol:trade.symbol,photos,chartLink},...memos];
+    try{localStorage.setItem('tj_memos_v2',JSON.stringify(next));}catch{doFlash('저장 공간이 부족해요. 캡처 대신 링크를 사용하거나 백업 후 공간을 확보해 주세요.');return false;}
+    setMemos(next);
     doFlash('매매 메모 저장됨 ✓');
+    return true;
   };
 
   // apply tweaks → CSS vars

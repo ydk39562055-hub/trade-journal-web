@@ -173,6 +173,7 @@ export async function collectSnapshot(client, { clientId, clientSecret, accessTo
     from: initial, through: end, collectedAt: new Date().toISOString(),
     currency: assets.find(a => id(a.assetId) === id(trader.depositAssetId))?.name || null,
     symbols, assets, deals, positions,
+    account: {balance:decimal(trader.balance,trader.moneyDigits),openPositions:positions.length},
   };
   // Authentication responses (which echo accessToken) never enter the output.
   return { snapshot, inbox: makeInbox(snapshot) };

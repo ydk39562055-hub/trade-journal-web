@@ -5,6 +5,7 @@ import { ReadOnlyClient } from './protocol.mjs';
 import { collectSnapshot } from './history.mjs';
 import { readVault,writeVault,exchangeToken } from './vault.mjs';
 import { FpPublisher,makeFpFeed } from './feed.mjs';
+import {enrichReviews} from './review.mjs';
 const stop=new AbortController();process.once('SIGINT',()=>stop.abort());process.once('SIGTERM',()=>stop.abort());
 const safe=e=>/^[A-Z][A-Z_0-9]+$/.test(e.message)?e.message:'FP_COLLECTION_FAILED';let store;
 try{
@@ -18,6 +19,7 @@ try{
     await client.connect(config.environment);const forceFull=!previous?.fullCollectedAt||Date.now()-Date.parse(previous.fullCollectedAt)>7*86400000;
     const result=await collectSnapshot(client,{...config,from:Date.parse(config.historyFrom),to:Date.now(),previous:previous?.snapshot,forceFull});
     result.fullCollectedAt=forceFull?result.snapshot.collectedAt:previous.fullCollectedAt;
+    await enrichReviews(client,result,previous,forceFull,(done,total)=>{if(done%20===0)console.log(JSON.stringify({state:'reviewing',done,total}));});
     await store.write('fp-snapshot.json',result);previous=result;
     publication=await publisher.publish(result,publication);await store.write('fp-publication.json',publication);
     const status={source:'fpmarkets',state:'synced',collectedAt:result.snapshot.collectedAt,executions:makeFpFeed(result).rows.length,cloudPublished:true};
