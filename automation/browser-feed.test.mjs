@@ -3,6 +3,21 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { recordId } from './feed.mjs';
+test('market journals isolate brokers, preserve IDs, deduplicate and keep only 2026', async () => {
+  const window = {};
+  vm.runInContext(await readFile(new URL('../app/broker-feed.js', import.meta.url), 'utf8'), vm.createContext({window}));
+  const fp = {id:'shared',source:'fpmarkets',tradedAtKorea:'2026-09-19',executedAt:'2026-09-19T10:00:00Z'};
+  const toss = {...fp,source:'toss'};
+  const meritz = {...fp,source:'meritz'};
+  const rows = [fp,toss,fp,meritz,{...fp,id:'old',tradedAtKorea:'2025-12-31'}, {...fp,id:'future',tradedAtKorea:'2027-01-01'},null];
+  const futures = window.TJBroker.journalRows(rows,'선물');
+  assert.equal(futures.length,1);
+  assert.equal(futures[0],fp);
+  assert.equal(window.TJBroker.journalRows(rows,'스윙')[0],toss);
+  assert.equal(window.TJBroker.journalRows(rows,'장기').length,0);
+  assert.equal(window.TJBroker.journalRows(rows,null).length,3);
+  assert.equal(rows.length,7);
+});
 test('browser and PC resolve the same private feed; exact decimals survive display formatting', async () => {
   const window = {};
   const context = vm.createContext({ window, crypto, TextEncoder, Uint8Array });

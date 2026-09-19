@@ -255,6 +255,7 @@ function App() {
     return ['home', 'journal', 'diary', 'stats', 'assets', 'broker'].includes(t) ? t : 'home';
   });
   useEffect(() => { localStorage.setItem('tj_tab', tab); window.scrollTo(0, 0); }, [tab]);
+  const [journalKind, setJournalKind] = useState('auto');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');     // 일지 탭 구획 — 전체 / 보유중 / 청산
   const [period, setPeriod] = useState('all');     // 기본=전체 기간 (달이 바뀌면 텅 비어 보이던 문제)
@@ -1063,7 +1064,7 @@ function App() {
      (2026-08-09 지적). 화면이 넓으면 그만큼 더 쓰되, 너무 길어져 눈이 피로하지 않게 1520 에서 멈춘다. */
   const CONTENT_W = wide ? 1520 : 1080;
 
-  const TABS = [['home', '◧', '홈'], ['journal', '☰', '일지'], ['broker', '↻', '자동 기록'], ['assets', '◈', '자산'], ['diary', '✎', '일기'], ['stats', '◍', '통계']];
+  const TABS = [['home', '◧', '홈'], ['journal', '☰', '일지'], ['broker', '↻', '연결'], ['assets', '◈', '자산'], ['diary', '✎', '일기'], ['stats', '◍', '통계']];
   const MKT_C = { '선물': 'var(--futures)', '스윙': 'var(--swing)', '장기': 'var(--long)' };
   const balOf = m => (m === '스윙' ? balW : m === '장기' ? balL : balF);
 
@@ -1092,17 +1093,19 @@ function App() {
 
   /* ── 탭별 본문 ── */
   const recent = useMemo(() => allOfMarket.slice().sort((a, b) => (b.traded_at || '').localeCompare(a.traded_at || '')), [allOfMarket]);
-  const recentBlock = recent.length > 0 && (
+  const recentBlock = <>
+    {filter !== '장기' && <button className="btn-primary" style={{padding:14,textAlign:'left'}} onClick={()=>{setJournalKind('auto');setTab('journal');}}>{filter === '선물' ? 'FP Markets 선물 자동 일지' : '토스 스윙 자동 일지'} 보기 →</button>}
+    {recent.length > 0 && (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 2px 0' }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>최근 일지</span>
         <span className="mono" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-4)' }}>{recent.length}건</span>
         <span style={{ flex: 1 }} />
-        <button onClick={() => setTab('journal')} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--violet-600)' }}>전체 보기 ›</button>
+        <button onClick={() => {setJournalKind('manual');setTab('journal');}} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--violet-600)' }}>전체 보기 ›</button>
       </div>
       {cardsOf(recent.slice(0, threeCol ? 4 : 3))}
     </>
-  );
+  )}</>;
 
   const homeView = threeCol ? (
     /* 넓은 화면 — 중앙: 성과·일지 / 우: 일기·루틴·회고 (팝업 없이 한 화면) */
@@ -1138,7 +1141,7 @@ function App() {
     </div>
   );
 
-  const journalView = (
+  const manualJournalView = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div style={{ display: 'flex', gap: 8 }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="메모 · 종목 · 셋업 · 태그 검색" style={{ flex: 1 }} />
@@ -1192,11 +1195,20 @@ function App() {
     </div>
   );
 
+  const brokerPanel = market => (<BrokerPanel key={market || 'connections'} market={market} code={settings.brokerFeedCode || ''} onConnect={code => setSettings(s => ({ ...s, brokerFeedCode: code }))} memos={memos} onAddMemo={addBrokerMemo} onRemoveMemo={removeMemo} syncId={syncId}
+        imports={brokerImports} onImport={item=>{setBrokerImports(rows=>[item,...rows]);doFlash('메리츠 기록 저장됨 ✓');}}
+        onRemoveImport={id=>{setBrokerImports(rows=>rows.filter(r=>r.id!==id));setDeleted(d=>({...d,[id]:new Date().toISOString()}));}} />);
+  const journalView = <div style={{display:'grid',gap:'var(--gap)'}}>
+    {filter !== '장기' && <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+      <button className={journalKind === 'auto' ? 'btn-primary' : 'btn-ghost'} onClick={()=>setJournalKind('auto')}>{filter === '선물' ? 'FP Markets 자동 일지' : '토스 자동 일지'}</button>
+      <button className={journalKind === 'manual' ? 'btn-primary' : 'btn-ghost'} onClick={()=>setJournalKind('manual')}>직접 작성 ({allOfMarket.length})</button>
+    </div>}
+    {filter === '장기' || journalKind === 'manual' ? manualJournalView : brokerPanel(filter)}
+  </div>;
+
   const body = tab === 'home' ? homeView
     : tab === 'journal' ? journalView
-      : tab === 'broker' ? <BrokerPanel code={settings.brokerFeedCode || ''} onConnect={code => setSettings(s => ({ ...s, brokerFeedCode: code }))} memos={memos} onAddMemo={addBrokerMemo} onRemoveMemo={removeMemo} syncId={syncId}
-        imports={brokerImports} onImport={item=>{setBrokerImports(rows=>[item,...rows]);doFlash('메리츠 기록 저장됨 ✓');}}
-        onRemoveImport={id=>{setBrokerImports(rows=>rows.filter(r=>r.id!==id));setDeleted(d=>({...d,[id]:new Date().toISOString()}));}} />
+      : tab === 'broker' ? brokerPanel(null)
       : tab === 'assets' ? <AssetsTab assets={assets} autoAssets={autoAssets} addHoldings={addHoldings} addPositions={addPositions} accounts={[['선물', balF], ['스윙', balW], ['장기', balL]]} saveAsset={saveAsset} removeAsset={removeAsset} quotes={quotes} asOf={assetAsOf} onRefresh={refreshAssetQuotes} />
       : tab === 'diary' ? <DiaryTab diary={diary} upsert={upsertDiary} remove={removeDiary} memo={{ items: memos, addOn: addMemoOn, remove: removeMemo }} routine={{ ...routineProps, open: true, setOpen: () => { } }} />
         : <DashboardModal entries={entries} market={filter} asPage onClose={() => setTab('home')} />;

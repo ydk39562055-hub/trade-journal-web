@@ -48,5 +48,17 @@
     const tail = fraction.replace(/0+$/, '');
     return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (tail ? '.' + tail : '');
   };
-  window.TJBroker = { clean, pull, cache, recordId, decimal };
+  // Journal grouping is a view over immutable broker records; IDs keep memos attached.
+  const marketOf = row => row.source === 'fpmarkets' ? '선물' : row.source === 'toss' ? '스윙' : null;
+  function journalRows(rows, market) {
+    const seen = new Set();
+    return rows.filter(row => {
+      if (!row || typeof row.id !== 'string' || !row.tradedAtKorea || row.tradedAtKorea < '2026-01-01' || row.tradedAtKorea >= '2027-01-01') return false;
+      if (market && marketOf(row) !== market) return false;
+      const key = row.source + ':' + row.id;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).sort((a,b) => (b.executedAt || '').localeCompare(a.executedAt || ''));
+  }
+  window.TJBroker = { clean, pull, cache, recordId, decimal, marketOf, journalRows };
 })();

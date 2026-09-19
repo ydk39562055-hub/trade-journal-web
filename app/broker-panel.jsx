@@ -24,7 +24,7 @@ function useFpFeed(code, refresh) {
   },[code,refresh]);
   return view;
 }
-function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, imports = [], onImport, onRemoveImport }) {
+function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, imports = [], onImport, onRemoveImport, market = null }) {
   const [view, setView] = React.useState({ feed: null, status: null, loading: !!code, error: '' });
   const [input, setInput] = React.useState('');
   const [connecting, setConnecting] = React.useState(false);
@@ -34,7 +34,7 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
   const [month, setMonth] = React.useState('all');
   const [limit, setLimit] = React.useState(40);
   const [refresh, setRefresh] = React.useState(0);
-  const fp = useFpFeed(code, refresh);
+  const fp = useFpFeed(market === '스윙' ? '' : code, refresh);
   const [manage, setManage] = React.useState(false);
   const [meritzOpen, setMeritzOpen] = React.useState(false);
   const [broker, setBroker] = React.useState('all');
@@ -43,7 +43,7 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
   React.useEffect(() => {
     let alive = true, timer, current = null, busy = false;
     setView({ feed: null, status: null, loading: !!code, error: '' });
-    if (!code) return;
+    if (!code || market === '선물') return;
     async function update() {
       if (busy || !alive) return;
       busy = true;
@@ -69,22 +69,21 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
     const wake = () => { if (!document.hidden) update(); };
     start(); document.addEventListener('visibilitychange', wake);
     return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', wake); };
-  }, [code, refresh]);
-  React.useEffect(() => setLimit(40), [search, side, month, broker]);
+  }, [code, refresh, market]);
+  React.useEffect(() => setLimit(40), [search, side, month, broker, market]);
 
   async function connect(raw) {
     setConnecting(true); setConnectionError('');
     try {
       const next = TJBroker.clean(raw);
-      await TJBroker.pull(next, 'status');
+      await TJBroker.pull(next, market === '선물' ? 'fp-status' : 'status');
       onConnect(next); setInput(''); setManage(false);
     } catch (e) { setConnectionError(e.message || '연결하지 못했어요.'); }
     finally { setConnecting(false); }
   }
-  const rows = [...(view.feed?.rows || []), ...(fp.feed?.rows || []), ...imports].filter(r=>r.tradedAtKorea>='2026-01-01')
-    .sort((a,b)=>(b.executedAt||'').localeCompare(a.executedAt||''));
+  const rows = TJBroker.journalRows([...(view.feed?.rows || []), ...(fp.feed?.rows || []), ...imports], market);
   const months = [...new Set(rows.map(r => r.tradedAtKorea?.slice(0, 7)).filter(Boolean))].sort().reverse();
-  const selected = rows.filter(r => (broker === 'all' || r.source === broker) && (side === 'all' || r.side === side)
+  const selected = rows.filter(r => (market || broker === 'all' || r.source === broker) && (side === 'all' || r.side === side)
     && (month === 'all' || r.tradedAtKorea?.startsWith(month))
     && (!search || `${r.name} ${r.symbol}`.toLowerCase().includes(search.toLowerCase())));
   const last = view.status?.collectedAt || view.status?.lastSuccessAt;
@@ -100,16 +99,16 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
 
   return <section className="broker-panel">
     <header className="broker-heading">
-      <div><div className="seclabel">BROKER JOURNAL</div><h2>자동 기록</h2><p>체결 내역은 자동으로, 매매 생각은 메모로 남겨요.</p></div>
+      <div><div className="seclabel">BROKER JOURNAL</div><h2>{market ? `${market} 자동 일지` : '연결·가져오기'}</h2><p>{market === '선물' ? 'FP Markets 체결 · 진입·SL·TP·R과 복기 메모' : market === '스윙' ? '토스증권 체결 · 국내·미국 주식과 복기 메모' : 'FP Markets → 선물 · 토스증권 → 스윙'}</p></div>
       {code && <button className="btn-ghost" onClick={() => setManage(!manage)}>연결 관리</button>}
     </header>
-    <div className="broker-connections">
-      <div className="broker-connection"><strong>토스증권</strong><span className={'broker-health ' + (!stale && !view.error && view.status?.state === 'ok' ? 'good' : '')}>{health}</span>
-        <small>마지막 수집 {stamp(last)} · 5분 간격</small></div>
-      <div className="broker-connection"><strong>FP Markets</strong><span className={'broker-health ' + (!fpStale && !fp.error && fp.status?.state === 'ok' ? 'good' : '')}>{fpHealth}</span><small>마지막 수집 {stamp(fpLast)} · 5분 간격</small>
-        {fp.feed?.account&&<div className="fp-account"><small>확정 잔액</small><b>{fp.feed.account.currency==='USD'?'$':fp.feed.account.currency+' '}{TJBroker.decimal(fp.feed.account.balance)}</b><small>보유 포지션 {fp.feed.account.openPositions}개 · 미실현손익 별도</small></div>}</div>
+    <div className="broker-connections" style={market ? {gridTemplateColumns:"1fr"} : undefined}>
+      {market !== '선물' && <div className="broker-connection"><strong>토스증권</strong><span className={'broker-health ' + (!stale && !view.error && view.status?.state === 'ok' ? 'good' : '')}>{health}</span>
+        <small>마지막 수집 {stamp(last)} · 5분 간격</small></div>}
+      {market !== '스윙' && <div className="broker-connection"><strong>FP Markets</strong><span className={'broker-health ' + (!fpStale && !fp.error && fp.status?.state === 'ok' ? 'good' : '')}>{fpHealth}</span><small>마지막 수집 {stamp(fpLast)} · 5분 간격</small>
+        {fp.feed?.account&&<div className="fp-account"><small>확정 잔액</small><b>{fp.feed.account.currency==='USD'?'$':fp.feed.account.currency+' '}{TJBroker.decimal(fp.feed.account.balance)}</b><small>보유 포지션 {fp.feed.account.openPositions}개 · 미실현손익 별도</small></div>}</div>}
     </div>
-    <div className="meritz-summary"><div><strong>메리츠증권</strong><small>국내·미국 · 체결 알림 / 화면 캡처</small></div><button className="btn-ghost" onClick={()=>setMeritzOpen(true)}>기록 가져오기</button></div>
+    {!market && <div className="meritz-summary"><div><strong>메리츠증권</strong><small>국내·미국 · 체결 알림 / 화면 캡처</small></div><button className="btn-ghost" onClick={()=>setMeritzOpen(true)}>기록 가져오기</button></div>}
     {(!code || manage) && <div className="broker-setup">
       <h3>{code ? '다른 기기에서도 같은 기록 보기' : 'PC 수집기 연결'}</h3>
       <p>PC의 연결 파일을 한 번 선택하면 이후 거래는 자동으로 들어와요. 토스 API 키는 이 화면에 입력하지 마세요.</p>
@@ -130,19 +129,19 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
       {connectionError && <p role="status">{connectionError}</p>}
     </div>}
     {(code || imports.length>0) && <>
-      {code && (view.error || stale || view.status?.state === 'error') && <p className="broker-notice" role="status">{view.error || (view.status?.state === 'error'
+      {code && market !== '선물' && (view.error || stale || view.status?.state === 'error') && <p className="broker-notice" role="status">{view.error || (view.status?.state === 'error'
         ? '최근 수집이 완료되지 않았어요. PC의 자동수집 상태 파일에서 연결 상태를 확인해 주세요.'
         : 'PC가 꺼져 있거나 절전 중이면 마지막 기록을 보여줘요. PC 수집기가 다시 실행되면 새 거래가 반영돼요.')}</p>}
       <div className="broker-toolbar"><input aria-label="종목 검색" placeholder="종목명 또는 티커 검색" value={search} onChange={e => setSearch(e.target.value)} />
-        <select aria-label="증권사 필터" value={broker} onChange={e=>setBroker(e.target.value)}><option value="all">전체 증권사</option><option value="toss">토스</option><option value="fpmarkets">FP Markets</option><option value="meritz">메리츠</option></select>
+        {!market && <select aria-label="증권사 필터" value={broker} onChange={e=>setBroker(e.target.value)}><option value="all">전체 증권사</option><option value="toss">토스</option><option value="fpmarkets">FP Markets</option><option value="meritz">메리츠</option></select>}
         <select aria-label="기록 월" value={month} onChange={e => setMonth(e.target.value)}><option value="all">전체 기간</option>{months.map(m => <option key={m}>{m}</option>)}</select>
         <select aria-label="매수 매도 필터" value={side} onChange={e => setSide(e.target.value)}><option value="all">매수·매도</option><option value="BUY">매수</option><option value="SELL">매도</option></select></div>
       <div className="broker-count"><strong>{selected.length.toLocaleString()}건</strong><span>{view.feed?.periodStart?.slice(0,10) || '2026-01-01'}부터 · 한국 시간</span><button className="btn-ghost" style={{marginLeft:'auto',whiteSpace:'nowrap'}} onClick={() => setRefresh(n => n + 1)}>새로고침</button></div>
-      <p className="broker-explanation">토스 분할 체결은 주문별로 합쳐 보여줘요. FP Markets는 체결별로 기록하며 수량은 계약 단위예요. 메리츠는 확인해 저장한 거래를 보여줘요. 자동 기록은 실현손익 통계에 아직 합산하지 않아요.</p>
-      {code && (fp.error || fp.status?.state === 'error') && <p className="broker-notice" role="status">{fp.error || 'FP Markets 최근 수집을 완료하지 못했어요. 마지막 기록을 보관하고 있어요.'}</p>}
+      <p className="broker-explanation">{market === '선물' ? 'FP Markets 체결별 기록 · 수량은 계약 단위예요.' : market === '스윙' ? '토스 분할 체결은 주문별로 합쳐 보여줘요.' : '메리츠 기록은 확인 후 저장할 수 있어요.'} 자동 체결은 수기 일지의 손익 통계와 별도로 표시해요.</p>
+      {code && market !== '스윙' && (fp.error || fp.status?.state === 'error') && <p className="broker-notice" role="status">{fp.error || 'FP Markets 최근 수집을 완료하지 못했어요. 마지막 기록을 보관하고 있어요.'}</p>}
       <div className="broker-list">{selected.slice(0, limit).map(row => <BrokerTrade key={row.id} row={row} review={fp.feed?.reviews?.[row.reviewId]}
         memos={memos.filter(m => m.brokerTradeId === row.id)} onAddMemo={onAddMemo} onRemoveMemo={onRemoveMemo} onRemoveImport={onRemoveImport} />)}</div>
-      {!view.loading && selected.length === 0 && <div className="broker-empty">{rows.length ? '조건에 맞는 거래가 없어요.' : '수집된 체결 기록이 아직 없어요.'}</div>}
+      {!(market === '선물' ? fp.loading : view.loading) && selected.length === 0 && <div className="broker-empty">{rows.length ? '조건에 맞는 거래가 없어요.' : '수집된 체결 기록이 아직 없어요.'}</div>}
       {limit < selected.length && <button className="btn-ghost broker-more" onClick={() => setLimit(n => n + 40)}>기록 더 보기 ({Math.min(limit, selected.length)} / {selected.length})</button>}
     </>}
     {meritzOpen && <MeritzModal code={code} imports={imports} onSave={onImport} onClose={()=>setMeritzOpen(false)}/>}
