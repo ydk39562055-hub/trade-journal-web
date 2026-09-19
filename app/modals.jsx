@@ -125,7 +125,7 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
   }, [cost, d.pnl, spotAcct]);
 
   // 선물 자동 R — 1R = 이 거래 리스크(있으면) → 없으면 시드 설정의 기본 리스크
-  const df = defaultRisk || {};                                  // { mode:'$'|'%', val }
+  const df = entry?.brokerTradeId ? {} : (defaultRisk || {});                                  // { mode:'$'|'%', val }
   const dRiskMode = d.riskMode || '$';                           // 이 거래의 리스크 단위(입력용)
   const perRisk = numOrNull(d.riskVal);
   const usePerTrade = perRisk != null && perRisk > 0;
@@ -137,14 +137,16 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
   const oneRFromDefault = oneR != null && !usePerTrade;          // 기본값으로 잡혔는지
   // 가격으로 R 계산 — 진입·손절·청산을 다 적었을 때만. (청산−진입) ÷ (진입−손절), 숏이면 부호 뒤집힘
   const priceR = (() => {
-    if (isSpot) return null;
+    if (isSpot || (d.brokerTradeId && !d.riskConfirmed)) return null;
     const en = numOrNull(d.entry_price), st = numOrNull(d.stop_price), ex = numOrNull(d.exit_price);
     if (en == null || st == null || ex == null) return null;
     const risk = Math.abs(en - st); if (!risk) return null;
+    if (!['long','short'].includes(d.direction)) return null;
     const dir = (d.direction === 'short') ? -1 : 1;
+    if ((en - st) * dir <= 0) return null;
     return Math.round(((ex - en) * dir / risk) * 100) / 100;
   })();
-  const autoFR = priceR == null && oneR != null && oneR !== 0 && d.pnl != null;   // 가격이 있으면 가격 우선
+  const autoFR = (!d.brokerTradeId || d.riskConfirmed) && priceR == null && oneR != null && oneR !== 0 && d.pnl != null;   // 가격이 있으면 가격 우선
   useEffectM(() => {
     if (priceR != null) { setD(p => (p.realized_r === priceR ? p : { ...p, realized_r: priceR })); return; }
     if (!autoFR) return;
@@ -174,11 +176,12 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
   const fld = { fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', display: 'block', margin: '14px 0 6px' };
 
   return (
-    <Modal open onClose={onClose} title={entry ? '일지 수정' : '새 일지'} maxWidth={560} sheet={window.matchMedia('(max-width:560px)').matches}>
+    <Modal open onClose={onClose} title={entry?.brokerTradeId ? '자동 체결 상세 일지' : entry ? '일지 수정' : '새 일지'} maxWidth={560} sheet={window.matchMedia('(max-width:560px)').matches}>
+      {d.brokerTradeId && <p className="broker-explanation">브로커 원본은 유지돼요. 아래는 내가 보완하는 일지이며, 저장한 결과·손익은 통계에 반영돼요. 매도 체결가는 청산가로 가져오며 매입가·손익은 직접 확인해 주세요.</p>}
       {/* market */}
       <div className="seg" style={{ width: '100%' }}>
         {TJ.MARKETS.map(m => (
-          <button key={m} className={d.market === m ? 'on' : ''} onClick={() => setMarket(m)}>{m}</button>
+          <button key={m} className={d.market === m ? 'on' : ''} disabled={!!d.brokerTradeId} onClick={() => setMarket(m)}>{m}</button>
         ))}
       </div>
 
@@ -222,6 +225,17 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
         </>
       )}
 
+      {d.brokerTradeId && <>
+        <label style={fld}>전략 이름</label><input value={d.strategy || ''} onChange={e=>set('strategy',e.target.value)} placeholder="이번 거래에 사용한 전략"/>
+        {!isSpot && <><label style={fld}>종목</label><input value={d.ticker || ''} onChange={e=>set('ticker',e.target.value)}/></>}
+        <label style={fld}>TP · 목표 익절가</label><input type="number" inputMode="decimal" value={d.target_price ?? ''} onChange={e=>set('target_price',numOrNull(e.target.value))}/>
+        {isSpot && <>
+          <label style={fld}>SL · 손절가</label><input type="number" inputMode="decimal" value={d.stop_price ?? ''} onChange={e=>set('stop_price',numOrNull(e.target.value))}/>
+          <label style={fld}>청산가</label><input type="number" inputMode="decimal" value={d.exit_price ?? ''} onChange={e=>set('exit_price',numOrNull(e.target.value))}/>
+          <label style={fld}>R배수 (직접 확인)</label><input type="number" inputMode="decimal" value={d.realized_r ?? ''} onChange={e=>set('realized_r',numOrNull(e.target.value))}/>
+        </>}
+        {!isSpot && <label style={{display:'block',marginTop:12}}><input type="checkbox" checked={!!d.riskConfirmed} onChange={e=>set('riskConfirmed',e.target.checked)}/> 최초 손절·진입 방향과 청산 범위를 확인했어요 — 입력값으로 R 자동 계산</label>}
+      </>}
       <label style={fld}>날짜</label>
       <input type="date" value={d.traded_at} onChange={e => set('traded_at', e.target.value)} />
 

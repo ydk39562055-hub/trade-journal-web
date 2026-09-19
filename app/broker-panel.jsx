@@ -24,7 +24,7 @@ function useFpFeed(code, refresh) {
   },[code,refresh]);
   return view;
 }
-function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, imports = [], onImport, onRemoveImport, market = null }) {
+function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, imports = [], onImport, onRemoveImport, market = null, entries = [], onEditDetail }) {
   const [view, setView] = React.useState({ feed: null, status: null, loading: !!code, error: '' });
   const [input, setInput] = React.useState('');
   const [connecting, setConnecting] = React.useState(false);
@@ -137,9 +137,9 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
         <select aria-label="기록 월" value={month} onChange={e => setMonth(e.target.value)}><option value="all">전체 기간</option>{months.map(m => <option key={m}>{m}</option>)}</select>
         <select aria-label="매수 매도 필터" value={side} onChange={e => setSide(e.target.value)}><option value="all">매수·매도</option><option value="BUY">매수</option><option value="SELL">매도</option></select></div>
       <div className="broker-count"><strong>{selected.length.toLocaleString()}건</strong><span>{view.feed?.periodStart?.slice(0,10) || '2026-01-01'}부터 · 한국 시간</span><button className="btn-ghost" style={{marginLeft:'auto',whiteSpace:'nowrap'}} onClick={() => setRefresh(n => n + 1)}>새로고침</button></div>
-      <p className="broker-explanation">{market === '선물' ? 'FP Markets 체결별 기록 · 수량은 계약 단위예요.' : market === '스윙' ? '토스 분할 체결은 주문별로 합쳐 보여줘요.' : '메리츠 기록은 확인 후 저장할 수 있어요.'} 자동 체결은 수기 일지의 손익 통계와 별도로 표시해요.</p>
+      <p className="broker-explanation">{market === '선물' ? 'FP Markets 체결별 기록 · 수량은 계약 단위예요.' : market === '스윙' ? '토스 분할 체결은 주문별로 합쳐 보여줘요.' : '메리츠 기록은 확인 후 저장할 수 있어요.'} 원본 체결은 그대로 보관하고, 상세 일지에 직접 확정한 결과·손익을 통계에 반영해요.</p>
       {code && market !== '스윙' && (fp.error || fp.status?.state === 'error') && <p className="broker-notice" role="status">{fp.error || 'FP Markets 최근 수집을 완료하지 못했어요. 마지막 기록을 보관하고 있어요.'}</p>}
-      <div className="broker-list">{selected.slice(0, limit).map(row => <BrokerTrade key={row.id} row={row} review={fp.feed?.reviews?.[row.reviewId]}
+      <div className="broker-list">{selected.slice(0, limit).map(row => <BrokerTrade key={row.id} row={row} review={fp.feed?.reviews?.[row.reviewId]} detail={entries.find(e=>e.brokerTradeId===row.id && e.brokerSource===row.source)} onEditDetail={onEditDetail}
         memos={memos.filter(m => m.brokerTradeId === row.id)} onAddMemo={onAddMemo} onRemoveMemo={onRemoveMemo} onRemoveImport={onRemoveImport} />)}</div>
       {!(market === '선물' ? fp.loading : view.loading) && selected.length === 0 && <div className="broker-empty">{rows.length ? '조건에 맞는 거래가 없어요.' : '수집된 체결 기록이 아직 없어요.'}</div>}
       {limit < selected.length && <button className="btn-ghost broker-more" onClick={() => setLimit(n => n + 40)}>기록 더 보기 ({Math.min(limit, selected.length)} / {selected.length})</button>}
@@ -148,7 +148,7 @@ function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, 
   </section>;
 }
 
-function BrokerTrade({ row, review, memos, onAddMemo, onRemoveMemo, onRemoveImport }) {
+function BrokerTrade({ row, review, detail, onEditDetail, memos, onAddMemo, onRemoveMemo, onRemoveImport }) {
   const [text, setText] = React.useState('');
   const [photos,setPhotos]=React.useState([]),[chartLink,setChartLink]=React.useState(''),[attachmentError,setAttachmentError]=React.useState(''),[processing,setProcessing]=React.useState(false),[expandedPhoto,setExpandedPhoto]=React.useState(null);
   async function attach(files){
@@ -167,6 +167,17 @@ function BrokerTrade({ row, review, memos, onAddMemo, onRemoveMemo, onRemoveImpo
     <div className="broker-trade-date">{row.tradedAtKorea || '날짜 미확정'} · {time} · {fp?'FP Markets':row.source==='meritz'?'메리츠증권':'토스증권'} · {fp?(row.action==='close'?'청산':'진입'):(row.currency==='KRW'?'국내':'미국')}</div>
     <div className="broker-numbers"><div><small>체결 수량</small><b>{TJBroker.decimal(row.quantity)}{fp?' 단위':'주'}</b></div><div><small>{fp?'체결가':'평균 체결가'}</small><b>{money(row.averagePrice,fp?row.priceCurrency:row.currency)}</b></div><div><small>{fp?'브로커 총손익':'체결 대금'}</small><b>{money(fp?row.grossProfit:row.filledAmount)}</b></div></div>
     {fp&&<FpReview review={review}/>}
+    <section style={{borderTop:'1px solid var(--border)',paddingTop:12,marginTop:12}}>
+      <button className="btn-primary" onClick={()=>onEditDetail(row,review)}>{detail ? '일지 전체 수정' : '＋ 상세 일지 작성'}</button>
+      <p className="broker-explanation">진입 근거·전략·SL·TP·R·결과·손익·태그·사진을 추가할 수 있어요. 직접 확정한 손익은 일지 통계에도 반영돼요.</p>
+      {detail && <div>
+        <strong>내가 보완한 일지</strong>
+        <p style={{whiteSpace:'pre-wrap'}}>{detail.body || detail.reason || '상세 항목 저장됨'}</p>
+        <div className="broker-fees">{[['전략',detail.strategy],['타임프레임',detail.timeframe],['진입',detail.entry_price],['SL',detail.stop_price],['TP',detail.target_price],['청산',detail.exit_price],['R',detail.realized_r],['손익',detail.pnl],['결과',({win:'익절',loss:'손절',be:'본전',holding:'보유중'})[detail.result]]].filter(([,v])=>v!=null && v!=='').map(([label,value])=><span key={label}>{label} {value}</span>)}</div>
+        <p>{[...(detail.setups||[]),...(detail.errors||[])].join(' · ')}</p>
+        <div className="fp-photo-list">{(detail.photos||[]).filter(TJAttachments.safeImage).map((p,i)=><button key={i} aria-label={'상세 일지 사진 '+(i+1)+' 확대'} onClick={()=>setExpandedPhoto(p)}><img src={p} alt={'상세 일지 사진 '+(i+1)}/></button>)}</div>
+      </div>}
+    </section>
     <details><summary>수수료·매매 메모·캡처{memos.length ? ` (${memos.length})` : ''}</summary>
       <div className="broker-fees"><span>수수료 {money(row.commission)}</span>{fp?<><span>스왑 {money(row.swap)}</span><span>청산 수수료 {money(row.realisedCommission)}</span><span>환전 비용 {money(row.conversionFee)}</span></>:<><span>세금 {money(row.tax)}</span><span>결제일 {row.settlementDate || '미확정'}</span></>}</div>
       {fp&&<p className="broker-explanation">수수료 $0은 브로커 원본의 값이에요. 스프레드는 체결가에 반영돼요. 체결 수수료와 청산 수수료를 중복 차감하지 않도록 순손익은 아직 합산하지 않아요.</p>}

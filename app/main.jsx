@@ -762,6 +762,9 @@ function App() {
   // entry ops
   const saveEntry = (e) => {
     e = { ...e, updated_at: new Date().toISOString() }; // 동기화 병합 시 최신 편집 우선용
+    const saved = entries.some(x => x.id === e.id) ? entries.map(x => x.id === e.id ? e : x) : [e, ...entries];
+    try { localStorage.setItem('tj_entries_v3', JSON.stringify(saved)); }
+    catch { doFlash('저장 공간이 부족해요. 사진 크기를 줄이거나 백업 후 다시 저장해 주세요.'); return false; }
     setEntries(prev => {
       const i = prev.findIndex(x => x.id === e.id);
       const next = i >= 0 ? prev.map(x => x.id === e.id ? e : x) : [e, ...prev];
@@ -1195,7 +1198,7 @@ function App() {
     </div>
   );
 
-  const brokerPanel = market => (<BrokerPanel key={market || 'connections'} market={market} code={settings.brokerFeedCode || ''} onConnect={code => setSettings(s => ({ ...s, brokerFeedCode: code }))} memos={memos} onAddMemo={addBrokerMemo} onRemoveMemo={removeMemo} syncId={syncId}
+  const brokerPanel = market => (<BrokerPanel entries={entries} onEditDetail={(row,review)=>setModal({type:'editor',entry:TJBroker.detailEntry(row,review,entries.find(e=>e.brokerTradeId===row.id && e.brokerSource===row.source))})} key={market || 'connections'} market={market} code={settings.brokerFeedCode || ''} onConnect={code => setSettings(s => ({ ...s, brokerFeedCode: code }))} memos={memos} onAddMemo={addBrokerMemo} onRemoveMemo={removeMemo} syncId={syncId}
         imports={brokerImports} onImport={item=>{setBrokerImports(rows=>[item,...rows]);doFlash('메리츠 기록 저장됨 ✓');}}
         onRemoveImport={id=>{setBrokerImports(rows=>rows.filter(r=>r.id!==id));setDeleted(d=>({...d,[id]:new Date().toISOString()}));}} />);
   const journalView = <div style={{display:'grid',gap:'var(--gap)'}}>

@@ -60,5 +60,20 @@
       seen.add(key); return true;
     }).sort((a,b) => (b.executedAt || '').localeCompare(a.executedAt || ''));
   }
-  window.TJBroker = { clean, pull, cache, recordId, decimal, marketOf, journalRows };
+  function detailEntry(row, review, existing) {
+    if (existing) return JSON.parse(JSON.stringify(existing));
+    const num = v => v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);
+    const fp = row.source === 'fpmarkets';
+    return {id: 'broker-detail:' + row.source + ':' + row.id,
+      brokerTradeId: row.id, brokerSource: row.source,
+      market: marketOf(row) || '스윙', traded_at: row.tradedAtKorea,
+      ticker: row.symbol || row.name || '', currency: row.currency === 'KRW' ? '₩' : '$',
+      entry_price: fp ? num(review?.entryPrice ?? (row.action === 'open' ? row.averagePrice : null)) : (row.side === 'BUY' ? num(row.averagePrice) : null),
+      exit_price: (fp ? row.action === 'close' : row.side === 'SELL') ? num(row.averagePrice) : null,
+      direction: fp ? review?.direction || (row.action === 'open' ? (row.side === 'BUY' ? 'long' : 'short') : null) : null,
+      stop_price: num(review?.initialStop), target_price: num(review?.initialTarget),
+      shares: !fp && row.side === 'BUY' ? num(row.quantity) : null,
+      body: '', photos: [], setups: [], errors: [], created_at: new Date().toISOString()};
+  }
+  window.TJBroker = { clean, pull, cache, recordId, decimal, marketOf, journalRows, detailEntry };
 })();
