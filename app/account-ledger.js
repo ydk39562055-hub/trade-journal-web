@@ -83,7 +83,7 @@
     const usd=(v,c)=>num(v)==null?null:c==='USD'?num(v):c==='KRW'?TJ.toUSD(num(v),'₩'):null;
     if(source==='fpmarkets') {
       const value=usd(feed.account?.balance,feed.account?.currency);
-      return {...manual,broker:source,bal:value,ret:null,hasOpen:false,open:null,
+      return {...manual,seed:null,deposit:0,base:null,broker:source,bal:value,ret:null,hasOpen:false,open:null,
         checkedAt:feed.account?.checkedAt,balanceLabel:'FP 확정 잔액',balanceNote:'미실현손익 별도 · 수집된 잔액 기준'};
     }
     const values=(feed.holdings||[]).map(h=>usd(h.marketValue,h.currency));

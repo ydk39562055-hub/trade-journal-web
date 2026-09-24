@@ -953,8 +953,8 @@ function App() {
     [['스윙', balW], ['선물', balF]].forEach(([nm, b]) => {
       const amt = b.bal;
       if (amt == null) return;
-      out.push({ id: 'auto-' + nm, auto: nm, name: nm + ' 계좌',
-                 cat: '현금_예금', qty: 0, buyPrice: 0, amount: amt, currency: '$',
+      out.push({ id: 'auto-' + nm, auto: nm, name: b.broker ? b.balanceLabel : nm + ' 계좌',
+                 cat: b.broker==='toss' ? '주식_ETF' : '현금_예금', qty: 0, buyPrice: 0, amount: amt, currency: '$',
                  note: b.broker ? b.balanceNote : b.base ? ('넣은 돈 ' + Math.round(b.base).toLocaleString() + '$ + 번 돈')
                               : '설정에서 ' + nm + ' 시드를 적어주세요' });
     });

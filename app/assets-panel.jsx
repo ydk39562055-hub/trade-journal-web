@@ -216,10 +216,10 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
                   return (
                     <tr style={{ borderTop: '2px solid var(--border)' }}>
                       <td style={{ padding: '11px 8px', fontWeight: 800 }}>합계</td>
-                      <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: 'var(--ink-3)' }}>{TJ.won(base)}</td>
+                      <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: 'var(--ink-3)' }}>{accounts.some(([,b])=>b.broker)?'확인 필요':TJ.won(base)}</td>
                       <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 800, color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{TJ.wonS(pnl)}</td>
                       <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>
-                        {base ? (pnl >= 0 ? '+' : '') + (pnl / base * 100).toFixed(1) + '%' : '—'}
+                        {base && !accounts.some(([,b])=>b.broker) ? (pnl >= 0 ? '+' : '') + (pnl / base * 100).toFixed(1) + '%' : '—'}
                       </td>
                       <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 800 }}>{TJ.won(bal)}</td>
                     </tr>
@@ -230,7 +230,7 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
           </div>
           <div style={{ fontSize: 10.5, color: 'var(--ink-4)', marginTop: 7, lineHeight: 1.55 }}>
             넣은 돈 = 시드 + 추가 입금 · 번 돈 = 실현손익(장기는 보유 평가손익 포함).
-            시드가 비어 있으면 설정에서 계좌별 시드를 적어주세요.
+            자동 연결 계좌의 입출금 원금·수익률은 확인 전까지 표시하지 않아요. 토스 평가액에는 예수금이 포함되지 않아요.
           </div>
         </div>
       )}
