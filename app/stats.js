@@ -103,8 +103,9 @@
     const TF_ORDER = ['1M', '3M', '5M', '15M', '1H', '4H'];
     const tfStats = TF_ORDER.filter(tf => tfAgg[tf]).map(tf => ({ tag: tf, ...tfAgg[tf], wr: (tfAgg[tf].w + tfAgg[tf].l) ? Math.round(tfAgg[tf].w / (tfAgg[tf].w + tfAgg[tf].l) * 100) : null }));
 
-    const clean = closed.filter(e => !(e.errors && e.errors.length)).length;
-    const adherence = closed.length ? Math.round(clean / closed.length * 100) : null;
+    const reviewedClosed = closed.filter(e => !e.automated || e.reviewed);
+    const clean = reviewedClosed.filter(e => !(e.errors && e.errors.length)).length;
+    const adherence = reviewedClosed.length ? Math.round(clean / reviewedClosed.length * 100) : null;
 
     // 등급별 (선물 — 등급 체계 검증)
     const GRADE_ORDER = ['A+', 'B', 'C', '—'];
@@ -155,7 +156,7 @@
     const base = (s || 0) + dep;              // 투입 원금 = 시드 + 입금
     const total = pnl + open;                 // 실현 + 미실현
     return {
-      seed: s, deposit: dep, base,
+      seed: s, deposit: dep, base, knownPnlCount: mine.filter(e=>pnlUSD(e)!=null).length,
       pnl: total, realized: pnl, open, hasOpen: openable,
       bal: base + total, ret: base ? total / base * 100 : null,
     };

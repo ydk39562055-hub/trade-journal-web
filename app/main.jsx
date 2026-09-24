@@ -1238,7 +1238,7 @@ function App() {
                 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: on ? '#fff' : MKT_C[m] }} />
                   <span style={{ fontSize: 13, fontWeight: on ? 700 : 600 }}>{m}</span><span style={{ flex: 1 }} />
-                  <span className="mono" style={{ fontSize: 11.5, fontWeight: 700 }}>{TJ.moneyS(b.pnl)}</span>
+                  <span className="mono" style={{ fontSize: 11.5, fontWeight: 700 }}>{b.broker && !b.knownPnlCount ? '손익 미확정' : TJ.moneyS(b.pnl)}</span>
                 </button>
               );
             })}
@@ -1332,7 +1332,7 @@ function App() {
       )}
 
       {/* ── 모달 ── */}
-      {modal?.type === 'editor' && <EditorModal entry={modal.entry} accts={{ '선물': balF.bal, '스윙': balW.bal, '장기': balL.bal }} defaultRisk={{ mode: settings.futuresRiskMode || '$', val: settings.futuresRiskVal ?? null }} defaultMarket={filter} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}
+      {modal?.type === 'editor' && <EditorModal entry={modal.entry} accts={{ '선물': balF.bal, '스윙': balW.broker ? 0 : balW.bal, '장기': balL.bal }} defaultRisk={{ mode: settings.futuresRiskMode || '$', val: settings.futuresRiskVal ?? null }} defaultMarket={filter} onAddMemo={addMemoOn} onSave={saveEntry} onClose={() => setModal(null)} />}
       {modal?.type === 'stats' && <DashboardModal entries={accountEntries} market={filter} onClose={() => setModal(null)} />}
       {modal?.type === 'settings' && <SettingsModal settings={settings} seedSuggest={holdValue} onSave={s => { setSettings(p => ({ ...p, ...s })); setModal(null); doFlash('시드 저장됨 ✓'); }} onClose={() => setModal(null)} />}
       {modal?.type === 'principles' && <PrinciplesModal text={principles} onSave={txt => { setPrinciples(txt); localStorage.setItem('tj_principles_custom', '1'); doFlash('원칙 저장됨 ✓'); }} onClose={() => setModal(null)} />}

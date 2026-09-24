@@ -13,7 +13,7 @@
       const latest = [...matches].sort((a,b)=>(b.updated_at||'').localeCompare(a.updated_at||''))[0];
       // All older notes/photos remain accessible when several fill annotations join one position.
       const entry = {...base, ...latest, id:base.id, market:base.market, brokerSource:source,
-        brokerTradeId:base.brokerTradeId, brokerTradeIds:ids, automated:true,
+        brokerTradeId:base.brokerTradeId, brokerTradeIds:ids, automated:true, reviewed:matches.length>0,
         brokerFacts:base, relatedDetails:matches.filter(e=>e!==latest)};
       for (const k of ['pnl','result','realized_r','shares','entry_price','stop_price','target_price','exit_price','direction']) {
         if (base[k] != null) entry[k] = base[k];

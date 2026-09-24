@@ -198,9 +198,9 @@ function RoutineCard({ routine, defaultOpen }) {
 function BalanceBand({ market, bal, onSeed, big, holdVal }) {
   if (bal.broker) return <section className="card" style={{padding:22,borderTop:'3px solid var(--violet)'}}>
     <div style={{fontWeight:700}}>{market} 계좌 · {bal.balanceLabel}</div>
-    <div className="mono" style={{fontSize:32,fontWeight:800,margin:'8px 0'}}>{bal.bal == null ? '확인 대기' : TJ.money(bal.bal)}</div>
+    <div className="mono" style={{fontSize:32,fontWeight:800,margin:'8px 0'}}>{bal.bal == null ? '확인 대기' : '$'+bal.bal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
     <div style={{fontSize:12,color:'var(--ink-3)'}}>{bal.balanceNote}</div>
-    <div style={{marginTop:10}}>확인된 실현손익 {TJ.moneyS(bal.realized)}</div>
+    <div style={{marginTop:10}}>확인된 실현손익 {bal.knownPnlCount ? TJ.moneyS(bal.realized) : '확인 필요'}</div>
     <small>{bal.checkedAt ? new Date(bal.checkedAt).toLocaleString('ko-KR')+' 수집' : '수집 시각 확인 대기'}</small>
   </section>;
   const c = market === '선물' ? 'var(--futures)' : market === '장기' ? 'var(--long)' : 'var(--swing)';
@@ -427,6 +427,7 @@ function RoutineMemoRow({ routine, memo, showRoutine }) {
 /* ─────────────── 성과 카드 1장 (곡선 · 승률 · R분포를 세그먼트로) ─────────────── */
 function PerfCard({ stats: s, onStats, height = 96 }) {
   const [view, setView] = useStateH('curve');
+  if (!s.hasAny && s.pool.some(e=>e.automated)) return <section className="card" style={{padding:18}}><strong>실현손익 확인 필요</strong><p>체결·보유 내역은 반영됐어요. 매입원가와 실현손익이 확인되면 성과를 계산해요.</p><button className="btn-ghost" onClick={onStats}>통계 보기</button></section>;
   const money = s.useMoney;
   const split = TJStats.curveSplit(s.pool);
   const multi = split.series.length > 1;

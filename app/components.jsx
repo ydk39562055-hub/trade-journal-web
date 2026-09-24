@@ -97,6 +97,7 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote, broke
   const rv = TJStats.num(e.realized_r);
   const rpv = TJStats.num(e.return_pct);   // 현물 수익률%
   const pv = TJStats.num(e.pnl);
+  const exact = (v, signed=false) => v == null ? '미확정' : (signed && Number(v)>0 ? '+' : '')+(e.currency||'$')+Number(v).toLocaleString('en-US',{maximumFractionDigits:5});
   const res = e.result && TJ.RESULT[e.result];
   const hasMoney = pv != null && pv !== 0;
   return (
@@ -117,7 +118,7 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote, broke
 
       {e.automated && <>
         <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}><small>{e.brokerSource==='fpmarkets'?'FP Markets':'토스'} 자동 반영 · {e.accountNote}</small><button className="btn-ghost btn-sm" onClick={()=>onEdit(e.id)}>복기 작성·수정</button></div>
-        <div className="broker-fees">{[['진입',e.entry_price],['SL',e.stop_price],['TP',e.target_price],['청산',e.exit_price],['보유 평가액',e.marketValue],['평가손익',e.unrealizedPnl]].filter(([,v])=>v!=null).map(([k,v])=><span key={k}>{k} {TJ.fmt(v,e.currency)}</span>)}</div>
+        <div className="broker-fees">{[['진입',e.entry_price],['SL',e.stop_price],['TP',e.target_price],['청산',e.exit_price],['보유 평가액',e.marketValue],['평가손익',e.unrealizedPnl]].filter(([,v])=>v!=null).map(([k,v])=><span key={k}>{k} {exact(v)}</span>)}</div>
         {(e.relatedDetails?.length>0 || brokerMemos.length>0) && <details><summary>기존 체결 메모·복기 ({(e.relatedDetails?.length||0)+brokerMemos.length})</summary>{[...(e.relatedDetails||[]),...brokerMemos].map(m=><div key={m.id}><p style={{whiteSpace:'pre-wrap'}}>{m.body||m.text||m.reason}</p><div className="fp-photo-list">{(m.photos||[]).filter(TJAttachments.safeImage).map((p,i)=><button key={i} onClick={()=>openLightbox(p)}><img src={p} alt="기존 복기 사진"/></button>)}</div></div>)}</details>}
         {e.brokerRows?.length>0 && <details><summary>원본 체결 {e.brokerRows.length}건</summary>{e.brokerRows.map(r=><div key={r.id} style={{fontSize:12,padding:'6px 0'}}>{r.tradedAtKorea} · {r.side==='BUY'?'매수':'매도'} · {r.quantity}{r.source==='toss'?'주':'단위'} · 체결가 {r.averagePrice} · 수수료 {r.commission ?? '미확정'}</div>)}</details>}
       </>}
@@ -138,7 +139,7 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote, broke
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginLeft: 'auto', flexShrink: 0 }}>
           {hasMoney ? (
             <span className="mono" style={{ fontSize: 16, fontWeight: 800, color: 'var(--ink)', whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: '-.01em' }}>
-              {TJ.fmt(pv, e.currency, true)}
+              {e.automated ? exact(Number(pv.toFixed(2)),true) : TJ.fmt(pv, e.currency, true)}
             </span>
           ) : (res && <span className={`resbadge ${res.cls}`} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{res.ko}</span>)}
           {e.market !== '선물'
@@ -149,7 +150,7 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote, broke
             ))
             : (rv != null && rv !== 0 && (
               <span className="mono" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {rv > 0 ? '+' : ''}{rv}R
+                {rv > 0 ? '+' : ''}{e.automated ? Number(rv.toFixed(2)) : rv}R
               </span>
             ))}
         </div>
@@ -172,7 +173,7 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote, broke
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 11, padding: '9px 11px' }}>
             {cell('수량', sh != null ? sh : '—')}
-            {cell('평단', px != null ? (e.avg_est ? TJ.fmt(px, e.currency) + '?' : TJ.fmt(px, e.currency)) : '—')}
+            {cell('평단', px != null ? (e.automated ? exact(px) : e.avg_est ? TJ.fmt(px, e.currency) + '?' : TJ.fmt(px, e.currency)) : '—')}
             {/* ★ 2026-08-09: 실시간 시세는 **장기 계좌에서만** 쓴다(사용자 결정).
                 장기 → 현재가·평가손익. 스윙·선물 → 내가 적은 값만(매수금액·담은 날). */}
             {live != null
@@ -180,7 +181,7 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote, broke
               : cell('매수금액', (sh != null && px != null) ? TJ.fmt(sh * px, e.currency) : '—')}
             {live != null
               ? cell('평가손익', pl != null ? TJ.fmt(pl, lsym, true) : '—', true)
-              : cell('담은 날', e.traded_at || '—', true)}
+              : cell(e.id.startsWith('broker-holding:') ? '수집 기준일' : '담은 날', e.traded_at || '—', true)}
           </div>
         );
       })()}

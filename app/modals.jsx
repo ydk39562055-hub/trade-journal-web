@@ -177,7 +177,7 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
 
   return (
     <Modal open onClose={onClose} title={entry?.brokerTradeId ? '자동 체결 상세 일지' : entry ? '일지 수정' : '새 일지'} maxWidth={560} sheet={window.matchMedia('(max-width:560px)').matches}>
-      {d.brokerTradeId && <p className="broker-explanation">브로커 원본은 유지돼요. 아래는 내가 보완하는 일지이며, 저장한 결과·손익은 통계에 반영돼요. 매도 체결가는 청산가로 가져오며 매입가·손익은 직접 확인해 주세요.</p>}
+      {d.brokerTradeId && <p className="broker-explanation">자동으로 확인된 수치는 수집 데이터로 갱신돼요. 진입 근거·전략·복기·사진을 추가하고, 미확정 수치는 직접 보완할 수 있어요.</p>}
       {/* market */}
       <div className="seg" style={{ width: '100%' }}>
         {TJ.MARKETS.map(m => (
@@ -228,11 +228,11 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
       {d.brokerTradeId && <>
         <label style={fld}>전략 이름</label><input value={d.strategy || ''} onChange={e=>set('strategy',e.target.value)} placeholder="이번 거래에 사용한 전략"/>
         {!isSpot && <><label style={fld}>종목</label><input value={d.ticker || ''} onChange={e=>set('ticker',e.target.value)}/></>}
-        <label style={fld}>TP · 목표 익절가</label><input type="number" inputMode="decimal" value={d.target_price ?? ''} onChange={e=>set('target_price',numOrNull(e.target.value))}/>
+        <label style={fld}>TP · 목표 익절가</label><input type="number" inputMode="decimal" readOnly={d.brokerFacts?.target_price != null} value={d.target_price ?? ''} onChange={e=>set('target_price',numOrNull(e.target.value))}/>
         {isSpot && <>
-          <label style={fld}>SL · 손절가</label><input type="number" inputMode="decimal" value={d.stop_price ?? ''} onChange={e=>set('stop_price',numOrNull(e.target.value))}/>
-          <label style={fld}>청산가</label><input type="number" inputMode="decimal" value={d.exit_price ?? ''} onChange={e=>set('exit_price',numOrNull(e.target.value))}/>
-          <label style={fld}>R배수 (직접 확인)</label><input type="number" inputMode="decimal" value={d.realized_r ?? ''} onChange={e=>set('realized_r',numOrNull(e.target.value))}/>
+          <label style={fld}>SL · 손절가</label><input type="number" inputMode="decimal" readOnly={d.brokerFacts?.stop_price != null} value={d.stop_price ?? ''} onChange={e=>set('stop_price',numOrNull(e.target.value))}/>
+          <label style={fld}>청산가</label><input type="number" inputMode="decimal" readOnly={d.brokerFacts?.exit_price != null} value={d.exit_price ?? ''} onChange={e=>set('exit_price',numOrNull(e.target.value))}/>
+          <label style={fld}>R배수 (직접 확인)</label><input type="number" inputMode="decimal" readOnly={d.brokerFacts?.realized_r != null} value={d.realized_r ?? ''} onChange={e=>set('realized_r',numOrNull(e.target.value))}/>
         </>}
         {!isSpot && <label style={{display:'block',marginTop:12}}><input type="checkbox" checked={!!d.riskConfirmed} onChange={e=>set('riskConfirmed',e.target.checked)}/> 최초 손절·진입 방향과 청산 범위를 확인했어요 — 입력값으로 R 자동 계산</label>}
       </>}
@@ -276,8 +276,8 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
               <textarea value={d.reason ?? ''} onChange={e => set('reason', e.target.value)} placeholder="왜 샀나 — 내 생각 그대로…" style={{ minHeight: 70 }} />
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ flex: 1 }}><label style={fld}>수량 (주)</label><input type="number" inputMode="decimal" value={d.shares ?? ''} onChange={e => set('shares', numOrNull(e.target.value))} placeholder="10" /></div>
-                <div style={{ flex: 1 }}><label style={fld}>평단가</label><input type="number" inputMode="decimal" value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} /></div>
+                <div style={{ flex: 1 }}><label style={fld}>수량 (주)</label><input type="number" inputMode="decimal" readOnly={d.brokerFacts?.shares != null} value={d.shares ?? ''} onChange={e => set('shares', numOrNull(e.target.value))} placeholder="10" /></div>
+                <div style={{ flex: 1 }}><label style={fld}>평단가</label><input type="number" inputMode="decimal" readOnly={d.brokerFacts?.entry_price != null} value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} /></div>
               </div>
 
               <label style={fld}>비중 (%) {autoW && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
@@ -288,12 +288,12 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
               <label style={fld}>결과</label>
               <div className="seg" style={{ width: '100%' }}>
                 {[['win', '익절'], ['loss', '손절'], ['be', '본전'], ['holding', '보유중']].map(([v, l]) => (
-                  <button key={v} className={d.result === v ? 'on' : ''} onClick={() => set('result', d.result === v ? null : v)}>{l}</button>
+                  <button key={v} className={d.result === v ? 'on' : ''} disabled={d.brokerFacts?.result != null} onClick={() => set('result', d.result === v ? null : v)}>{l}</button>
                 ))}
               </div>
 
               <label style={fld}>손익금액 ({cur} · +이익 / −손실)</label>
-              <input type="number" inputMode="decimal" value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
+              <input type="number" inputMode="decimal" readOnly={d.brokerFacts?.pnl != null} value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
 
               <label style={fld}>수익률 (%) {autoR && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
               <input type="number" inputMode="decimal" placeholder="+18 / -5" value={d.return_pct ?? ''} onChange={e => set('return_pct', numOrNull(e.target.value))} />
@@ -321,9 +321,9 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
               {/* 가격 3칸 — 전부 선택. 적으면 R이 자동으로 나오고, 안 적어도 지금까지처럼 그대로 동작 */}
               <label style={fld}>진입 · 손절 · 청산 <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>안 적어도 됨 · 적으면 R 자동</span></label>
               <div style={{ display: 'flex', gap: 7 }}>
-                <input type="number" inputMode="decimal" placeholder="진입가" value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} style={{ flex: 1, minWidth: 0 }} />
-                <input type="number" inputMode="decimal" placeholder="손절가" value={d.stop_price ?? ''} onChange={e => set('stop_price', numOrNull(e.target.value))} style={{ flex: 1, minWidth: 0 }} />
-                <input type="number" inputMode="decimal" placeholder="청산가" value={d.exit_price ?? ''} onChange={e => set('exit_price', numOrNull(e.target.value))} style={{ flex: 1, minWidth: 0 }} />
+                <input type="number" inputMode="decimal" placeholder="진입가" readOnly={d.brokerFacts?.entry_price != null} value={d.entry_price ?? ''} onChange={e => set('entry_price', numOrNull(e.target.value))} style={{ flex: 1, minWidth: 0 }} />
+                <input type="number" inputMode="decimal" placeholder="손절가" readOnly={d.brokerFacts?.stop_price != null} value={d.stop_price ?? ''} onChange={e => set('stop_price', numOrNull(e.target.value))} style={{ flex: 1, minWidth: 0 }} />
+                <input type="number" inputMode="decimal" placeholder="청산가" readOnly={d.brokerFacts?.exit_price != null} value={d.exit_price ?? ''} onChange={e => set('exit_price', numOrNull(e.target.value))} style={{ flex: 1, minWidth: 0 }} />
               </div>
               {priceR != null && (
                 <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>
@@ -336,7 +336,7 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
               )}
 
               <label style={fld}>손익금액 ($ · +이익 / −손실)</label>
-              <input type="number" inputMode="decimal" value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
+              <input type="number" inputMode="decimal" readOnly={d.brokerFacts?.pnl != null} value={d.pnl ?? ''} onChange={e => set('pnl', numOrNull(e.target.value))} />
 
               <label style={fld}>리스크 (1R) <span style={{ fontWeight: 500, color: 'var(--ink-4)', fontSize: 12 }}>손절 시 잃는 금액 · 비우면 기본값</span></label>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -351,7 +351,7 @@ function EditorModal({ entry, onSave, onClose, accts, defaultMarket, onAddMemo, 
               {oneR != null && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>1R = {curFmt(oneR)}{useMode === '%' ? ` (선물 잔고 × ${useVal}%)` : ''}{oneRFromDefault ? ' · 기본값 사용' : ''}</div>}
 
               <label style={fld}>R배수 {(autoFR || priceR != null) && <span style={{ color: 'var(--violet)', fontWeight: 700 }}>· 자동</span>}</label>
-              <input type="number" inputMode="decimal" placeholder="2 / -1" value={d.realized_r ?? ''} onChange={e => set('realized_r', numOrNull(e.target.value))} />
+              <input type="number" inputMode="decimal" placeholder="2 / -1" readOnly={d.brokerFacts?.realized_r != null} value={d.realized_r ?? ''} onChange={e => set('realized_r', numOrNull(e.target.value))} />
               {autoFR && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6 }}>손익 {curFmt(d.pnl)} ÷ 1R {curFmt(oneR)} = {d.realized_r}R</div>}
               {!isSpot && d.pnl != null && oneR == null && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>리스크(1R)를 적거나, 시드 설정에서 선물 기본 리스크를 넣으면 손익만으로 R이 자동 계산돼요</div>}
 

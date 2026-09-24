@@ -58,3 +58,10 @@ test('untouched demo entries do not inflate a linked account; edited notes stay'
   assert.equal(TJAccount.build([{...sample,body:'my edit'}],null,feed,[sample]).some(e=>e.id==='seed-1'),true);
   assert.equal(TJAccount.build([sample],null,null,[sample]).length,1);
 });
+test('unreviewed automatic trades never imply perfect discipline or known zero profit',()=>{
+  const {TJAccount,TJStats}=api();
+  const e=TJAccount.build([],null,feed);
+  assert.equal(TJStats.computeStats(e,'선물').adherence,null);
+  assert.equal(TJStats.balanceOf([{market:'스윙',pnl:null}],'스윙',null,0).knownPnlCount,0);
+  assert.equal(TJStats.balanceOf([{market:'스윙',pnl:0}],'스윙',null,0).knownPnlCount,1);
+});
