@@ -142,11 +142,11 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
     <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
       {/* ── 총자산 ── */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '16px 17px' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>총자산</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>등록·연동된 자산 합계</div>
         <div className="mono" style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.25 }}>{TJ.won(totalUSD)}</div>
         <div className="mono" style={{ fontSize: 12.5, color: 'var(--ink-4)', marginTop: -2 }}>{TJ.usdOnly(totalUSD)}</div>
         <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
-          {costUSD > 0 && (
+          {costUSD > 0 && autoAssets.length === 0 && (
             <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: plUSD >= 0 ? 'var(--win)' : 'var(--loss)' }}>
               {TJ.wonS(plUSD)} · {(costUSD ? (plUSD / costUSD) * 100 : 0).toFixed(1)}%
             </span>
@@ -177,6 +177,7 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
         )}
       </div>
 
+      <div role="status" style={{fontSize:12,color:'var(--ink-3)',lineHeight:1.65}}>이 합계는 전재산이 아닙니다. 토스 예수금·미등록 계좌와 자산은 포함되지 않으며, FP는 미실현손익을 제외한 잔액입니다. 원화 금액은 환산값입니다.</div>
       {/* ── 계좌별 성과 ──
           ★ 2026-08-09 사용자 요청: "스윙 장기 선물로 돈을 얼마나 수익이 났는지 다 확인이 되어야".
           자산은 '지금 얼마 있나', 여기는 '어디서 얼마나 벌었나'. 둘은 다른 질문이라 나눠 놓는다. */}
@@ -217,7 +218,7 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
                     <tr style={{ borderTop: '2px solid var(--border)' }}>
                       <td style={{ padding: '11px 8px', fontWeight: 800 }}>합계</td>
                       <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: 'var(--ink-3)' }}>{accounts.some(([,b])=>b.broker)?'확인 필요':TJ.won(base)}</td>
-                      <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 800, color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{TJ.wonS(pnl)}</td>
+                      <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 800, color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{accounts.some(([,b])=>b.broker && !b.knownPnlCount)?'일부 손익 미확정':TJ.wonS(pnl)}</td>
                       <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: pnl >= 0 ? 'var(--win)' : 'var(--loss)' }}>
                         {base && !accounts.some(([,b])=>b.broker) ? (pnl >= 0 ? '+' : '') + (pnl / base * 100).toFixed(1) + '%' : '—'}
                       </td>

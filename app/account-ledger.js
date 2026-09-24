@@ -70,8 +70,7 @@
     return [...generated,...saved.filter(e=>{
       if (consumed.has(e.id)) return false;
       const sample=samples.find(s=>s.id===e.id);
-      const linked=e.market==='선물'?fp:e.market==='스윙'?toss:null;
-      if (linked && sample && !e.updated_at && Object.keys({...sample,...e}).filter(k=>k!=='created_at').every(k=>JSON.stringify(sample[k])===JSON.stringify(e[k]))) return false;
+      if (sample && !e.updated_at && Object.keys({...sample,...e}).filter(k=>k!=='created_at').every(k=>JSON.stringify(sample[k])===JSON.stringify(e[k]))) return false;
       return true;
     }).map(e=>{
       if (toss?.holdings && e.id.startsWith('broker-holding:toss:')) return {...e,result:null,pnl:null,realized_r:null,shares:0,accountNote:'이전 보유 복기'};
@@ -88,8 +87,8 @@
     }
     const values=(feed.holdings||[]).map(h=>usd(h.marketValue,h.currency));
     const value=feed.holdings ? (values.length?sum(values):0) : null;
-    return {...manual,broker:source,bal:value,ret:null,checkedAt:feed.checkedAt,
-      balanceLabel:'토스 보유 평가액',balanceNote:'예수금 미포함 · 계좌 총잔액은 API 확인 필요'};
+    return {...manual,seed:null,deposit:0,base:null,broker:source,bal:value,ret:null,checkedAt:feed.checkedAt,
+      balanceLabel:'토스 보유 평가액',balanceNote:'주식 평가액만 포함 · 현금 매수가능금액은 총예수금과 달라 합산하지 않아요'};
   }
   window.TJAccount={build,balance};
 })();

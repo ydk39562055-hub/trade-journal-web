@@ -30,14 +30,15 @@ function NetWorthCard({ total, pl, cost, count, autoCount, onOpen, onQuickAdd })
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '15px 17px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>내 전 재산</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>등록·연동된 자산 합계</div>
         <button onClick={onOpen} style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--violet-600)', fontWeight: 700 }}>자산 관리 ›</button>
       </div>
 
+      <div style={{fontSize:11.5,color:'var(--ink-4)',marginTop:6}}>토스 예수금·미등록 자산·FP 미실현손익 미포함 · 전재산 확정값이 아닙니다.</div>
       {empty ? (
         <React.Fragment>
           <div style={{ fontSize: 13.5, color: 'var(--ink-2)', marginTop: 7, lineHeight: 1.65 }}>
-            아직 자산을 안 적으셨어요. <b>예금·집 금액만 적으면</b> 전 재산이 바로 나옵니다.
+            아직 자산을 안 적으셨어요. <b>예금·집 금액만 적으면</b> 등록한 자산을 합산해 보여드려요.
             <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 3 }}>
               주식·코인은 일지(장기)와 보유현황에서 자동으로 올라옵니다 — 여기 안 적어도 됩니다.
             </div>
@@ -72,7 +73,7 @@ function NetWorthCard({ total, pl, cost, count, autoCount, onOpen, onQuickAdd })
           </div>
           <div className="mono" style={{ fontSize: 12.5, color: 'var(--ink-4)', marginTop: -2 }}>{TJ.usdOnly(total)}</div>
           <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginTop: 5, alignItems: 'center' }}>
-            {cost > 0 && (
+            {cost > 0 && !autoCount && (
               <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: pl >= 0 ? 'var(--win)' : 'var(--loss)' }}>
                 {TJ.wonS(pl)} · {(cost ? (pl / cost) * 100 : 0).toFixed(1)}%
               </span>
