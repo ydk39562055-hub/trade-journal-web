@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { reconcile } from './toss/pnl.mjs';
 
 // A separate record in the user's existing Supabase project; never the manual journal's ID.
 const RPC = 'https://oxogtsfxdjbctzehxvae.supabase.co/rest/v1/rpc/';
@@ -20,10 +21,11 @@ export function makeFeed(snapshot) {
   for (const account of snapshot.accounts) {
     for (const h of account.holdings.items) if (!stocks.has(h.symbol)) stocks.set(h.symbol, h.name);
     const stale = new Set(account.notReturnedOrderIds);
+    const profits = reconcile(account);
     for (const execution of account.executions) {
       if (!execution.executedAt || Date.parse(execution.executedAt) < since) continue;
       const { accountId, orderId, ...facts } = execution;
-      rows.push({ ...facts, id: digest(execution.id), name: stocks.get(execution.symbol) || execution.symbol,
+      rows.push({ ...facts, ...profits.get(execution.id), id: digest(execution.id), name: stocks.get(execution.symbol) || execution.symbol,
         historyUnavailable: stale.has(orderId) });
     }
   }

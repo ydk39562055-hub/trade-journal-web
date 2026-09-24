@@ -55,8 +55,9 @@
     for (const row of TJBroker.journalRows(toss?.rows||[], '스윙')) {
       const base=TJBroker.detailEntry(row);
       // Executed buy orders are history, not evidence that these shares are still held.
-      attach({...base,shares:null,result:null,pnl:null,realized_r:null,brokerRows:[row],
-        accountNote:row.side==='BUY'?'매수 체결':'매도 체결 · 실현손익 확인 필요'},'toss',[row.id]);
+      const calculated=row.pnlStatus==='calculated'?num(row.pnl):null;
+      attach({...base,shares:null,result:result(calculated),pnl:calculated,pnlStatus:row.pnlStatus,realized_r:null,brokerRows:[row],
+        accountNote:row.side==='BUY'?'매수 체결':calculated!=null?'매도 체결 · 이동평균 원가·비용으로 계산':({'purchase_history_missing':'과거 매입내역 부족','holdings_quantity_mismatch':'현재 보유수량과 불일치','holdings_cost_mismatch':'현재 평단과 불일치','interleaved_order_fills':'분할 체결 순서 확인 필요','missing_cost_or_execution':'체결·비용 확인 필요'}[row.pnlReason]||'실현손익 확인 필요')},'toss',[row.id]);
     }
     for (const h of toss?.holdings||[]) {
       if (!(num(h.quantity)>0)) continue;
@@ -88,6 +89,7 @@
     const values=(feed.holdings||[]).map(h=>usd(h.marketValue,h.currency));
     const value=feed.holdings ? (values.length?sum(values):0) : null;
     return {...manual,seed:null,deposit:0,base:null,broker:source,bal:value,ret:null,checkedAt:feed.checkedAt,
+      pnlCalculated:true,pnlUnresolved:(feed.rows||[]).filter(r=>r.side==='SELL'&&r.pnlStatus!=='calculated').length,
       balanceLabel:'토스 보유 평가액',balanceNote:'주식 평가액만 포함 · 현금 매수가능금액은 총예수금과 달라 합산하지 않아요'};
   }
   window.TJAccount={build,balance};

@@ -200,7 +200,7 @@ function BalanceBand({ market, bal, onSeed, big, holdVal }) {
     <div style={{fontWeight:700}}>{market} 계좌 · {bal.balanceLabel}</div>
     <div className="mono" style={{fontSize:32,fontWeight:800,margin:'8px 0'}}>{bal.bal == null ? '확인 대기' : '$'+bal.bal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
     <div style={{fontSize:12,color:'var(--ink-3)'}}>{bal.balanceNote}</div>
-    <div style={{marginTop:10}}>확인된 실현손익 {bal.knownPnlCount ? TJ.moneyS(bal.realized) : '확인 필요'}</div>
+    <div style={{marginTop:10}}>{bal.pnlCalculated?'거래내역으로 계산한 실현손익':'확인된 실현손익'} {bal.knownPnlCount ? TJ.moneyS(bal.realized) : '확인 필요'}{bal.pnlCalculated && <small style={{display:'block'}}>이동평균 매입원가·매수/매도 비용 반영 · 증권사 손익과 대조 전{bal.pnlUnresolved>0?' · 미계산 매도 '+bal.pnlUnresolved+'건 제외':''}</small>}</div>
     <small>{bal.checkedAt ? new Date(bal.checkedAt).toLocaleString('ko-KR')+' 수집' : '수집 시각 확인 대기'}</small>
   </section>;
   const c = market === '선물' ? 'var(--futures)' : market === '장기' ? 'var(--long)' : 'var(--swing)';
