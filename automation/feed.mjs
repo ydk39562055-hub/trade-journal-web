@@ -28,7 +28,14 @@ export function makeFeed(snapshot) {
     }
   }
   rows.sort((a, b) => (b.executedAt || '').localeCompare(a.executedAt || '') || a.id.localeCompare(b.id));
-  return { kind: 'broker-feed', version: 1, source: 'toss', periodStart: from, rows };
+  const decimal = v => typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? v : null;
+  const holdings = snapshot.accounts.flatMap(account => account.holdings.items.map(h=>({
+    id:digest('holding:'+account.accountId+':'+h.symbol), symbol:h.symbol, name:h.name,
+    currency:h.currency, quantity:decimal(h.quantity), averagePurchasePrice:decimal(h.averagePurchasePrice),
+    marketValue:decimal(h.marketValue?.amount), profitLoss:decimal(h.profitLoss?.amount)
+  })));
+  return { kind: 'broker-feed', version: 1, source: 'toss', periodStart: from, rows,
+    checkedAt:snapshot.collectedAt, holdings };
 }
 
 export class FeedPublisher {

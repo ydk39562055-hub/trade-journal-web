@@ -197,7 +197,7 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
               <tbody>
                 {accounts.map(([nm, b]) => (
                   <tr key={nm} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '11px 8px', fontWeight: 800, fontSize: 15 }}>{nm}</td>
+                    <td style={{ padding: '11px 8px', fontWeight: 800, fontSize: 15 }}>{nm}{b.broker && <small style={{display:'block',fontWeight:400}}>{b.balanceNote}</small>}</td>
                     <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: 'var(--ink-3)' }}>{b.base ? TJ.won(b.base) : '—'}</td>
                     <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 800, color: b.pnl > 0 ? 'var(--win)' : b.pnl < 0 ? 'var(--loss)' : 'inherit' }}>
                       {b.pnl ? TJ.wonS(b.pnl) : '—'}
@@ -205,7 +205,7 @@ function AssetsTab({ assets = [], autoAssets = [], accounts = [], saveAsset, rem
                     <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', color: b.ret == null ? 'var(--ink-4)' : b.ret >= 0 ? 'var(--win)' : 'var(--loss)' }}>
                       {b.ret == null ? '—' : (b.ret >= 0 ? '+' : '') + b.ret.toFixed(1) + '%'}
                     </td>
-                    <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 700 }}>{b.base || b.pnl ? TJ.won(b.bal) : '—'}</td>
+                    <td className="mono" style={{ padding: '11px 8px', textAlign: 'right', fontWeight: 700 }}>{b.bal != null ? TJ.won(b.bal) : '확인 대기'}</td>
                   </tr>
                 ))}
                 {(() => {

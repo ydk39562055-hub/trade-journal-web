@@ -92,7 +92,7 @@ function IconBtn({ onClick, title, danger, children }) {
 }
 
 /* ─── 일지 카드 ─── */
-function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote }) {
+function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote, brokerMemos = [] }) {
   const [hov, setHov] = useStateCo(false);
   const rv = TJStats.num(e.realized_r);
   const rpv = TJStats.num(e.return_pct);   // 현물 수익률%
@@ -111,10 +111,16 @@ function EntryCard({ e, onEdit, onDelete, onSell, onBuyMore, index, quote }) {
       <div style={{ position: 'absolute', top: 11, right: 13, display: 'flex', gap: 12, opacity: hov ? 1 : 0, pointerEvents: hov ? 'auto' : 'none', transition: 'opacity .14s', background: 'var(--surface)', boxShadow: '-12px 0 10px 4px var(--surface)' }}>
         <button onClick={() => onEdit(e.id)} style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-3)' }}
           onMouseEnter={ev => ev.currentTarget.style.color = 'var(--ink)'} onMouseLeave={ev => ev.currentTarget.style.color = 'var(--ink-3)'}>수정</button>
-        <button onClick={() => onDelete(e.id)} style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-3)' }}
-          onMouseEnter={ev => ev.currentTarget.style.color = 'var(--loss)'} onMouseLeave={ev => ev.currentTarget.style.color = 'var(--ink-3)'}>삭제</button>
+        {onDelete && <button onClick={() => onDelete(e.id)} style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-3)' }}
+          onMouseEnter={ev => ev.currentTarget.style.color = 'var(--loss)'} onMouseLeave={ev => ev.currentTarget.style.color = 'var(--ink-3)'}>삭제</button>}
       </div>
 
+      {e.automated && <>
+        <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}><small>{e.brokerSource==='fpmarkets'?'FP Markets':'토스'} 자동 반영 · {e.accountNote}</small><button className="btn-ghost btn-sm" onClick={()=>onEdit(e.id)}>복기 작성·수정</button></div>
+        <div className="broker-fees">{[['진입',e.entry_price],['SL',e.stop_price],['TP',e.target_price],['청산',e.exit_price],['보유 평가액',e.marketValue],['평가손익',e.unrealizedPnl]].filter(([,v])=>v!=null).map(([k,v])=><span key={k}>{k} {TJ.fmt(v,e.currency)}</span>)}</div>
+        {(e.relatedDetails?.length>0 || brokerMemos.length>0) && <details><summary>기존 체결 메모·복기 ({(e.relatedDetails?.length||0)+brokerMemos.length})</summary>{[...(e.relatedDetails||[]),...brokerMemos].map(m=><div key={m.id}><p style={{whiteSpace:'pre-wrap'}}>{m.body||m.text||m.reason}</p><div className="fp-photo-list">{(m.photos||[]).filter(TJAttachments.safeImage).map((p,i)=><button key={i} onClick={()=>openLightbox(p)}><img src={p} alt="기존 복기 사진"/></button>)}</div></div>)}</details>}
+        {e.brokerRows?.length>0 && <details><summary>원본 체결 {e.brokerRows.length}건</summary>{e.brokerRows.map(r=><div key={r.id} style={{fontSize:12,padding:'6px 0'}}>{r.tradedAtKorea} · {r.side==='BUY'?'매수':'매도'} · {r.quantity}{r.source==='toss'?'주':'단위'} · 체결가 {r.averagePrice} · 수수료 {r.commission ?? '미확정'}</div>)}</details>}
+      </>}
       {/* head */}
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 9, rowGap: 7, paddingRight: 4 }}>
         <MarketTag market={e.market} />

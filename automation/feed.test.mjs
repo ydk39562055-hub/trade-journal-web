@@ -2,6 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeFeed, FeedPublisher, cleanFeedCode, recordId } from './feed.mjs';
 const code = 'TJBF' + 'ab'.repeat(32);
+test('holdings publish only journal fields without private account identifiers',()=>{
+  const feed=makeFeed({collectedAt:'2026-09-24',accounts:[{accountId:'private-id',executions:[],notReturnedOrderIds:[],holdings:{items:[{
+    symbol:'TEST',name:'Test',currency:'USD',quantity:'3',averagePurchasePrice:'100',
+    accountId:'private-id',secret:'do-not-publish',marketValue:{amount:'330'},profitLoss:{amount:'30'}
+  }]}}]});
+  assert.equal(feed.holdings[0].marketValue,'330');
+  assert.equal(feed.holdings[0].profitLoss,'30');
+  assert.ok(!JSON.stringify(feed).includes('private-id'));
+  assert.ok(!JSON.stringify(feed).includes('do-not-publish'));
+});
 const snapshot = { collectedAt: '2026-09-05T15:00:00Z', accounts: [{
   accountId: 'sensitive_account', notReturnedOrderIds: [], holdings: { items: [] },
   executions: [{ id: 'toss:sensitive_account:private_order', accountId: 'sensitive_account', orderId: 'private_order',

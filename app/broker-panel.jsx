@@ -1,4 +1,4 @@
-function useFpFeed(code, refresh) {
+function useFpFeed(code, refresh, feedType = 'fp-data') {
   const [view, setView] = React.useState({feed:null,status:null,loading:!!code,error:''});
   React.useEffect(() => {
     let alive=true, timer, busy=false, current=null;
@@ -7,21 +7,21 @@ function useFpFeed(code, refresh) {
     async function update(){
       if(busy||!alive)return; busy=true;
       try {
-        const status=await TJBroker.pull(code,'fp-status');
+        const status=await TJBroker.pull(code,feedType === 'data' ? 'status' : 'fp-status');
         const feed=!current?.feed||(status.revision&&status.revision!==current.status?.revision)
-          ? await TJBroker.pull(code,'fp-data') : current.feed;
+          ? await TJBroker.pull(code,feedType) : current.feed;
         current={feed,status}; if(alive)setView({...current,loading:false,error:''});
-        await TJBroker.cache(code,current,false,'fp-data').catch(()=>{});
-      }catch{if(alive)setView(v=>({...v,loading:false,error:'FP 최신 상태를 확인하지 못했어요.'}));}
+        await TJBroker.cache(code,current,false,feedType).catch(()=>{});
+      }catch{if(alive)setView(v=>({...v,loading:false,error:(feedType === 'data' ? '토스' : 'FP')+' 최신 상태를 확인하지 못했어요.'}));}
       finally{busy=false;}
     }
-    async function start(){current=await TJBroker.cache(code,undefined,false,'fp-data').catch(()=>null);
+    async function start(){current=await TJBroker.cache(code,undefined,false,feedType).catch(()=>null);
       if(!alive)return; if(current?.feed)setView({...current,loading:true,error:''});
       await update(); if(alive)timer=setInterval(()=>{if(!document.hidden)update();},60000);
     }
     const wake=()=>{if(!document.hidden)update();}; start(); document.addEventListener('visibilitychange',wake);
     return ()=>{alive=false;clearInterval(timer);document.removeEventListener('visibilitychange',wake);};
-  },[code,refresh]);
+  },[code,refresh,feedType]);
   return view;
 }
 function BrokerPanel({ code, onConnect, memos, onAddMemo, onRemoveMemo, syncId, imports = [], onImport, onRemoveImport, market = null, entries = [], onEditDetail }) {

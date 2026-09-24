@@ -907,7 +907,7 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
   const list = holdings.filter(h => h.account === acct);
   const symsKey = [...new Set(list.map(h => TJPortfolio.yahooSym(h)).filter(Boolean))].join(',');
   const symOf = c => c === 'KRW' ? '₩' : '$';
-  const qOf = h => { const s = TJPortfolio.yahooSym(h); return (s && quotes[s]) || null; };   // {price,currency} — Yahoo
+  const qOf = h => { if(h.automated) return h.marketValue!=null && h.qty>0 ? {price:h.marketValue/h.qty,currency:h.currency}:null; const s = TJPortfolio.yahooSym(h); return (s && quotes[s]) || null; };   // {price,currency} — Yahoo
   const priceOf = h => { const q = qOf(h); return q ? q.price : null; };
   const liveSym = q => (q && q.currency === 'KRW') ? '₩' : '$';                                // 시세 통화(Yahoo가 알려줌)
   const avgUSD1 = h => (h.avgPrice != null && h.avgPrice > 0) ? TJ.toUSD(h.avgPrice, symOf(h.currency)) : null;  // 1주 평단(달러 환산)
@@ -1026,7 +1026,7 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
                       <div className="mono" style={{ fontSize: 14, fontWeight: 800, color: 'var(--ink)' }}>{v != null ? TJ.fmt(v, dsym) : '—'}</div>
                       {pl != null && <div className="mono" style={{ fontSize: 11.5, fontWeight: 700, color: pl >= 0 ? 'var(--win)' : 'var(--loss)' }}>{pl >= 0 ? '+' : ''}{pl.toFixed(1)}%</div>}
                     </div>
-                    <button onClick={() => removeHolding(h.id)} style={{ fontSize: 13, color: 'var(--ink-4)', flexShrink: 0 }} onMouseEnter={e => e.currentTarget.style.color = 'var(--loss)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-4)'}>✕</button>
+                    {!h.automated && <button onClick={() => removeHolding(h.id)} style={{ fontSize: 13, color: 'var(--ink-4)', flexShrink: 0 }} onMouseEnter={e => e.currentTarget.style.color = 'var(--loss)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-4)'}>✕</button>}
                   </div>
                   {/* 일지 보내기 */}
                   {asking ? (
@@ -1084,7 +1084,7 @@ function HoldingsModal({ holdings, entries, addHoldings, removeHolding, clearHol
               <button className="btn-ghost" onClick={() => fileRef.current.click()} disabled={busy} style={{ width: '100%', justifyContent: 'center', borderStyle: 'dashed', color: 'var(--ink-3)' }}>{busy ? 'AI가 읽는 중…' : '📷 스크린샷으로 추가'}</button>
               <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
               <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 6, lineHeight: 1.5 }}>증권사 보유목록을 찍어 올리면 종목·수량·평단을 읽어 <b>{acct} 보유현황 + 일지(보유중)</b>에 넣어요. (토스=스윙, 메리츠·나무=장기)</div>
-              {list.length > 0 && <button onClick={() => { if (confirm(acct + ' 보유 종목을 모두 비울까요?')) clearHoldings(acct); }} style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 10 }}>이 계좌 보유 비우기</button>}
+              {list.length > 0 && <button onClick={() => { if (confirm(acct + ' 보유 종목을 모두 비울까요?')) clearHoldings(acct); }} style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 10 }}>직접 입력한 보유 비우기</button>}
             </>
           )}
       </div>
