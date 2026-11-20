@@ -88,6 +88,23 @@ export async function fetchOrders(client, account, { maxPages = 500 } = {}) {
   return [...rows.values()];
 }
 
+export const CASH_CURRENCIES = ['KRW', 'USD'];
+
+// Cash-based buying power per currency (GET /api/v1/buying-power, result.cashBuyingPower,
+// a decimal string; margin excluded). A failed or malformed read is null for that currency
+// and never fails the collection: orders and holdings stay the checkpoint.
+export async function fetchCash(client, account) {
+  const cash = {};
+  for (const currency of CASH_CURRENCIES) {
+    try {
+      const result = await client.get('/api/v1/buying-power', account, { currency });
+      if (result?.currency != null && result.currency !== currency) throw new Error('CASH_CURRENCY_MISMATCH');
+      cash[currency] = money(result?.cashBuyingPower ?? null);
+    } catch { cash[currency] = null; }
+  }
+  return cash;
+}
+
 export async function collectSnapshot(client, previous = null, { now = () => new Date().toISOString() } = {}) {
   const startedAt = now();
   const accounts = await client.get('/api/v1/accounts');
@@ -108,8 +125,9 @@ export async function collectSnapshot(client, previous = null, { now = () => new
     const holdings = await client.get('/api/v1/holdings', id);
     if (!Array.isArray(holdings?.items)) throw new Error('INCOMPLETE_HOLDINGS_RESPONSE');
     const executions = [...orders.values()].map(order => makeExecution(id, order)).filter(Boolean);
+    const cash = await fetchCash(client, id);
     collected.push({ accountId: id, accountType: account.accountType,
-      orders: [...orders.values()], executions, holdings,
+      orders: [...orders.values()], executions, holdings, cash,
       // History retention can change. Previously observed facts are never silently deleted.
       notReturnedOrderIds: [...orders.keys()].filter(key => !seen.has(key)),
     });

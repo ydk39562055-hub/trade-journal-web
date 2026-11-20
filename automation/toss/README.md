@@ -51,6 +51,9 @@ node --test automation/toss/client.test.mjs automation/toss/history.test.mjs aut
 
 `TJ_PRIVATE_DATA_DIR`는 절대 경로이며 공개 저장소 밖이어야 한다.
 `toss-snapshot.json`에 원본과 정규화된 사실을 함께 보관한다.
+2026-11-20부터 수집마다 계좌별 `GET /api/v1/buying-power?currency=KRW|USD`(매수 가능 금액 조회, 미수 제외 현금 기준)를
+읽어 `accounts[].cash: {KRW, USD}`에 소수 문자열로 싣는다. 한 통화 조회가 실패하면 그 통화만 `null`이고 수집은 계속된다.
+클라우드 피드(`feed.mjs` makeFeed)에는 현금을 싣지 않는다. 토큰은 수집기 하나만 쓰므로 다른 곳에서 이 API를 부르지 않는다.
 `toss-status.json`은 최근 상태와 수집 건수이며, 오류 상태에서도 직전 성공 시각을 보존한다.
 SQLite 파일은 단일 실행 잠금용이며 프로세스 종료 시 운영체제가 잠금을 해제한다.
 

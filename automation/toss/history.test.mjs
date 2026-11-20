@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchOrders, makeExecution, collectSnapshot } from './history.mjs';
+import { fetchOrders, makeExecution, collectSnapshot, fetchCash } from './history.mjs';
 
 const order = (id, extra = {}) => ({ orderId: id, symbol: 'US_TEST', currency: 'USD',
   side: 'BUY', status: 'FILLED', orderedAt: '2026-09-01T10:00:00+09:00',
@@ -44,12 +44,36 @@ test('exact decimals, KST date, partial cancellations and missing fees survive w
   assert.throws(() => makeExecution('1', order('a', { execution: { filledQuantity: 0.5 } })), /DECIMAL/);
 });
 
-function fixture(orders, holdings = { items: [] }) {
+function fixture(orders, holdings = { items: [] }, cash = {}) {
   return { get: async (path, _account, query) => path.endsWith('/accounts')
     ? [{ accountSeq: '1', accountType: 'BROKERAGE' }]
     : path.endsWith('/holdings') ? holdings
+    : path.endsWith('/buying-power') ? cash[query.currency]?.() ?? { currency: query.currency }
     : page(query.status === 'CLOSED' ? orders : []) };
 }
+
+test('cash buying power is read per currency into accounts[].cash as exact decimal strings', async () => {
+  const calls = [];
+  const base = fixture([order('a')], { items: [] }, {
+    KRW: () => ({ currency: 'KRW', cashBuyingPower: '1234567' }),
+    USD: () => ({ currency: 'USD', cashBuyingPower: '4025.123456789' }),
+  });
+  const client = { get: async (path, account, query) => { calls.push({ path, account, query }); return base.get(path, account, query); } };
+  const snapshot = await collectSnapshot(client);
+  assert.deepEqual(snapshot.accounts[0].cash, { KRW: '1234567', USD: '4025.123456789' });
+  assert.deepEqual(calls.filter(c => c.path === '/api/v1/buying-power').map(c => [c.account, c.query.currency]), [['1', 'KRW'], ['1', 'USD']]);
+});
+
+test('a failed or malformed cash read is null for that currency and does not fail the collection', async () => {
+  const snapshot = await collectSnapshot(fixture([order('a')], { items: [] }, {
+    KRW: () => { throw Object.assign(new Error('TOSS_HTTP_429'), { status: 429 }); },
+    USD: () => ({ currency: 'USD', cashBuyingPower: 12.5 }),
+  }));
+  assert.deepEqual(snapshot.accounts[0].cash, { KRW: null, USD: null });
+  assert.equal(snapshot.accounts[0].executions.length, 1);
+  assert.deepEqual(await fetchCash(fixture([], undefined, { KRW: () => ({ currency: 'USD', cashBuyingPower: '1' }),
+    USD: () => ({ currency: 'USD', cashBuyingPower: '-0.50' }) }), '1'), { KRW: null, USD: '-0.50' });
+});
 
 test('recollection replaces facts, preserves disappeared history and never changes the input snapshot', async () => {
   const first = await collectSnapshot(fixture([order('a'), order('b')]));

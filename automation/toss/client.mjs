@@ -65,7 +65,8 @@ export class TossClient {
   }
   get(path, accountSeq = null, query = {}) {
     // No caller-supplied method or origin: order placement/cancel/replace cannot pass.
-    if (!['/api/v1/accounts', '/api/v1/orders', '/api/v1/holdings', '/api/v1/stocks'].includes(path)
+    // buying-power is an inquiry (GET, "매수 가능 금액 조회"): it reads cash and places nothing.
+    if (!['/api/v1/accounts', '/api/v1/orders', '/api/v1/holdings', '/api/v1/stocks', '/api/v1/buying-power'].includes(path)
       && !/^\/api\/v1\/orders\/[A-Za-z0-9_-]+$/.test(path)) throw new Error('READ_ONLY_OPERATION_REQUIRED');
     if (!['/api/v1/accounts', '/api/v1/stocks'].includes(path) && !/^\d+$/.test(String(accountSeq))) throw new Error('ACCOUNT_REQUIRED');
     const operation = this.#queue.then(async () => {

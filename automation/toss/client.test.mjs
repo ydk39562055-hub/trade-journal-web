@@ -23,6 +23,25 @@ test('authentication is single-flight, cached and sent only to the official host
   assert.throws(() => client.get('https://example.com/api/v1/accounts'));
   assert.throws(() => client.get('/api/v1/orders/123/cancel', 1));
 });
+test('buying power is an allowed GET inquiry for one account; order, modify and cancel paths stay refused', async () => {
+  const calls = [];
+  const client = new TossClient(credentials, { delay: async () => {}, fetchImpl: async (url, init) => {
+    calls.push({ url, init });
+    return response(url.endsWith('/oauth2/token')
+      ? { access_token: 'private_test_token', expires_in: 86400, token_type: 'Bearer' }
+      : { result: { currency: 'USD', cashBuyingPower: '3500.5' } });
+  }});
+  assert.deepEqual(await client.get('/api/v1/buying-power', '7', { currency: 'USD' }), { currency: 'USD', cashBuyingPower: '3500.5' });
+  const read = calls.at(-1);
+  assert.equal(read.url, 'https://openapi.tossinvest.com/api/v1/buying-power?currency=USD');
+  assert.equal(read.init.method, 'GET');
+  assert.equal(read.init.headers['X-Tossinvest-Account'], '7');
+  assert.throws(() => client.get('/api/v1/buying-power', null, { currency: 'KRW' }), /ACCOUNT_REQUIRED/);
+  for (const path of ['/api/v1/orders/123/cancel', '/api/v1/orders/123/modify', '/api/v1/orders/new/buy',
+    '/api/v1/order', '/api/v1/buying-power/../orders', '/api/v1/buying-power/x'])
+    assert.throws(() => client.get(path, 1), /READ_ONLY_OPERATION_REQUIRED/);
+  assert.ok(calls.every(c => c.init.method === 'GET' || c.url.endsWith('/oauth2/token')));
+});
 test('server error messages cannot leak tokens or request bodies', async () => {
   const client = new TossClient(credentials, { delay: async () => {}, fetchImpl: async () => ({
     ok: false, status: 403, text: async () => JSON.stringify({ error: { code: 'ip-not-allowed', message: credentials.clientSecret } }),
