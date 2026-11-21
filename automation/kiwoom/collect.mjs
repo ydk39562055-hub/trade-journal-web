@@ -18,7 +18,7 @@ try{
  if(canonical(saved?.[0]?.data)!==canonical(feed))throw Error('KIWOOM_CLOUD_VERIFY_FAILED');
  const status={kind:'broker-status',version:1,source:'kiwoom',state:'ok',revision,collectedAt:snapshot.collectedAt,count:feed.rows.length,holdings:feed.holdings.length};
  await publisher.rpc('sync_push',{p_sync_id:recordId(link.code,'kiwoom-status'),p_data:status});
- await store.write('status.json',status);console.log(JSON.stringify({state:'synced',orders:feed.rows.length,holdings:feed.holdings.length,collectedAt:feed.checkedAt}));
+ await store.write('status.json',status);console.log(JSON.stringify({state:'synced',orders:feed.rows.length,krFills:feed.rows.filter(r=>r.market==='KR').length,krCheckedThrough:feed.domesticCheckedThrough,holdings:feed.holdings.length,collectedAt:feed.checkedAt}));
 }catch(e){
  const code=/^[A-Z_0-9]+$/.test(e.message)?e.message:'KIWOOM_COLLECTION_FAILED';
  if(code!=='COLLECTOR_ALREADY_RUNNING'){
