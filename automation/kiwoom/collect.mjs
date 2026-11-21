@@ -1,5 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {KiwoomClient} from './client.mjs';
+import {credentialsFrom} from './keys.mjs';
 import {collect,makeFeed} from './history.mjs';
 import {openPrivateStore} from '../private-store.mjs';
 import {FpPublisher} from '../ctrader/feed.mjs';
@@ -7,7 +8,7 @@ import {recordId,digest,canonical} from '../feed.mjs';
 let store,publisher;
 try{
  store=await openPrivateStore(process.env.TJ_KIWOOM_DATA_DIR);
- const credentials=JSON.parse(await readFile(process.env.TJ_KIWOOM_CREDENTIALS,'utf8'));
+ const credentials=credentialsFrom(process.env);
  const link=JSON.parse(await readFile(process.env.TJ_FEED_CODE_PATH,'utf8'));
  publisher=new FpPublisher(link.code);
  const snapshot=await collect(new KiwoomClient(credentials),await store.read('snapshot.json'));

@@ -68,3 +68,18 @@ test('unreviewed automatic trades never imply perfect discipline or known zero p
   assert.equal(TJStats.balanceOf([{market:'스윙',pnl:null}],'스윙',null,0).knownPnlCount,0);
   assert.equal(TJStats.balanceOf([{market:'스윙',pnl:0}],'스윙',null,0).knownPnlCount,1);
 });
+test('Kiwoom holdings stay in long account and broker total is not double counted',()=>{
+ const {TJAccount}=api();const feed={checkedAt:'2026-09-24',rows:[],account:{balance:'140000',currency:'KRW'},holdings:[{id:'k',symbol:'TEST',currency:'USD',quantity:'2',averagePurchasePrice:'30',marketValue:'80',profitLoss:'20'}]};
+ const rows=TJAccount.build([],null,null,[],feed);assert.equal(rows.length,1);assert.equal(rows[0].market,'장기');assert.equal(rows[0].brokerSource,'kiwoom');assert.equal(rows[0].result,'holding');
+ const b=TJAccount.balance({bal:999},feed,'kiwoom');assert.equal(b.bal,100);assert.equal(b.base,null);
+ feed.holdings=[];assert.equal(TJAccount.build(rows,null,null,[],feed)[0].shares,0);
+});
+test('Kiwoom row note follows the row: domestic fills by fill time, US orders by order date',()=>{
+ const {TJAccount}=api();
+ const kr={id:'kr1',source:'kiwoom',market:'KR',symbol:'069500',name:'KODEX 200',currency:'KRW',side:'BUY',quantity:'1',averagePrice:'4900',tradedAtKorea:'2026-11-20',dateBasis:'executionTime',executedAt:'2026-11-20T04:07:47.000Z',issues:['fees_pending']};
+ const us={id:'us1',source:'kiwoom',symbol:'TEST',currency:'USD',side:'BUY',quantity:'1',averagePrice:'100',tradedAtKorea:'2026-11-19',dateBasis:'orderDate',executedAt:null,issues:[]};
+ const out=TJAccount.build([],null,null,[],{checkedAt:'2026-11-20',rows:[kr,us],holdings:[],account:{balance:'0',currency:'KRW'}});
+ const note=id=>out.find(e=>e.brokerTradeId===id).accountNote;
+ assert.equal(note('kr1'),'키움 국내 체결 · 체결 시각 기준 · 손익 미확정');assert.equal(note('us1'),'키움 체결 · 주문일 기준 · 손익 미확정');
+ assert.equal(out.find(e=>e.brokerTradeId==='kr1').currency,'₩');
+});

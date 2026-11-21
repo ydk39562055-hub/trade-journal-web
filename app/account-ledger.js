@@ -5,7 +5,7 @@
   const currency = c => c === 'KRW' ? '₩' : c === 'USD' ? '$' : c;
   const result = p => p == null ? null : p > 0 ? 'win' : p < 0 ? 'loss' : 'be';
   const sum = xs => xs.length && xs.every(x => num(x) != null) ? xs.reduce((a,x)=>a+Number(x),0) : null;
-  function build(saved, toss, fp, samples = []) {
+  function build(saved, toss, fp, samples = [], kiwoom = null) {
     const generated = [], consumed = new Set();
     function attach(base, source, ids) {
       const matches = saved.filter(e=>e.brokerSource===source && (e.id===base.id || ids.includes(e.brokerTradeId)));
@@ -68,19 +68,31 @@
         pnl:null,realized_r:null,body:'',photos:[],setups:[],errors:[],
         marketValue:num(h.marketValue),unrealizedPnl:num(h.profitLoss),accountNote:'토스 현재 보유'},'toss',['holding:'+h.id]);
     }
+    for (const row of TJBroker.journalRows(kiwoom?.rows||[], '장기')) {
+      const base=TJBroker.detailEntry(row);
+      attach({...base,shares:null,result:null,pnl:null,realized_r:null,brokerRows:[row],accountNote:row.dateBasis==='executionTime'?'키움 국내 체결 · 체결 시각 기준 · 손익 미확정':'키움 체결 · 주문일 기준 · 손익 미확정'},'kiwoom',[row.id]);
+    }
+    for (const h of kiwoom?.holdings||[]) {
+      if (!(num(h.quantity)>0)) continue;
+      attach({id:'broker-holding:kiwoom:'+h.id,brokerTradeId:'holding:'+h.id,market:'장기',ticker:h.symbol,currency:currency(h.currency),
+        traded_at:(kiwoom.checkedAt||'').slice(0,10),created_at:kiwoom.checkedAt,result:'holding',shares:num(h.quantity),entry_price:num(h.averagePurchasePrice),
+        pnl:null,realized_r:null,body:'',photos:[],setups:[],errors:[],marketValue:num(h.marketValue),unrealizedPnl:num(h.profitLoss),accountNote:'키움 현재 보유'},'kiwoom',['holding:'+h.id]);
+    }
     return [...generated,...saved.filter(e=>{
       if (consumed.has(e.id)) return false;
       const sample=samples.find(s=>s.id===e.id);
       if (sample && !e.updated_at && Object.keys({...sample,...e}).filter(k=>k!=='created_at').every(k=>JSON.stringify(sample[k])===JSON.stringify(e[k]))) return false;
       return true;
     }).map(e=>{
-      if (toss?.holdings && e.id.startsWith('broker-holding:toss:')) return {...e,result:null,pnl:null,realized_r:null,shares:0,accountNote:'이전 보유 복기'};
+      if ((toss?.holdings && e.id.startsWith('broker-holding:toss:')) || (kiwoom?.holdings && e.id.startsWith('broker-holding:kiwoom:'))) return {...e,result:null,pnl:null,realized_r:null,shares:0,accountNote:'이전 보유 복기'};
       return e;
     })];
   }
   function balance(manual,feed,source) {
     if (!feed) return manual;
     const usd=(v,c)=>num(v)==null?null:c==='USD'?num(v):c==='KRW'?TJ.toUSD(num(v),'₩'):null;
+    if(source==='kiwoom') return {...manual,seed:null,deposit:0,base:null,broker:source,bal:usd(feed.account?.balance,feed.account?.currency),ret:null,
+      checkedAt:feed.checkedAt,balanceLabel:'키움 장기 · 해외계좌 추정자산',balanceNote:'키움 제공 원화 추정자산 · 예수금 및 해외증권 기준, 국내주식 별도'};
     if(source==='fpmarkets') {
       const value=usd(feed.account?.balance,feed.account?.currency);
       return {...manual,seed:null,deposit:0,base:null,broker:source,bal:value,ret:null,hasOpen:false,open:null,

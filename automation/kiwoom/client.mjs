@@ -15,6 +15,8 @@ const NO_DATA_OK=new Set(['kt00009','ust21180']);
 const NO_DATA=/\((501724|571758):/,OUT_OF_RANGE=/\(506424:/;
 // Kiwoom answers 1700 "유량=1" (one request per second per API ID) when asked faster.
 export const GAP_MS=1100;
+// Account numbers never reach the snapshot: any acnt_no-like field is dropped from answers (top level and rows).
+export const stripAccount=o=>{if(o&&typeof o==='object'&&!Array.isArray(o))for(const k of Object.keys(o))if(/acnt_?no|acct_?no/i.test(k))delete o[k];return o;};
 export class KiwoomClient {
  constructor(credentials, fetchImpl=fetch){this.credentials=credentials;this.fetch=fetchImpl;}
  async auth(){
@@ -36,7 +38,7 @@ export class KiwoomClient {
    const list=empty||(id==='kt00009'&&j[listKey]==null)?[]:j[listKey];
    if(!Array.isArray(list))throw Error('KIWOOM_INCOMPLETE_RESPONSE');
    first??=j;rows.push(...list);cont=empty?'N':r.headers.get('cont-yn');next=r.headers.get('next-key');
-   if(cont!=='Y')return {...first,[listKey]:rows};
+   if(cont!=='Y')return stripAccount({...first,[listKey]:rows.map(x=>stripAccount({...x}))});
    if(!next||seen.has(next))throw Error('KIWOOM_CURSOR_STALLED');seen.add(next);
   }throw Error('KIWOOM_PAGE_LIMIT');
  }
